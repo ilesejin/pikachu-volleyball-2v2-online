@@ -1,5 +1,9 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import {
+  initializeAuth,
+  inMemoryPersistence,
+  signInAnonymously,
+} from 'firebase/auth';
 import {
   getFirestore,
   doc,
@@ -28,6 +32,8 @@ import {
 export class FirebaseRoomStore {
   constructor() {
     this.db = null;
+    this.auth = null;
+    this.identityPromise = null;
   }
   async identity() {
     if (
@@ -40,18 +46,27 @@ export class FirebaseRoomStore {
         'Configure your new Firebase project in online_2v2/config.js. See ONLINE_SETUP.md.'
       );
     }
-    const app =
-      getApps().find((item) => item.name === 'online-2v2') ||
-      initializeApp(firebaseConfig, 'online-2v2');
-    this.db = getFirestore(app);
-    const auth = getAuth(app);
-    if (!auth.currentUser) await signInAnonymously(auth);
-    return auth.currentUser.uid;
+    if (!this.identityPromise) {
+      this.identityPromise = (async () => {
+        const app =
+          getApps().find((item) => item.name === 'online-2v2-tabs') ||
+          initializeApp(firebaseConfig, 'online-2v2-tabs');
+        // Initialize with NONE persistence before anything can restore a shared user.
+        // Each tab gets its own identity, including duplicated tabs/windows.
+        this.auth = initializeAuth(app, { persistence: inMemoryPersistence });
+        this.db = getFirestore(app);
+        if (!this.auth.currentUser) await signInAnonymously(this.auth);
+        return this.auth.currentUser.uid;
+      })().catch((error) => {
+        this.identityPromise = null;
+        throw error;
+      });
+    }
+    return this.identityPromise;
   }
   async token() {
     await this.identity();
-    const app = getApps().find((item) => item.name === 'online-2v2');
-    return getAuth(app).currentUser.getIdToken();
+    return this.auth.currentUser.getIdToken();
   }
   room(id) {
     return doc(this.db, 'rooms', id);
@@ -99,7 +114,9 @@ export class FirebaseRoomStore {
       if (!validSlots(data.layout, slots, true))
         throw new Error('Invalid player positions.');
       if (data.members[clientId])
-        throw new Error('This browser already joined the room.');
+        throw new Error(
+          'This tab already joined the room. Open another tab to join separately.'
+        );
       if (Object.keys(data.members).length >= (data.layout === 'pairs' ? 2 : 4))
         throw new Error('This lobby is full.');
       const used = occupiedSlots(data.members);

@@ -74,3 +74,5 @@ Choose an arrangement and region, then press **Quick Match**. The first browser 
 ## Updating an existing deployment
 
 The selectable lobby and player-name fields use protocol `pikavolley-2v2-v2`. Update both the frontend and Quick Match server, and publish the updated `firestore.2v2.rules` before creating new rooms. Old version-1 rooms are not compatible; finish those games and create fresh rooms after upgrading. No live Firebase rules are published by the build or tests.
+
+Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.

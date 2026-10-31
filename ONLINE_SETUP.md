@@ -61,3 +61,13 @@ To run the combined local browser/server integration tests, build with `npx webp
 ## Lobby update (protocol v2)
 
 Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v2`; create new rooms after upgrading.
+
+Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
+
+To verify the real Firebase Auth SDK's tab identity and token behavior locally:
+
+```powershell
+firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json --only auth "node tests/auth-tabs.cjs"
+```
+
+This uses a demo project and the local Authentication emulator, without reading the frontend's real Firebase configuration.

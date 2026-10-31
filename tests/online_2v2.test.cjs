@@ -679,3 +679,51 @@ test('a guest receiving its slot update after match start refreshes controls wit
   OnlineMatch.prototype.refreshRoster.call(guest);
   assert.equal(bindings, 1);
 });
+
+test('authentication is private to each tab, coalesces concurrent sign-ins, and reuses its own token', async () => {
+  const makeTab = () => {
+    const apps = [];
+    let calls = 0;
+    const persistence = { type: 'NONE' };
+    const { FirebaseRoomStore } = load(
+      'online_2v2/firebase_store.js',
+      ['FirebaseRoomStore'],
+      {
+        firebaseConfig: { projectId: 'test-project', apiKey: 'test-key' },
+        getApps: () => apps,
+        initializeApp: (config, name) => {
+          const app = { name };
+          apps.push(app);
+          return app;
+        },
+        initializeAuth: (app, options) => {
+          assert.equal(options.persistence, persistence);
+          return app.auth || (app.auth = { currentUser: null });
+        },
+        inMemoryPersistence: persistence,
+        getFirestore: () => ({}),
+        signInAnonymously: async (auth) => {
+          calls++;
+          await Promise.resolve();
+          auth.currentUser = {
+            uid: Math.random().toString(),
+            getIdToken: async () => 'tab-token',
+          };
+        },
+      }
+    );
+    return { store: new FirebaseRoomStore(), count: () => calls };
+  };
+  const first = makeTab(),
+    second = makeTab();
+  const [one, again, two] = await Promise.all([
+    first.store.identity(),
+    first.store.identity(),
+    second.store.identity(),
+  ]);
+  assert.equal(one, again);
+  assert.notEqual(one, two);
+  assert.equal(first.count(), 1);
+  assert.equal(await first.store.token(), 'tab-token');
+  assert.equal(first.count(), 1);
+});

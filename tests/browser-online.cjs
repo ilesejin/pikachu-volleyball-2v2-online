@@ -261,15 +261,23 @@ async function cdp(url) {
       'Condition timed out: ' +
         expression +
         '; status=' +
-        (await ev('document.getElementById("status")?.textContent'))
+        (await ev('document.getElementById("status")?.textContent')) +
+        '; debug=' +
+        JSON.stringify(
+          await ev(
+            '({phase:window.__volley?.session.phase,status:window.__volley?.room.data?.status,isHost:window.__volley?.room.isHost,closed:window.__volley?.room.closed,back:window.backDebug})'
+          )
+        )
     );
   };
   const result = { ws, send, ev, until };
   allConnections.push(result);
   return result;
 }
-async function tab(port, lang = 'en', injected = true) {
-  const context = await browser.send('Target.createBrowserContext');
+async function tab(port, lang = 'en', injected = true, existingContext = null) {
+  const context = existingContext
+    ? { browserContextId: existingContext }
+    : await browser.send('Target.createBrowserContext');
   const target = await browser.send('Target.createTarget', {
     url: 'about:blank',
     browserContextId: context.browserContextId,
@@ -299,6 +307,10 @@ async function tab(port, lang = 'en', injected = true) {
   return page;
 }
 async function click(page, id) {
+  if (id === 'back-lobby')
+    await page.ev(
+      'window.backDebug=[];document.getElementById("back-lobby").addEventListener("click",()=>backDebug.push({stage:"capture",disabled:document.getElementById("back-lobby").disabled,phase:__volley.session.phase,isHost:__volley.room.isHost}),{capture:true,once:true});document.addEventListener("click",()=>backDebug.push({stage:"bubbled",phase:__volley.session.phase,status:__volley.room.data.status}),{once:true});'
+    );
   if (['create', 'find', 'join'].includes(id))
     await page.ev(
       "document.getElementById('about-with-your-friend').hidden=false"
@@ -325,7 +337,13 @@ async function join(page, roomId, slot) {
 }
 async function selectSlot(page, slot) {
   const selector = JSON.stringify('[data-slots="' + slot + '"]');
-  await page.until('!!document.querySelector(' + selector + ')');
+  await page.until(
+    '!!document.querySelector(' +
+      selector +
+      ') && !document.querySelector(' +
+      selector +
+      ').disabled'
+  );
   await page.ev('document.querySelector(' + selector + ').click()');
   await page.until(
     'JSON.stringify(__volley.room.data.members[__volley.room.selfId].slots)===' +
@@ -678,7 +696,9 @@ async function screenshot(page, name) {
     'document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"))'
   );
   await click(pairHost, 'create');
-  await pairHost.until('!__volley.room.closed');
+  await pairHost.until(
+    '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+  );
   await pairHost.ev(
     'document.getElementById("local-name-1").value="Alice";document.getElementById("local-name-2").value="Bob";document.getElementById("names-form").requestSubmit()'
   );
@@ -788,6 +808,30 @@ async function screenshot(page, name) {
   console.log(
     'Two browsers: two local players per browser, reverse-team host, controls, pause, and cleanup passed.'
   );
+  const sharedHost = await tab(port);
+  await click(sharedHost, 'create');
+  await sharedHost.until(
+    '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+  );
+  await selectSlot(sharedHost, '0');
+  const sharedGuest = await tab(port, 'en', true, sharedHost.contextId);
+  assert.equal(sharedGuest.contextId, sharedHost.contextId);
+  await join(sharedGuest, await sharedHost.ev('__volley.room.id'), '1');
+  assert.notEqual(
+    await sharedHost.ev('__volley.room.selfId'),
+    await sharedGuest.ev('__volley.room.selfId')
+  );
+  await sharedHost.until(
+    'Object.keys(__volley.room.data.members).length===2 && Object.values(__volley.room.data.members).every(m=>m.slots.length===1)'
+  );
+  await sharedHost.send('Page.bringToFront');
+  await click(sharedHost, 'start');
+  await sharedGuest.until('__volley.session.lastFrame>2');
+  await click(sharedHost, 'leave');
+  await sharedGuest.until('__volley.room.closed');
+  console.log(
+    'Same browser profile: separate tabs join independently, select different slots, receive host snapshots, and close cleanly.'
+  );
   if (matchmakingApp) {
     for (const layout of ['four', 'pairs']) {
       const pages = [];
@@ -798,7 +842,9 @@ async function screenshot(page, name) {
           'document.getElementById("layout").value=' + JSON.stringify(layout)
         );
         await click(page, 'quick-match');
-        await page.until('!__volley.room.closed');
+        await page.until(
+          '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+        );
         assert.deepEqual(
           await page.ev(
             '__volley.room.data.members[__volley.room.selfId].slots'
@@ -836,7 +882,9 @@ async function screenshot(page, name) {
     }
     const early = await tab(port);
     await click(early, 'quick-match');
-    await early.until('!__volley.room.closed');
+    await early.until(
+      '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+    );
     await selectSlot(early, '0');
     await early.until(
       '!document.getElementById("create").disabled || document.getElementById("connect-panel").hidden'
@@ -853,7 +901,9 @@ async function screenshot(page, name) {
     );
     const next = await tab(port);
     await click(next, 'quick-match');
-    await next.until('!__volley.room.closed');
+    await next.until(
+      '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+    );
     assert.notEqual(
       await early.ev('__volley.room.id'),
       await next.ev('__volley.room.id')
