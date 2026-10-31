@@ -1,0 +1,16 @@
+dist/
+node_modules/
+firebase_config.js
+quick_match_server_url.js
+analytics.html
+.firebaserc
+firebase.json
+.firebase/
+yarn.lock
+
+
+.test-artifacts/
+
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
