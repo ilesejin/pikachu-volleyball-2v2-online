@@ -1,23 +1,45 @@
-# 피카츄 배구 P2P 온라인
+# 피카츄 배구 2대2 온라인
 
-[_English_](README.md) | _&check;_ _Korean(한국어)_
+[English](README.md) · [Firebase 및 배포 설정](ONLINE_SETUP.md)
 
-피카츄 배구(対戦ぴかちゅ～　ﾋﾞｰﾁﾊﾞﾚｰ編)는 "(C) SACHI SOFT / SAWAYAKAN Programmers"와 "(C) Satoshi Takenouchi"가 1997년에 만든 윈도우용 게임입니다.
+현재 오프라인 2대2 게임을 WebRTC 방에서 플레이합니다. 브라우저 4개에서 각 1명씩 플레이하거나, 브라우저 2개에서 각 2명씩 플레이할 수 있습니다. 영어와 한국어 화면을 지원합니다.
 
-피카츄 배구 P2P 온라인은 이 피카츄 배구 게임의 P2P (peer-to-peer) 온라인 버전입니다. 인터넷을 통해 다른 사람과 함께 플레이할 수 있습니다. 원조 게임을 리버스 엔지니어링해서 만든 [피카츄 배구 오프라인 웹 버전](https://github.com/gorisanson/pikachu-volleyball)에 [WebRTC](https://webrtc.org/) [data channels](https://webrtc.org/getting-started/data-channels)을 결합하여 개발했습니다.
+방장 브라우저만 기존 물리 엔진과 AI를 실행합니다. 게스트는 입력을 방장에게 보내고 받은 게임 상태를 표시합니다. Firebase 익명 인증과 Firestore는 방 및 연결 설정에 사용되며, 경기 중 입력과 상태는 WebRTC로 전송됩니다.
 
-https://gorisanson.github.io/pikachu-volleyball-p2p-online/ko/ 에서 피카츄 배구 P2P 온라인을 플레이할 수 있습니다.
+새 Firebase 프로젝트의 설정, 익명 로그인 활성화, 보안 규칙 적용은 [ONLINE_SETUP.md](ONLINE_SETUP.md)를 참고하세요. 설정 전에는 방을 만들 수 없습니다. 이전 Firebase 프로젝트의 설정을 새 게임에서 사용하지 않습니다.
 
-<img src="src/resources/assets/images/screenshot.png" alt="피카츄 배구 게임 스크린샷" width="648">
+`npm ci` 후 `npm start`를 실행하고 `/ko/`를 여세요. 방을 생성해 초대 링크를 공유하면 참가자가 빈 자리를 선택할 수 있습니다. 방장은 경기 시작·재시작·일시정지·대기실 복귀와 너비·서브·속도·승리 점수를 설정합니다. 빈 자리는 AI로 채울 수 있으며 게스트가 나가면 AI가 대신합니다. 방장이 나가면 방은 종료됩니다.
 
-## 구조
+기본 너비는 한쪽당 384입니다. 고정 시작 위치는 왼쪽부터 P1–P2–P3–P4이고 오른쪽은 P4가 먼저 서브합니다. 서브는 선수 교대, 공 위치 교대(기본값), 완전 고정 중 선택합니다. 같은 팀 선수는 서로 충돌하지 않으며 AI는 앞·뒤 구역을 담당합니다. 기존 물리 및 충돌 특성은 유지합니다.
 
-- 오프라인 버전: 오프라인 웹 버전의 소스 코드 파일이 모두 [`src/resources/js/offline_version_js/`](src/resources/js/offline_version_js)에 담겨 있습니다. https://github.com/gorisanson/pikachu-volleyball/tree/main/src/resources/js 에 있는 소스 코드 파일과 동일한 것입니다. 이를 기반으로 온라인 버전을 만들었습니다.
+기본 조작은 로컬 1명일 때 방향키/Enter와 R/D/F/G/V/Z를 함께 사용할 수 있고, 2명일 때 첫 번째 R/D/F/G/V/Z와 두 번째 방향키/Enter입니다. 조작 설정에서 기존 선수별 키 배치를 선택할 수도 있습니다. 자세한 키 표와 구조 및 검증 방법은 [영문 README](README.md)를 참고하세요.
 
-- WebRTC data channels: WebRTC data channels를 이용한 P2P 온라인 핵심 기능들이 [`src/resources/js/data_channel/data_channel.js`](src/resources/js/data_channel/data_channel.js)에 담겨 있습니다. (WebRTC로 P2P 연결을 맺기 위한 매개 수단으로 [Firebase Cloud Firestore](https://firebase.google.com/docs/firestore)를 사용합니다. 방장이 방장의 친구에게 보내는 방 ID가 서로 공유하는 Cloud Firestore document의 ID입니다. [Firebase + WebRTC Codelab](https://webrtc.org/getting-started/firebase-rtc-codelab) 및 [https://github.com/webrtc/FirebaseRTC](https://github.com/webrtc/FirebaseRTC)에서 사용한 방식을 거의 그대로 이용한 것입니다.)
+게스트 입력은 방장을 거쳐 돌아오므로 인터넷 지연이 반영됩니다. 방장 이전이나 게스트 예측은 구현하지 않았습니다. 일부 네트워크는 TURN 서버가 필요합니다.
 
-- 퀵 매치: 퀵 매치 서버와 통신하는 기능이 [`src/resources/js/quick_match/quick_match.js`](src/resources/js/quick_match/quick_match.js)에 담겨 있습니다. (퀵 매치 서버로는 [Google App Engine](https://cloud.google.com/appengine)을 사용합니다. 퀵 매치 서버는 퀵 매치를 위해 현재 대기하고 있는 사람의 방 ID를 새로 들어온 사람에게 보내주는 역할을 합니다.)
+검증: `npm test`, 개발 빌드 후 `npm run test:browser`, `npm run build`. 배포 전에는 반드시 Git 원격 주소를 확인하세요. 폴더 이름과 기존 원격 저장소 이름이 다릅니다.
 
-게임에서 사용되는 RNG (random number generator) 부분만을 제외하면 게임 상태는 오로지 사용자의 (키보드) 입력에 의해 결정됩니다. 따라서 네트워크 양편에 있는 두 사용자가 사용하는 RNG가 같다면, 사용자의 입력을 서로 주고 받는 것만으로도 두 사용자의 게임 상태를 동일하게 유지할 수 있습니다. 이 P2P 온라인 버전은 data channel open event가 발생할 때 이 두 사용자의 RNG를 같게 만들고 그 후 사용자의 입력을 네트워크를 통해 서로 주고 받습니다.
+원작: SACHI SOFT / SAWAYAKAN Programmers 및 Satoshi Takenouchi. JavaScript 이식과 기존 P2P 구현: [이규태 (gorisanson)](https://github.com/gorisanson/pikachu-volleyball).
 
-더 자세한 사항은 [`src/resources/js/main_online.js`](src/resources/js/main_online.js) 파일에 있는 주석에서 볼 수 있습니다.
+## 빠른 대전
+
+같은 새 Firebase 프로젝트를 사용하도록 형제 폴더의 `pikachu-volleyball-2v2-online-quick-match-server-main` 서버를 설정하세요. `src/resources/js/online_2v2/quick_match_config.js`의 `quickMatchServerURL`에 서버 HTTPS 주소를 입력하면 빠른 대전 버튼이 활성화됩니다. 자세한 설정은 서버 README를 참고하세요.
+
+인원 배치와 지역을 선택한 뒤 **빠른 대전**을 누르세요. 첫 브라우저가 방장이 되고, 다음 참가자들은 대기실에 들어와 빈 자리 또는 팀을 직접 선택합니다. 방장은 빈 자리에 AI를 넣고 먼저 시작할 수 있습니다. 경기 시작 후에는 새 빠른 대전 참가자를 받지 않습니다. 초대 링크 방식도 계속 사용할 수 있습니다.
+
+## 기존 P2P 화면과 채팅
+
+기존 P2P의 첫 화면, 메뉴 바, 설정 하위 메뉴, 화면 테마와 채팅 입력 바를 사용합니다. **친구들과 함께 → 방 만들기**로 방을 만들거나 빠른 대전을 선택하세요. 방장은 **게임 → 시작 / 재시작**으로 경기를 시작합니다.
+
+**설정** 메뉴에서 그래픽, 배경음, 효과음, 속도, 승리 점수를 선택합니다. **코트 / 서브**에서 너비와 서브 방식을 바꿉니다. 경기 설정은 방장만 변경하며 경기 중 변경 시 확인 대화상자를 거쳐 같은 선수 구성으로 재시작합니다. 그래픽·소리·테마·키 배치는 각 브라우저에만 적용됩니다.
+
+**Space** 또는 **채팅** 버튼으로 메시지를 입력하고 **Enter**로 모두에게 보냅니다. **Escape**로 입력을 닫으며 **채팅 끄기**는 내 브라우저에서만 채팅을 끕니다. 대기실과 경기 중 모두 사용할 수 있고, 로컬 2명은 각자 이름을 정하고 채팅 이름에서 화자를 선택합니다. 채팅은 방장을 통해 WebRTC로 전달되며 Firestore에 저장되지 않습니다.
+
+## 자리 선택, 선수 이름과 연습모드
+
+초대와 빠른 대전 모두 대기실에 자리 미선택 상태로 입장합니다. 1명은 빈 자리 하나를, 로컬 2명은 빈 팀 전체(P1+P2 또는 P3+P4)를 선택합니다. 선택을 취소하거나 다른 빈 자리로 바꿀 수 있습니다. 참가한 사람 모두가 자리를 고르고 연결되어야 방장이 시작할 수 있습니다. 남는 자리는 AI로 채울 수 있습니다.
+
+각 브라우저는 대기실에서 자기 선수들의 이름을 바꿀 수 있습니다. 로컬 2명의 이름은 팀을 바꿔도 유지되며 채팅의 이름 선택에서 화자를 고릅니다. 채팅은 기존처럼 같은 편의 무작위 좌표에 나타나고, 같은 선수의 이전 메시지를 교체합니다. 모두에게 같은 좌표가 보이며 경기 물리 난수와 분리되어 있습니다.
+
+설정 메뉴에 연습모드와 기본 설정 복원을 추가했습니다. 연습모드는 기존 오프라인 동작처럼 점수판을 숨기고 승리점수에 의한 종료를 막습니다. 기본 설정 복원은 이름과 자리를 유지합니다. 대화상자가 없을 때 Escape로 메뉴 바를 숨기거나 표시합니다.
+
+이번 대기실은 `pikavolley-2v2-v2` 형식입니다. 배포 시 프런트엔드, 빠른 대전 서버와 `firestore.2v2.rules`를 함께 갱신하고 새 방을 만드세요.

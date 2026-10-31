@@ -8,3 +8,9 @@ firebase.json
 .firebase/
 yarn.lock
 
+
+.test-artifacts/
+
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*

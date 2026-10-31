@@ -6,7 +6,7 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   entry: {
-    main: './src/resources/js/main_online.js',
+    main: './src/resources/js/main_online_2v2.js',
     ko: './src/ko/ko.js',
     main_replay: './src/resources/js/replay/main_replay.js',
     main_update_history:
@@ -50,14 +50,9 @@ module.exports = {
       chunkFilename: '[id].[contenthash].css',
     }),
     new HtmlWebpackPlugin({
-      template: 'src/en/index.html',
+      template: 'src/en/online_2v2.html',
       filename: 'en/index.html',
-      chunks: [
-        'runtime',
-        'main',
-        'dark_color_scheme',
-        'is_embedded_in_other_website',
-      ],
+      chunks: ['runtime', 'main'],
       chunksSortMode: 'manual',
       minify: {
         collapseWhitespace: true,
@@ -65,15 +60,9 @@ module.exports = {
       },
     }),
     new HtmlWebpackPlugin({
-      template: 'src/ko/index.html',
+      template: 'src/ko/online_2v2.html',
       filename: 'ko/index.html',
-      chunks: [
-        'runtime',
-        'ko',
-        'main',
-        'dark_color_scheme',
-        'is_embedded_in_other_website',
-      ],
+      chunks: ['runtime', 'main'],
       chunksSortMode: 'manual',
       minify: {
         collapseWhitespace: true,

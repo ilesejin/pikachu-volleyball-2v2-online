@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <title>피카츄 배구 P2P 온라인 · 2대2</title>
+    <link rel="icon" href="../resources/assets/images/IDI_PIKAICON-0.png" />
+  </head>
+  <body>
+    <div id="before-connection" class="limit-width">
+      <div id="about-box-head">
+        <h1>피카츄 배구 <span class="no-wrap">P2P 온라인 · 2대2</span></h1>
+        <div class="if-embedded-in-other-website hidden">
+          <div class="limit-width">
+            타 사이트 상에서 피카츄 배구 P2P 온라인을 실행하고 있는 것 같습니다.
+            다음 주소로 직접 방문하면 광고 없는 쾌적한 환경에서 플레이할 수
+            있습니다.
+            <div class="original-address">
+              피카츄 배구 P2P 온라인 원 주소:<br />
+              <a
+                href="https://gorisanson.github.io/pikachu-volleyball-p2p-online/ko/"
+                target="_blank"
+                rel="noopener"
+                >https://gorisanson.github.io/pikachu-volleyball-p2p-online/ko/</a
+              >
+            </div>
+            <button type="button" class="btn-in-box">
+              <span>닫기</span>
+            </button>
+          </div>
+        </div>
+        <div class="color-scheme-toggle-switch-container">
+          <input
+            type="checkbox"
+            id="dark-color-scheme-checkbox-1"
+            class="toggle-switch dark-color-scheme-checkbox"
+          />
+          <label for="dark-color-scheme-checkbox-1"></label>
+        </div>
+        <p class="languages">
+          <a href="../en/" target="_self">English</a>
+          | &check; Korean(한국어)
+        </p>
+        <p class="offline-version">
+          <a href="https://gorisanson.github.io/pikachu-volleyball/ko/"
+            >오프라인 웹 버전</a
+          >도 있습니다.
+        </p>
+
+        <p class="original-by">
+          원조 피카츄 배구 (対戦ぴかちゅ～　ﾋﾞｰﾁﾊﾞﾚｰ編) 게임은 원래 다음 분들이
+          만들었습니다.<br />
+          1997 (C)
+          <span class="no-wrap">SACHI SOFT / SAWAYAKAN Programmers</span><br />
+          1997 (C) <span class="no-wrap">Satoshi Takenouchi</span>
+        </p>
+        <p class="reverse-engineered-by">
+          원조 피카츄 배구 게임을 리버스 엔지니어링하여 P2P 온라인 버전으로
+          만들었습니다.<br />
+          P2P 온라인 버전으로 만든 사람:
+          <span class="no-wrap"
+            ><a href="https://gorisanson.github.io/">이규태</a></span
+          >
+        </p>
+        <p class="source-code-on">
+          소스 코드를
+          <a
+            href="https://github.com/gorisanson/pikachu-volleyball-p2p-online"
+            target="_blank"
+            rel="noopener"
+            >GitHub</a
+          >에서 볼 수 있습니다.
+        </p>
+
+        <p class="update-history-on">
+          <a href="./update-history/" target="_self">업데이트 기록</a>
+        </p>
+      </div>
+
+      <div class="margin-top">
+        <img
+          class="screenshot"
+          src="../resources/assets/images/screenshot.png"
+          alt="피카츄 배구"
+        />
+        <p>
+          브라우저 4개에서 1명씩, 또는 브라우저 2개에서 팀당 2명씩 온라인 2대2
+          경기를 즐기세요.
+        </p>
+      </div>
+      <div id="connect-panel">
+        <div class="nickname-input-container">
+          <label for="nickname">닉네임 (최대 24자)</label
+          ><input
+            id="nickname"
+            maxlength="24"
+            value="Player"
+            autocomplete="nickname"
+          />
+        </div>
+        <label id="pair-name-label" hidden
+          >두 번째 로컬 선수 이름<input
+            id="pair-name"
+            maxlength="24"
+            value="Player 2"
+            autocomplete="off"
+        /></label>
+        <div class="connection-fields">
+          <label
+            >인원 배치<select id="layout">
+              <option value="four">브라우저당 1명 · 4개 브라우저</option>
+              <option value="pairs">브라우저당 2명 · 2개 브라우저</option>
+            </select></label
+          ><label
+            >빠른 대전 그룹<select id="match-region">
+              <option value="GLOBAL">Global</option>
+              <option value="KR">Korea</option>
+              <option value="TW">Taiwan</option>
+            </select></label
+          >
+        </div>
+        <div class="margin-top grid-1-1">
+          <button type="button" id="quick-match" disabled>
+            빠른 대전 (Enter)</button
+          ><button type="button" id="with-your-friend-btn">
+            친구들과 함께
+          </button>
+        </div>
+        <button id="cancel-search" type="button" hidden>검색 취소</button>
+        <div id="about-with-your-friend" class="margin-top" hidden>
+          <p>
+            <strong>방장</strong> — 방을 만들고 초대 링크 또는 방 ID를
+            공유하세요.
+          </p>
+          <p>
+            <strong>참가자</strong> — 방을 찾은 뒤 빈 자리를 선택하고
+            참가하세요.
+          </p>
+          <button type="button" id="create" disabled>방 만들기</button>
+          <div class="room-id-with-join">
+            <label for="room-id">참가할 방 ID</label
+            ><input
+              id="room-id"
+              maxlength="20"
+              autocomplete="off"
+              spellcheck="false"
+            /><button type="button" id="find" disabled>방 찾기</button
+            ><button type="button" id="join" disabled>방 참가</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p id="status" class="connection-status" role="status" aria-live="polite">
+      게임 자료를 불러오는 중…
+    </p>
+    <div id="flex-container" hidden>
+      <div id="menu-bar">
+        <div class="btn-container left">
+          <div class="relative-container">
+            <button
+              type="button"
+              id="options-dropdown-btn"
+              class="btn dropdown-btn"
+            >
+              설정
+            </button>
+            <div id="options-dropdown" class="dropdown">
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="graphic-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  그래픽 &#9654;&#xfe0e;
+                </button>
+                <div id="graphic-submenu" class="submenu">
+                  <button
+                    type="button"
+                    id="graphic-sharp-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>예리하게
+                  </button>
+                  <button type="button" id="graphic-soft-btn" class="btn">
+                    <span class="check">&check; </span>부드럽게
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="bgm-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  배경음악 &#9654;&#xfe0e;
+                </button>
+                <div id="bgm-submenu" class="submenu">
+                  <button type="button" id="bgm-on-btn" class="btn selected">
+                    <span class="check">&check; </span>켜기
+                  </button>
+                  <button type="button" id="bgm-off-btn" class="btn">
+                    <span class="check">&check; </span>끄기
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="sfx-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  효과음 &#9654;&#xfe0e;
+                </button>
+                <div id="sfx-submenu" class="submenu">
+                  <button type="button" id="stereo-btn" class="btn selected">
+                    <span class="check">&check; </span>스테레오
+                  </button>
+                  <button type="button" id="mono-btn" class="btn">
+                    <span class="check">&check; </span>모노
+                  </button>
+                  <button type="button" id="sfx-off-btn" class="btn">
+                    <span class="check">&check; </span>끄기
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="speed-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  속도 &#9654;&#xfe0e;
+                </button>
+                <div id="speed-submenu" class="submenu">
+                  <button type="button" id="slow-speed-btn" class="btn">
+                    <span class="check">&check; </span>느리게
+                  </button>
+                  <button
+                    type="button"
+                    id="medium-speed-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>보통
+                  </button>
+                  <button type="button" id="fast-speed-btn" class="btn">
+                    <span class="check">&check; </span>빠르게
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="winning-score-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  승리점수 &#9654;&#xfe0e;
+                </button>
+                <div id="winning-score-submenu" class="submenu">
+                  <button type="button" id="winning-score-5-btn" class="btn">
+                    <span class="check">&check; </span>5점
+                  </button>
+                  <button type="button" id="winning-score-10-btn" class="btn">
+                    <span class="check">&check; </span>10점
+                  </button>
+                  <button
+                    type="button"
+                    id="winning-score-15-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>15점
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button type="button" id="court-submenu-btn" class="btn">
+                  코트 / 서브
+                </button>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="practice-mode-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  연습모드 &#9654;
+                </button>
+                <div id="practice-mode-submenu" class="submenu">
+                  <button type="button" id="practice-mode-on-btn" class="btn">
+                    <span class="check">✓ </span>켜기</button
+                  ><button
+                    type="button"
+                    id="practice-mode-off-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">✓ </span>끄기
+                  </button>
+                </div>
+              </div>
+              <button id="reset-to-default-btn" type="button" class="btn">
+                기본 설정으로
+              </button>
+              <div id="local-panel" hidden>
+                <button type="button" id="controls-open-btn" class="btn">
+                  조작 설정
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="color-scheme-toggle-switch-container">
+            <input
+              type="checkbox"
+              id="dark-color-scheme-checkbox-2"
+              class="toggle-switch dark-color-scheme-checkbox"
+            />
+            <label for="dark-color-scheme-checkbox-2"></label>
+          </div>
+        </div>
+        <div class="relative-container">
+          <button
+            type="button"
+            id="match-dropdown-btn"
+            class="btn dropdown-btn"
+          >
+            게임
+          </button>
+          <div id="host-panel" class="dropdown" hidden>
+            <button type="button" id="start" class="btn">시작 / 재시작</button
+            ><button type="button" id="pause" class="btn" disabled>
+              일시정지</button
+            ><button type="button" id="back-lobby" class="btn" disabled>
+              대기실
+            </button>
+          </div>
+        </div>
+        <div class="btn-container right">
+          <button type="button" id="leave" class="btn">나가기</button>
+        </div>
+      </div>
+
+      <div id="game-panel" hidden>
+        <div id="game-canvas-container">
+          <div id="canvas-container"></div>
+          <div id="player-names" class="nicknames-container"></div>
+          <div id="chat-bubbles" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div id="lobby-banner">
+        <p>
+          <strong>대기실</strong> — 방장이 게임 → 시작 / 재시작으로 경기를
+          시작합니다. 빈 자리는 컴퓨터로 채울 수 있습니다.
+        </p>
+      </div>
+      <details id="room-panel" open>
+        <summary>
+          방 · <output id="room-code"></output> <span id="phase"></span>
+        </summary>
+        <p id="arrangement"></p>
+        <ul id="roster"></ul>
+        <div class="invite-controls">
+          <label>초대 링크<input id="invite-link" readonly /></label
+          ><button type="button" id="copy-link">복사</button>
+        </div>
+        <label id="fill-ai-label"
+          ><input id="fill-ai" type="checkbox" checked />빈 자리를 컴퓨터로
+          채우기</label
+        >
+        <div id="lobby-editor">
+          <h3>내 자리 선택</h3>
+          <p>
+            입장 시 자리가 지정되지 않습니다. 빈 자리 또는 팀을 선택하고,
+            취소하면 자리를 비웁니다. 참가자 모두가 자리를 골라야 시작할 수
+            있습니다.
+          </p>
+          <div id="slot-choices"></div>
+          <button id="cancel-slot" type="button">자리 선택 취소</button>
+          <div id="lobby-participants"></div>
+          <form id="names-form">
+            <label
+              >첫 번째 선수 이름<input
+                id="local-name-1"
+                maxlength="24"
+                required /></label
+            ><label id="local-name-2-label" hidden
+              >두 번째 선수 이름<input
+                id="local-name-2"
+                maxlength="24" /></label
+            ><button id="save-names" type="submit">이름 저장</button>
+          </form>
+        </div>
+        <p id="my-positions"></p>
+        <p class="controls-hint">
+          1명: 방향키 / Enter 또는 R/D/F/G/V/Z. 2명: 첫 번째 R/D/F/G/V/Z, 두
+          번째 방향키 / Enter. Space로 채팅합니다.
+        </p>
+      </details>
+      <label id="chat-speaker-label" hidden
+        >채팅 이름<select id="chat-speaker"></select
+      ></label>
+      <div id="chat-input-here">
+        <div id="chat-input-and-send-btn-container" class="hidden">
+          <input
+            type="text"
+            id="chat-input"
+            maxlength="50"
+            autocomplete="off"
+            aria-label="채팅 메시지"
+          /><button type="button" id="send-btn">보내기 (Enter)</button>
+        </div>
+        <div id="chat-open-btn-and-chat-disabling-btn-container">
+          <button type="button" id="chat-open-btn">채팅 (스페이스 바)</button
+          ><button type="button" id="chat-disabling-btn">채팅 끄기</button>
+        </div>
+      </div>
+      <details id="chat-history">
+        <summary>채팅 기록</summary>
+        <ol id="chat-log" aria-live="polite"></ol>
+      </details>
+    </div>
+    <div
+      id="match-settings-dialog"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="match-settings-title"
+    >
+      <h2 id="match-settings-title">코트와 서브</h2>
+      <form id="settings-form">
+        <input id="practice-mode" type="checkbox" hidden />
+        <label
+          >한쪽 코트 너비<input
+            id="court-width"
+            type="number"
+            value="384"
+            min="216"
+            max="10000"
+            step="1"
+            required /></label
+        ><label
+          >서브 방식<select id="serve-mode">
+            <option value="rotate-players">
+              1 · 공 뒤 고정, 선수 위치 교대
+            </option>
+            <option value="rotate-ball" selected>
+              2 · 선수 고정, 공 위치 교대
+            </option>
+            <option value="fixed">3 · 선수와 공 위치 고정</option>
+          </select></label
+        ><select id="speed" hidden>
+          <option value="20">20</option>
+          <option value="25" selected>25</option>
+          <option value="30">30</option></select
+        ><select id="winning-score" hidden>
+          <option>5</option>
+          <option>10</option>
+          <option selected>15</option>
+        </select>
+      </form>
+      <p>경기 중 적용하면 같은 선수 구성으로 경기를 다시 시작합니다.</p>
+      <div class="dialog-actions">
+        <button type="button" id="settings-apply" class="btn-in-box">
+          적용</button
+        ><button
+          type="button"
+          data-close="match-settings-dialog"
+          class="btn-in-box"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+    <div
+      id="settings-confirm"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-confirm-title"
+    >
+      <h2 id="settings-confirm-title">설정을 바꿀까요?</h2>
+      <p id="settings-confirm-text"></p>
+      <p>진행 중인 경기가 다시 시작됩니다.</p>
+      <div class="dialog-actions">
+        <button type="button" id="settings-confirm-yes" class="btn-in-box">
+          예</button
+        ><button type="button" id="settings-confirm-no" class="btn-in-box">
+          아니요
+        </button>
+      </div>
+    </div>
+    <div
+      id="controls-dialog"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="controls-title"
+    >
+      <h2 id="controls-title">조작 설정</h2>
+      <label
+        >키 배치<select id="controls">
+          <option value="standard">
+            기본 · 1명: 방향키 + RDFG, 2명: RDFG / 방향키
+          </option>
+          <option value="position">기존 선수별 키 (P1–P4)</option>
+        </select></label
+      >
+      <p>
+        R 점프 · D 왼쪽 · F 오른쪽 아래 · G 오른쪽 · V 아래 · Z 공격. 선수별 키:
+        P1 W/A/S/D/X/Z; P2 Y/G/H/J/B/V; P3 P/L/세미콜론/따옴표/쉼표; P4
+        방향키/Enter.
+      </p>
+      <label><input id="mute" type="checkbox" />이 브라우저 음소거</label
+      ><button type="button" data-close="controls-dialog" class="btn-in-box">
+        닫기
+      </button>
+    </div>
+  </body>
+</html>

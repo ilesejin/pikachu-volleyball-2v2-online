@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function roomData(roomId) { return get(/databases/$(database)/documents/rooms/$(roomId)).data; }
+    function host(roomId) { return signedIn() && roomData(roomId).hostId == request.auth.uid; }
+    function member(roomId) { return signedIn() && request.auth.uid in roomData(roomId).members; }
+    function validSlots(layout, slots, unassigned) {
+      return slots is list && ((unassigned && slots.size() == 0) || (layout == 'four' && slots.size() == 1 && slots[0] is int && slots[0] >= 0 && slots[0] < 4)
+        || (layout == 'pairs' && (slots == [0, 1] || slots == [2, 3])));
+    }
+    function validRoom(data) {
+      return data.schema == 'pikavolley-2v2-v2' && data.hostId is string && data.members is map
+        && data.members.size() >= 1 && data.members.size() <= (data.layout == 'pairs' ? 2 : 4) && data.seats is list && data.seats.size() == 4
+        && data.layout in ['four', 'pairs'] && data.status in ['lobby', 'playing', 'closed'];
+    }
+    function ownSeat(data, i, slots) { return (data.seats[i] == request.auth.uid) == (i in slots); }
+    function ownSeats(data, slots) {
+      return ownSeat(data, 0, slots) && ownSeat(data, 1, slots) && ownSeat(data, 2, slots) && ownSeat(data, 3, slots);
+    }
+    function seatChange(old, data, i) {
+      return old.seats[i] == data.seats[i]
+        || (old.seats[i] == '' && data.seats[i] == request.auth.uid)
+        || (old.seats[i] == request.auth.uid && data.seats[i] == '');
+    }
+    function onlyOwnSeats(old, data) {
+      return seatChange(old, data, 0) && seatChange(old, data, 1) && seatChange(old, data, 2) && seatChange(old, data, 3);
+    }
+    function validNames(data, me) {
+      return me.keys().hasOnly(['name','names','slots','connected']) && me.names is list
+        && me.names.size() == (data.layout == 'pairs' ? 2 : 1)
+        && me.names[0] is string && me.names[0].size() > 0 && me.names[0].size() <= 24
+        && (data.layout != 'pairs' || (me.names[1] is string && me.names[1].size() > 0 && me.names[1].size() <= 24))
+        && me.name == me.names[0] && me.connected is bool;
+    }
+    function validOwnMember(data, old) {
+      let me = data.members[request.auth.uid];
+      return validNames(data, me) && validSlots(data.layout, me.slots, true) && ownSeats(data, me.slots)
+        && ((request.auth.uid in old.members && me.connected == old.members[request.auth.uid].connected)
+          || (!(request.auth.uid in old.members) && me.connected == false));
+    }
+    function ready(data) {
+      let ids = data.members.keys();
+      let n = ids.size();
+      let count = data.layout == 'pairs' ? 2 : 1;
+      return data.members[ids[0]].slots.size() == count
+        && (n < 2 || data.members[ids[1]].slots.size() == count)
+        && (n < 3 || data.members[ids[2]].slots.size() == count)
+        && (n < 4 || data.members[ids[3]].slots.size() == count);
+    }
+    match /rooms/{roomId} {
+      // A room code is required. No public room directory is exposed.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && validRoom(request.resource.data)
+        && request.resource.data.hostId == request.auth.uid && request.resource.data.status == 'lobby'
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && validSlots(request.resource.data.layout, request.resource.data.members[request.auth.uid].slots, true)
+        && validNames(request.resource.data, request.resource.data.members[request.auth.uid])
+        && ownSeats(request.resource.data, request.resource.data.members[request.auth.uid].slots)
+        && request.resource.data.seats.hasOnly(['', request.auth.uid]);
+      allow update: if signedIn() && validRoom(request.resource.data)
+        && request.resource.data.hostId == resource.data.hostId && request.resource.data.schema == resource.data.schema
+        && (resource.data.status == 'playing' || request.resource.data.status != 'playing' || ready(request.resource.data))
+        && (resource.data.hostId == request.auth.uid || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'seats'])
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+          && onlyOwnSeats(resource.data, request.resource.data)
+          && ((!(request.auth.uid in request.resource.data.members) && ownSeats(request.resource.data, []))
+            || (resource.data.status == 'lobby' && validOwnMember(request.resource.data, resource.data)))
+        ));
+      allow delete: if signedIn() && resource.data.hostId == request.auth.uid;
+      match /connections/{peerId} {
+        allow get: if member(roomId) && (host(roomId) || request.auth.uid == peerId);
+        allow list: if host(roomId);
+        allow create, delete: if host(roomId);
+        allow update: if host(roomId) || (member(roomId) && request.auth.uid == peerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer']));
+        match /{side}/{candidateId} {
+          allow read: if member(roomId) && (host(roomId) || request.auth.uid == peerId);
+          allow create: if member(roomId) && request.resource.data.candidate is string && request.resource.data.candidate.size() < 8192
+            && ((side == 'hostCandidates' && host(roomId)) || (side == 'guestCandidates' && request.auth.uid == peerId));
+          allow delete: if host(roomId);
+        }
+      }
+    }
+  }
+}

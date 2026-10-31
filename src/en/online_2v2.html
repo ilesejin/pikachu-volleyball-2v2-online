@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <title>Pikachu Volleyball P2P Online · 2v2</title>
+    <link rel="icon" href="../resources/assets/images/IDI_PIKAICON-0.png" />
+  </head>
+  <body>
+    <div id="before-connection" class="limit-width">
+      <div id="about-box-head">
+        <h1>
+          Pikachu Volleyball <span class="no-wrap">P2P Online · 2v2</span>
+        </h1>
+        <div class="if-embedded-in-other-website hidden">
+          <div class="limit-width">
+            It seems that you are playing Pikachu Volleyball P2P Online in some
+            foreign website. If you visit the following link directly, you can
+            play the game in a pleasant environment without ads.
+            <div class="original-address">
+              The original address of Pikachu Volleyball P2P Online:<br />
+              <a
+                href="https://gorisanson.github.io/pikachu-volleyball-p2p-online/en/"
+                target="_blank"
+                rel="noopener"
+                >https://gorisanson.github.io/pikachu-volleyball-p2p-online/en/</a
+              >
+            </div>
+            <button type="button" class="btn-in-box">
+              <span>close</span>
+            </button>
+          </div>
+        </div>
+        <div class="color-scheme-toggle-switch-container">
+          <input
+            type="checkbox"
+            id="dark-color-scheme-checkbox-1"
+            class="toggle-switch dark-color-scheme-checkbox"
+          />
+          <label for="dark-color-scheme-checkbox-1"></label>
+        </div>
+        <p class="languages">
+          &check; English |
+          <a href="../ko/" target="_self">Korean(한국어)</a>
+        </p>
+        <p class="offline-version">
+          You can also play
+          <a href="https://gorisanson.github.io/pikachu-volleyball/en/"
+            >the offline web version</a
+          >.
+        </p>
+
+        <p class="original-by">
+          The original Pikachu Volleyball (対戦ぴかちゅ～　ﾋﾞｰﾁﾊﾞﾚｰ編) was
+          developed by<br />
+          1997 (C)
+          <span class="no-wrap">SACHI SOFT / SAWAYAKAN Programmers</span><br />
+          1997 (C) <span class="no-wrap">Satoshi Takenouchi</span>
+        </p>
+        <p class="reverse-engineered-by">
+          The original game was reverse engineered and implemented into<br />
+          this P2P (peer-to-peer) online version by<br />
+          <span class="no-wrap"
+            ><a href="https://gorisanson.github.io/">Kyutae Lee</a></span
+          >
+        </p>
+        <p class="source-code-on">
+          You can view the source code on
+          <a
+            href="https://github.com/gorisanson/pikachu-volleyball-p2p-online"
+            target="_blank"
+            rel="noopener"
+            >GitHub</a
+          >.
+        </p>
+
+        <p class="update-history-on">
+          <a href="./update-history/" target="_self">Update history</a>
+        </p>
+      </div>
+
+      <div class="margin-top">
+        <img
+          class="screenshot"
+          src="../resources/assets/images/screenshot.png"
+          alt="Pikachu Volleyball"
+        />
+        <p>
+          Play 2v2 online with four browsers, or share a keyboard on each team.
+        </p>
+      </div>
+      <div id="connect-panel">
+        <div class="nickname-input-container">
+          <label for="nickname">Nickname (maximum 24 characters)</label
+          ><input
+            id="nickname"
+            maxlength="24"
+            value="Player"
+            autocomplete="nickname"
+          />
+        </div>
+        <label id="pair-name-label" hidden
+          >Second local player name<input
+            id="pair-name"
+            maxlength="24"
+            value="Player 2"
+            autocomplete="off"
+        /></label>
+        <div class="connection-fields">
+          <label
+            >Arrangement<select id="layout">
+              <option value="four">One player per browser · 4 browsers</option>
+              <option value="pairs">
+                Two local players per browser · 2 browsers
+              </option>
+            </select></label
+          ><label
+            >Quick Match group<select id="match-region">
+              <option value="GLOBAL">Global</option>
+              <option value="KR">Korea</option>
+              <option value="TW">Taiwan</option>
+            </select></label
+          >
+        </div>
+        <div class="margin-top grid-1-1">
+          <button type="button" id="quick-match" disabled>
+            Quick Match (Enter)</button
+          ><button type="button" id="with-your-friend-btn">
+            With your friends
+          </button>
+        </div>
+        <button id="cancel-search" type="button" hidden>Cancel search</button>
+        <div id="about-with-your-friend" class="margin-top" hidden>
+          <p>
+            <strong>Room creator</strong> — Create a room and share its
+            invitation link or Room ID.
+          </p>
+          <p>
+            <strong>Joiner</strong> — Find the room, choose a free position,
+            then join.
+          </p>
+          <button type="button" id="create" disabled>create room</button>
+          <div class="room-id-with-join">
+            <label for="room-id">Room ID to join</label
+            ><input
+              id="room-id"
+              maxlength="20"
+              autocomplete="off"
+              spellcheck="false"
+            /><button type="button" id="find" disabled>find room</button
+            ><button type="button" id="join" disabled>join room</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p id="status" class="connection-status" role="status" aria-live="polite">
+      Loading game assets…
+    </p>
+    <div id="flex-container" hidden>
+      <div id="menu-bar">
+        <div class="btn-container left">
+          <div class="relative-container">
+            <button
+              type="button"
+              id="options-dropdown-btn"
+              class="btn dropdown-btn"
+            >
+              Options
+            </button>
+            <div id="options-dropdown" class="dropdown">
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="graphic-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  Graphic &#9654;&#xfe0e;
+                </button>
+                <div id="graphic-submenu" class="submenu">
+                  <button
+                    type="button"
+                    id="graphic-sharp-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>sharp
+                  </button>
+                  <button type="button" id="graphic-soft-btn" class="btn">
+                    <span class="check">&check; </span>soft
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="bgm-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  BGM &#9654;&#xfe0e;
+                </button>
+                <div id="bgm-submenu" class="submenu">
+                  <button type="button" id="bgm-on-btn" class="btn selected">
+                    <span class="check">&check; </span>on
+                  </button>
+                  <button type="button" id="bgm-off-btn" class="btn">
+                    <span class="check">&check; </span>off
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="sfx-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  SFX &#9654;&#xfe0e;
+                </button>
+                <div id="sfx-submenu" class="submenu">
+                  <button type="button" id="stereo-btn" class="btn selected">
+                    <span class="check">&check; </span>stereo
+                  </button>
+                  <button type="button" id="mono-btn" class="btn">
+                    <span class="check">&check; </span>mono
+                  </button>
+                  <button type="button" id="sfx-off-btn" class="btn">
+                    <span class="check">&check; </span>off
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="speed-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  Speed &#9654;&#xfe0e;
+                </button>
+                <div id="speed-submenu" class="submenu">
+                  <button type="button" id="slow-speed-btn" class="btn">
+                    <span class="check">&check; </span>slow
+                  </button>
+                  <button
+                    type="button"
+                    id="medium-speed-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>medium
+                  </button>
+                  <button type="button" id="fast-speed-btn" class="btn">
+                    <span class="check">&check; </span>fast
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="winning-score-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  Winning score &#9654;&#xfe0e;
+                </button>
+                <div id="winning-score-submenu" class="submenu">
+                  <button type="button" id="winning-score-5-btn" class="btn">
+                    <span class="check">&check; </span>5 pts
+                  </button>
+                  <button type="button" id="winning-score-10-btn" class="btn">
+                    <span class="check">&check; </span>10 pts
+                  </button>
+                  <button
+                    type="button"
+                    id="winning-score-15-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>15 pts
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button type="button" id="court-submenu-btn" class="btn">
+                  Court / serve
+                </button>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="practice-mode-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  Practice mode &#9654;
+                </button>
+                <div id="practice-mode-submenu" class="submenu">
+                  <button type="button" id="practice-mode-on-btn" class="btn">
+                    <span class="check">✓ </span>on</button
+                  ><button
+                    type="button"
+                    id="practice-mode-off-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">✓ </span>off
+                  </button>
+                </div>
+              </div>
+              <button id="reset-to-default-btn" type="button" class="btn">
+                Reset to defaults
+              </button>
+              <div id="local-panel" hidden>
+                <button type="button" id="controls-open-btn" class="btn">
+                  Controls
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="color-scheme-toggle-switch-container">
+            <input
+              type="checkbox"
+              id="dark-color-scheme-checkbox-2"
+              class="toggle-switch dark-color-scheme-checkbox"
+            />
+            <label for="dark-color-scheme-checkbox-2"></label>
+          </div>
+        </div>
+        <div class="relative-container">
+          <button
+            type="button"
+            id="match-dropdown-btn"
+            class="btn dropdown-btn"
+          >
+            Game
+          </button>
+          <div id="host-panel" class="dropdown" hidden>
+            <button type="button" id="start" class="btn">Start / restart</button
+            ><button type="button" id="pause" class="btn" disabled>Pause</button
+            ><button type="button" id="back-lobby" class="btn" disabled>
+              Lobby
+            </button>
+          </div>
+        </div>
+        <div class="btn-container right">
+          <button type="button" id="leave" class="btn">Exit</button>
+        </div>
+      </div>
+
+      <div id="game-panel" hidden>
+        <div id="game-canvas-container">
+          <div id="canvas-container"></div>
+          <div id="player-names" class="nicknames-container"></div>
+          <div id="chat-bubbles" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div id="lobby-banner">
+        <p>
+          <strong>Waiting room</strong> — The host can start from Game → Start /
+          restart. Empty positions can use computers.
+        </p>
+      </div>
+      <details id="room-panel" open>
+        <summary>
+          Room · <output id="room-code"></output> <span id="phase"></span>
+        </summary>
+        <p id="arrangement"></p>
+        <ul id="roster"></ul>
+        <div class="invite-controls">
+          <label>Invitation link<input id="invite-link" readonly /></label
+          ><button type="button" id="copy-link">Copy</button>
+        </div>
+        <label id="fill-ai-label"
+          ><input id="fill-ai" type="checkbox" checked />Fill empty positions
+          with computers</label
+        >
+        <div id="lobby-editor">
+          <h3>Choose your slot</h3>
+          <p>
+            You entered without a slot. Select an empty position or team; cancel
+            to release it. Every joined human must be assigned before starting.
+          </p>
+          <div id="slot-choices"></div>
+          <button id="cancel-slot" type="button">Cancel slot selection</button>
+          <div id="lobby-participants"></div>
+          <form id="names-form">
+            <label
+              >First player name<input
+                id="local-name-1"
+                maxlength="24"
+                required /></label
+            ><label id="local-name-2-label" hidden
+              >Second player name<input
+                id="local-name-2"
+                maxlength="24" /></label
+            ><button id="save-names" type="submit">Save names</button>
+          </form>
+        </div>
+        <p id="my-positions"></p>
+        <p class="controls-hint">
+          Solo: arrows / Enter or R/D/F/G/V/Z. Pairs: first uses R/D/F/G/V/Z;
+          second uses arrows / Enter. Space opens chat.
+        </p>
+      </details>
+      <label id="chat-speaker-label" hidden
+        >Chat as<select id="chat-speaker"></select
+      ></label>
+      <div id="chat-input-here">
+        <div id="chat-input-and-send-btn-container" class="hidden">
+          <input
+            type="text"
+            id="chat-input"
+            maxlength="50"
+            autocomplete="off"
+            aria-label="Chat message"
+          /><button type="button" id="send-btn">send (Enter)</button>
+        </div>
+        <div id="chat-open-btn-and-chat-disabling-btn-container">
+          <button type="button" id="chat-open-btn">Chat (space bar)</button
+          ><button type="button" id="chat-disabling-btn">Disable chat</button>
+        </div>
+      </div>
+      <details id="chat-history">
+        <summary>Chat history</summary>
+        <ol id="chat-log" aria-live="polite"></ol>
+      </details>
+    </div>
+    <div
+      id="match-settings-dialog"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="match-settings-title"
+    >
+      <h2 id="match-settings-title">Court and serve</h2>
+      <form id="settings-form">
+        <input id="practice-mode" type="checkbox" hidden />
+        <label
+          >Width per court<input
+            id="court-width"
+            type="number"
+            value="384"
+            min="216"
+            max="10000"
+            step="1"
+            required /></label
+        ><label
+          >Serving<select id="serve-mode">
+            <option value="rotate-players">
+              1 · Back ball, rotating players
+            </option>
+            <option value="rotate-ball" selected>
+              2 · Fixed players, rotating ball
+            </option>
+            <option value="fixed">3 · Fixed players and ball</option>
+          </select></label
+        ><select id="speed" hidden>
+          <option value="20">20</option>
+          <option value="25" selected>25</option>
+          <option value="30">30</option></select
+        ><select id="winning-score" hidden>
+          <option>5</option>
+          <option>10</option>
+          <option selected>15</option>
+        </select>
+      </form>
+      <p>Applying during a match restarts the match with the same players.</p>
+      <div class="dialog-actions">
+        <button type="button" id="settings-apply" class="btn-in-box">
+          Apply</button
+        ><button
+          type="button"
+          data-close="match-settings-dialog"
+          class="btn-in-box"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+    <div
+      id="settings-confirm"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-confirm-title"
+    >
+      <h2 id="settings-confirm-title">Change options?</h2>
+      <p id="settings-confirm-text"></p>
+      <p>The current match will restart.</p>
+      <div class="dialog-actions">
+        <button type="button" id="settings-confirm-yes" class="btn-in-box">
+          Yes</button
+        ><button type="button" id="settings-confirm-no" class="btn-in-box">
+          No
+        </button>
+      </div>
+    </div>
+    <div
+      id="controls-dialog"
+      class="fade-in-box notice fixed hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="controls-title"
+    >
+      <h2 id="controls-title">Controls</h2>
+      <label
+        >Keyboard layout<select id="controls">
+          <option value="standard">
+            Standard · solo: arrows + RDFG; pairs: RDFG / arrows
+          </option>
+          <option value="position">Original position keys (P1–P4)</option>
+        </select></label
+      >
+      <p>
+        R jump · D left · F down-right · G right · V down · Z hit. Position
+        keys: P1 W/A/S/D/X/Z; P2 Y/G/H/J/B/V; P3 P/L/semicolon/quote/comma; P4
+        arrows/Enter.
+      </p>
+      <label><input id="mute" type="checkbox" />Mute this browser</label
+      ><button type="button" data-close="controls-dialog" class="btn-in-box">
+        Close
+      </button>
+    </div>
+  </body>
+</html>

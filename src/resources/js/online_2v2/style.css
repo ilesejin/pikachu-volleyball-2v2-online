@@ -1,0 +1,296 @@
+/* The base layout and controls come from the original P2P stylesheet. */
+:root {
+  --aspect-ratio: calc(768 / 304);
+  --inverse-aspect-ratio: calc(304 / 768);
+  --canvas-width: min(96vw, calc(76vh * var(--aspect-ratio)), 1500px);
+  --canvas-height: calc(var(--canvas-width) * var(--inverse-aspect-ratio));
+}
+[hidden] {
+  display: none !important;
+}
+#before-connection {
+  width: min(96vw, 864px);
+}
+.connection-status {
+  max-width: 864px;
+  margin: 8px auto;
+  padding: 0 18px;
+  font-size: 0.9rem;
+}
+.connection-status.error {
+  color: #cf3636;
+}
+.connection-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.connection-fields label,
+#settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connection-fields select,
+#nickname,
+#room-id,
+#controls,
+#settings-form input,
+#settings-form select {
+  min-width: 0;
+  font-size: inherit;
+  padding: 7px;
+  color: var(--color);
+  background: var(--background-color);
+}
+#nickname {
+  width: 100%;
+}
+#quick-match,
+#with-your-friend-btn {
+  font-size: var(--font-size);
+}
+#about-with-your-friend button,
+#cancel-search {
+  padding: 10px 18px;
+  font-size: 0.9em;
+}
+.room-id-with-join {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+  align-items: center;
+}
+.room-id-with-join label {
+  width: 100%;
+}
+#room-id {
+  flex: 1;
+}
+#menu-bar {
+  grid-template-columns: 1fr auto auto;
+}
+#menu-bar .btn-container.left {
+  display: flex;
+  align-items: center;
+}
+#menu-bar > .relative-container {
+  display: flex;
+  align-items: center;
+}
+#menu-bar .dropdown {
+  top: 100%;
+  left: 0;
+}
+#menu-bar .submenu {
+  top: 0;
+  left: 100%;
+}
+#menu-bar .dropdown .btn {
+  display: block;
+  margin: 0;
+  border-radius: 0;
+  width: calc(1.65 * var(--btn-width));
+}
+#menu-bar .submenu > .btn {
+  width: calc(1.45 * var(--btn-width));
+}
+#menu-bar .btn:disabled {
+  cursor: default;
+}
+#menu-bar .dropdown-btn[aria-expanded='true'] {
+  background: var(--btn-in-dropdown-hover-background-color);
+}
+#game-panel,
+#canvas-container {
+  width: var(--canvas-width);
+  height: var(--canvas-height);
+}
+#room-panel {
+  margin: 10px 0;
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+#room-panel summary {
+  cursor: pointer;
+}
+#phase {
+  margin-left: 15px;
+}
+#roster {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0;
+  gap: 12px;
+}
+#roster li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 3px solid;
+  padding-top: 6px;
+  overflow-wrap: anywhere;
+}
+#roster button {
+  align-self: flex-start;
+}
+.player-0 {
+  border-color: #d8b021 !important;
+}
+.player-1 {
+  border-color: #ef9146 !important;
+}
+.player-2 {
+  border-color: #7abb31 !important;
+}
+.player-3 {
+  border-color: #e85544 !important;
+}
+.invite-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.invite-controls label {
+  flex: 1;
+}
+#invite-link {
+  width: 100%;
+  padding: 6px;
+  font-size: 0.85rem;
+}
+#fill-ai-label {
+  display: block;
+  margin: 12px 0;
+}
+.controls-hint {
+  line-height: 1.5;
+}
+#lobby-banner {
+  text-align: center;
+  padding: 28px 20px;
+}
+#player-names {
+  left: 0;
+  margin-left: 0;
+  width: 100%;
+  grid-template-columns: repeat(4, 1fr);
+  height: auto;
+  padding-top: 9%;
+  pointer-events: none;
+  text-align: center;
+}
+#player-names .nickname {
+  font-size: clamp(10px, 1.25vw, 18px);
+  text-shadow: 1px 1px 2px #000;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+.fade-in-box.fixed {
+  padding: 24px max(20px, calc((100vw - 720px) / 2));
+  z-index: 50;
+  justify-content: center;
+  gap: 20px;
+}
+.fade-in-box.fixed p {
+  margin: 0;
+}
+#settings-form {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+}
+#controls-dialog label {
+  display: block;
+}
+#controls-dialog select {
+  width: 100%;
+}
+#chat-history {
+  font-size: 0.8rem;
+  margin-top: 10px;
+}
+#chat-log {
+  max-height: 160px;
+  overflow-y: auto;
+  padding-left: 24px;
+}
+#chat-log li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#chat-bubbles {
+  pointer-events: none;
+}
+#chat-bubbles .chat-box {
+  max-width: 28%;
+  overflow-wrap: anywhere;
+  font-size: clamp(12px, 1.6vw, 24px);
+  padding: 6px;
+}
+#chat-bubbles .chat-box.in-speech-bubble {
+  color: #232629;
+}
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--link-color);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .connection-fields {
+    grid-template-columns: 1fr;
+  }
+  #roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fade-in-box.fixed {
+    padding: 20px;
+  }
+  #menu-bar .dropdown .btn {
+    font-size: 0.8em;
+  }
+}
+#menu-bar > .btn-container.left {
+  grid-column: 1;
+  grid-row: 1;
+}
+#menu-bar > .relative-container {
+  grid-column: 2;
+  grid-row: 1;
+}
+#menu-bar > .btn-container.right {
+  grid-column: 3;
+  grid-row: 1;
+}
+#controls-dialog {
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+#controls-dialog > * {
+  flex-shrink: 0;
+}
+#chat-bubbles .chat-box {
+  max-width: 45%;
+  padding: 10px;
+  font-size: calc(1.5 * var(--font-size));
+}
+#slot-choices { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+#slot-choices button, #cancel-slot, #save-names, #lobby-participants button { padding: 8px 14px; font-size: inherit; }
+#names-form { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; align-items: flex-end; }
+#names-form label { display: flex; flex-direction: column; gap: 6px; }
+#names-form input, #pair-name { max-width: 100%; padding: 7px; font-size: inherit; }
+#pair-name-label { display: flex; flex-direction: column; margin-top: 12px; }
+#chat-speaker-label { font-size: 0.85rem; margin-bottom: 6px; }
+#chat-speaker { font-size: inherit; }
+#lobby-participants { border-top: 1px solid var(--btn-border-color); margin-top: 15px; }

@@ -681,7 +681,7 @@ function processCollisionBetweenBallAndPlayer(
   userInput,
   playerState
 ) {
-  // playerX is maybe pika's x position
+  // playerX is pika's x position
   // if collision occur,
   // greater the x position difference between pika and ball,
   // greater the x velocity of the ball.
@@ -1030,3 +1030,6 @@ function expectedLandingPointXWhenPowerHit(
     copyBall.yVelocity += 1;
   }
 }
+
+// Current 2v2 engine; the former online-specific physics rules have been removed.
+export { DoublesPhysics, createDoublesRules } from '../offline_2v2/doubles_physics.js';

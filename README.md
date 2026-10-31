@@ -1,23 +1,76 @@
-# Pikachu Volleyball P2P Online
+# Pikachu Volleyball 2v2 Online
 
-_&check;_ _English_ | [_Korean(한국어)_](README.ko.md)
+[한국어](README.ko.md) · [Firebase and deployment setup](ONLINE_SETUP.md)
 
-Pikachu Volleyball (対戦ぴかちゅ～　ﾋﾞｰﾁﾊﾞﾚｰ編) is an old Windows game which was developed by "(C) SACHI SOFT / SAWAYAKAN Programmers" and "(C) Satoshi Takenouchi" in 1997.
+The current offline 2v2 game, playable through WebRTC rooms. Choose four browsers with one player each, or two browsers with two local players each. English and Korean pages are included.
 
-Pikachu Volleyball P2P Online is an peer-to-peer online version of the game. You can play with other person through the internet. It is developed by integrating [WebRTC](https://webrtc.org/) [data channels](https://webrtc.org/getting-started/data-channels) to [the offline web version of Pikachu Volleyball](https://github.com/gorisanson/pikachu-volleyball) which is made by reverse engineering the original game.
+The room host runs the preserved offline physics and AI. Guests send controls to the host and render its snapshots; they do not simulate physics. Each guest connects directly to the host through a WebRTC data channel. Firebase Anonymous Authentication identifies participants, and Firestore handles rooms and WebRTC signaling. Gameplay inputs and snapshots do not pass through Firestore. This is host-authoritative peer-to-peer networking, with no dedicated game server.
 
-You can play Pikachu Volleyball P2P online on the website: https://gorisanson.github.io/pikachu-volleyball-p2p-online/en/
+## Playing
 
-<img src="src/resources/assets/images/screenshot.png" alt="Pikachu Volleyball game screenshot" width="648">
+1. Configure your new Firebase project using [ONLINE_SETUP.md](ONLINE_SETUP.md), install dependencies, then run `npm start`.
+2. Open `/en/` or `/ko/`, enter player names and choose the browser arrangement. Choose **With your friends → create room**, or use **Quick Match**.
+3. Share the invitation link. Guests join the lobby without selecting a position.
+4. Each browser selects an empty slot (solo) or an entire team (pairs) in the lobby. Selection can be cancelled or switched to another empty position.
+5. The host starts from **Game → Start / restart** once every joined human is assigned and connected. Remaining empty positions may use AI.
 
-## Structure
+The host controls start/restart, pause, return to lobby, court width, serve mode, game speed, and winning score. The interface uses the original P2P page, menu bar, Options submenus, theme switch, and chat bar. In the lobby, match options apply on the next start. During a match, the host confirms an options change in the original-style dialog before the match restarts. A disconnected guest is replaced with AI. If the host leaves, the room closes; host migration is not implemented. Return to the lobby to admit new players.
 
-- Offline version: All the offline web version source code files is in the directory [`src/resources/js/offline_version_js/`](src/resources/js/offline_version_js). These are the same as the source code files in https://github.com/gorisanson/pikachu-volleyball/tree/main/src/resources/js. The online version is developed base on these.
+The default court width is 384 per side. Fixed starting positions run P1–P2–P3–P4 from left to right; P4 serves first on the right. Teammates pass through one another. Computers use front/back midpoint zones determined by their round-start positions.
 
-- WebRTC data channels: The peer-to-peer online functions utilizing WebRTC data channels are contained in [`src/resources/js/data_channel/data_channel.js`](src/resources/js/data_channel/data_channel.js). ([Firebase Cloud Firestore](https://firebase.google.com/docs/firestore) is used as a mediator for establishing a peer-to-peer communication via WebRTC. The room ID which the room creator sends to the joiner is the ID of a Cloud Firestore document which is shared between them. This method is originally from [Firebase + WebRTC Codelab](https://webrtc.org/getting-started/firebase-rtc-codelab) and [https://github.com/webrtc/FirebaseRTC](https://github.com/webrtc/FirebaseRTC).)
+Serve choices:
 
-- Quick Match: The communication with the quick match server is contained in [`src/resources/js/quick_match/quick_match.js`](src/resources/js/quick_match/quick_match.js). ([Google App Engine](https://cloud.google.com/appengine) is used as the quick match server. The quick match server sends the ID of the room, which is created by a person waiting for a quick match, to the new one who comes in.)
+1. Ball at the back; teammates alternate positions.
+2. Fixed player positions; ball alternates above teammates (default).
+3. Fixed player positions and ball above the back player.
 
-The game state is deterministic on the user (keyboard) inputs except the RNG (random number generator) used in the game. So if the RNG is the same on both peers, only the user inputs need to be communicated to maintain the same game state between the peers. In this p2p online version, the RNG is set to the same thing on both peers at the data channel open event, then the user inputs are communicated via the data channel.
+## Controls
 
-Refer comments on [`src/resources/js/main_online.js`](src/resources/js/main_online.js) for other details.
+By default, one local player can use both arrows/Enter and R/D/F/G/V/Z (jump/left/down-right/right/down/hit). Both key sets work simultaneously for the same player. For two local players, the first uses R/D/F/G/V/Z (jump/left/down-right/right/down/hit), and the second uses arrows and Enter. The local controls panel can instead use the original slot-specific bindings:
+
+| Slot | Jump | Left | Down      | Right | Hit   | Down-right   |
+| ---- | ---- | ---- | --------- | ----- | ----- | ------------ |
+| P1   | W    | A    | X         | D     | Z     | S            |
+| P2   | Y    | G    | B         | J     | V     | H            |
+| P3   | P    | L    | Semicolon | Quote | Comma | Down + Right |
+| P4   | Up   | Left | Down      | Right | Enter | Down + Right |
+
+Use the physical punctuation keys without Shift.
+
+## Chat and in-game options
+
+Press **Space** or click **Chat** to type a room-wide message. Press **Enter** to send, **Escape** to close, or **Disable chat** to suppress chat on this browser. All connected browsers receive messages in both the lobby and during play. In local pairs, each player has an editable name. Choose which local player speaks using **Chat as**. Names can be edited by their own browser in the lobby and follow local player order when switching teams. Messages use reliable WebRTC through the host; they are not stored in Firestore. The browser keeps the latest 100 messages while the room is open and displays temporary messages over the court. Like the original, each message gets random coordinates on its sender’s side, replaces that player’s previous message, and uses a speech bubble only in menus/dialogs. The host sends the chosen coordinates so every browser sees the same placement; this randomness never uses the physics RNG.
+
+**Options** restores Graphic (sharp/soft), BGM (on/off), SFX (stereo/mono/off), Speed, Winning score, and Practice mode submenus, plus Reset to defaults. Court / serve opens a matching dialog for width and serving rules. Match options are host-only; graphics, sound, theme, and controls are local to each browser. During a match, changing shared options asks for confirmation and restarts the same lineup. **Game** contains start/restart, pause/resume, and return to lobby; **Exit** leaves the room. Escape hides/shows the menu bar when no dialog is open. Practice mode uses the existing offline behavior: scoreboards are hidden and winning-score termination is disabled. Reset restores options while keeping player names and slot assignments.
+
+## Implementation and physics preservation
+
+- `src/resources/js/offline_2v2/`: copied offline game, rendering, audio, and physics.
+- `src/resources/js/online_2v2/`: original P2P UI integration, lobby, authenticated Firestore signaling, WebRTC host connections, validated inputs, snapshot rendering, and room-wide chat.
+- `src/resources/js/main_online_2v2.js`: current entry point. Older online/replay modules remain in the repository.
+- `firestore.2v2.rules`: rules for the new Firebase project, with no public room listing and per-participant signaling access.
+
+The original `physics.js` is unchanged in the copied core. The separate `doubles_physics.js` retains movement, ball collisions, and their existing quirks, adapting court geometry and four-player orchestration. Hits are processed in P1/P2/P3/P4 order with individual collision latches. This can make simultaneous overlapping hits order-dependent; it is intentionally preserved. The ball advances once per simulation step. Snapshot synchronization does not change these physics rules.
+
+Guests currently have no prediction or interpolation: a remote control must reach the host before its result returns in a snapshot. Internet latency and the selected simulation rate determine responsiveness; completion within one frame is not guaranteed. Existing STUN configuration may not connect every network; configure TURN for restrictive networks (see setup).
+
+## Validation
+
+- `npm test`: preservation, 2v2 behavior, lobby ownership, input validation, and snapshot tests.
+- `npx webpack --config webpack.dev.js` then `npm run test:browser`: local real-WebRTC tests with four isolated browsers and two-browser local pairs. Requires Chrome and Node 22; optionally set `PIKA_CHROME` to its executable. Uses a local signaling fixture, not a live Firebase project.
+- Firebase emulator tests and production/deployment steps are in [ONLINE_SETUP.md](ONLINE_SETUP.md).
+- `npm run build`: production output in `dist/`. Building does not publish it.
+
+## Credits
+
+Original Windows game (1997): SACHI SOFT / SAWAYAKAN Programmers and Satoshi Takenouchi. JavaScript reverse engineering and original web/P2P implementation: [Kyutae Lee (gorisanson)](https://github.com/gorisanson/pikachu-volleyball), [original P2P project](https://github.com/gorisanson/pikachu-volleyball-p2p-online). This repository extends the offline 2v2 adaptation.
+
+## Quick Match server
+
+The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` project now supports the new 2v2 lobby. Configure it with the same new Firebase project, then set `quickMatchServerURL` in `src/resources/js/online_2v2/quick_match_config.js` to its HTTPS origin. Quick Match is disabled while that URL is empty. See the server README for credentials, CORS, local running, and deployment.
+
+Choose an arrangement and region, then press **Quick Match**. The first browser creates and advertises a room; later searches reserve browser capacity in that lobby. Everyone arrives unassigned and chooses a free slot or whole team there. The host may start early with AI. Running matches accept no new Quick Match players. To search again after a match, leave the room first. Invitation rooms continue to work without this server.
+
+## Updating an existing deployment
+
+The selectable lobby and player-name fields use protocol `pikavolley-2v2-v2`. Update both the frontend and Quick Match server, and publish the updated `firestore.2v2.rules` before creating new rooms. Old version-1 rooms are not compatible; finish those games and create fresh rooms after upgrading. No live Firebase rules are published by the build or tests.
