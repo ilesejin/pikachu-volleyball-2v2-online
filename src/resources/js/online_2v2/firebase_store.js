@@ -22,6 +22,7 @@ import {
 import { firebaseConfig } from './config.js';
 import {
   ROOM_SCHEMA,
+  randomizedPositions,
   validSlots,
   occupiedSlots,
   matchSettings,
@@ -161,6 +162,18 @@ export class FirebaseRoomStore {
         ['members.' + clientId]: { ...member, slots },
         seats,
       });
+    });
+  }
+  async randomizeSlots(id, hostId) {
+    return runTransaction(this.db, async (transaction) => {
+      const snapshot = await transaction.get(this.room(id));
+      if (!snapshot.exists()) throw new Error('Room not found.');
+      const data = snapshot.data();
+      if (data.hostId !== hostId)
+        throw new Error('Only the host can randomize positions.');
+      if (data.schema !== ROOM_SCHEMA || data.status !== 'lobby')
+        throw new Error('Positions can only be randomized in the lobby.');
+      transaction.update(this.room(id), randomizedPositions(data));
     });
   }
   async rename(id, clientId, value) {

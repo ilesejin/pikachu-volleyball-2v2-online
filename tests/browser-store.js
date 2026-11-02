@@ -35,6 +35,9 @@ class BrowserTestStore {
   selectSlots(id, clientId, slots) {
     return this.request('selectSlots', { id, clientId, slots });
   }
+  randomizeSlots(id, hostId) {
+    return this.request('randomizeSlots', { id, hostId });
+  }
   rename(id, clientId, names) {
     return this.request('rename', { id, clientId, names });
   }

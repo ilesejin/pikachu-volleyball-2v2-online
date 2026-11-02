@@ -28,11 +28,12 @@ const protocol = load(
     'canUpdateLive',
     'validSlots',
     'occupiedSlots',
+    'randomizedPositions',
     'normalizeInput',
     'ownedInputs',
     'RemoteInput',
   ],
-  { DOUBLES_CONFIG: config }
+  { DOUBLES_CONFIG: config, crypto: require('node:crypto').webcrypto }
 );
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
@@ -1004,4 +1005,90 @@ test('guests accept live options only from the current host and retain a finishe
   assert.equal(guest.game.paused, true);
   guest.message('host', packet);
   assert.equal(applied, 1);
+});
+
+test('random solo assignment covers all 24 permutations and pairs stay together in either team', () => {
+  const members = Object.fromEntries(
+    ['a', 'b', 'c', 'd'].map((id, i) => [
+      id,
+      { names: [id], slots: [i], connected: i % 2 === 0 },
+    ])
+  );
+  const data = { layout: 'four', members },
+    before = plain(data),
+    permutations = new Set();
+  for (let a = 0; a < 4; a++)
+    for (let b = 0; b < 3; b++)
+      for (let c = 0; c < 2; c++) {
+        const indices = [a, b, c];
+        const result = protocol.randomizedPositions(data, () =>
+          indices.shift()
+        );
+        permutations.add(JSON.stringify(result.seats));
+        assert.equal(new Set(result.seats).size, 4);
+        for (const [id, member] of Object.entries(result.members)) {
+          assert.equal(result.seats[member.slots[0]], id);
+          assert.deepEqual(plain(member.names), members[id].names);
+          assert.equal(member.connected, members[id].connected);
+        }
+      }
+  assert.equal(permutations.size, 24);
+  assert.deepEqual(plain(data), before);
+  for (const j of [0, 1]) {
+    const pair = {
+      layout: 'pairs',
+      members: {
+        a: { names: ['A', 'B'], slots: [] },
+        b: { names: ['C', 'D'], slots: [2, 3] },
+      },
+    };
+    const result = protocol.randomizedPositions(pair, () => j);
+    assert.deepEqual(plain(result.members.a.slots), j === 0 ? [2, 3] : [0, 1]);
+    assert.deepEqual(plain(result.members.b.slots), j === 0 ? [0, 1] : [2, 3]);
+    assert.deepEqual(plain(result.members.a.names), ['A', 'B']);
+    assert.deepEqual(plain(result.members.b.names), ['C', 'D']);
+  }
+  for (let j = 0; j < 4; j++) {
+    const result = protocol.randomizedPositions(
+      { layout: 'four', members: { a: { slots: [] } } },
+      (limit) => j % limit
+    );
+    assert.equal(result.seats.filter(Boolean).length, 1);
+  }
+});
+test('host randomization atomically assigns unselected and selected members and rejects guests or running games', async () => {
+  for (const layout of ['four', 'pairs']) {
+    const { store, documents } = fakeStore();
+    await store.create(
+      'random',
+      'host',
+      layout === 'pairs' ? ['H1', 'H2'] : ['Host'],
+      layout,
+      [],
+      {}
+    );
+    await store.claim(
+      'random',
+      'guest',
+      layout === 'pairs' ? ['G1', 'G2'] : ['Guest'],
+      layout === 'pairs' ? [2, 3] : [3]
+    );
+    const before = plain(documents.get('rooms/random'));
+    await assert.rejects(store.randomizeSlots('random', 'guest'), /host/);
+    await store.randomizeSlots('random', 'host');
+    const after = documents.get('rooms/random');
+    assert.equal(protocol.lobbyReady(after), true);
+    for (const id of ['host', 'guest']) {
+      assert.equal(protocol.validSlots(layout, after.members[id].slots), true);
+      assert.deepEqual(after.members[id].names, before.members[id].names);
+      assert.equal(after.members[id].connected, before.members[id].connected);
+      for (const slot of after.members[id].slots)
+        assert.equal(after.seats[slot], id);
+    }
+    after.members.guest.connected = true;
+    await store.beginMatch('random', 'host', {});
+    const playing = plain(after);
+    await assert.rejects(store.randomizeSlots('random', 'host'), /lobby/);
+    assert.deepEqual(documents.get('rooms/random'), playing);
+  }
 });

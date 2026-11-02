@@ -34,6 +34,7 @@ const protocol = load(
     'ROOM_SCHEMA',
     'validSlots',
     'occupiedSlots',
+    'randomizedPositions',
     'matchSettings',
     'playerNames',
     'lobbyReady',
@@ -142,6 +143,29 @@ async function denied(action) {
     other.store.claim(pairs, other.uid, 'Duplicate', [0, 1])
   );
   await host.store.close(pairs);
+  const randomRoom = crypto.randomBytes(10).toString('hex');
+  await host.store.create(randomRoom, host.uid, ['H1', 'H2'], 'pairs', [], {});
+  await guest.store.claim(randomRoom, guest.uid, ['G1', 'G2'], []);
+  await assert.rejects(
+    guest.store.randomizeSlots(randomRoom, guest.uid),
+    /host/
+  );
+  await host.store.randomizeSlots(randomRoom, host.uid);
+  const assigned = await host.store.peek(randomRoom);
+  assert.equal(protocol.lobbyReady(assigned), true);
+  assert.deepEqual(assigned.members[host.uid].names, ['H1', 'H2']);
+  assert.deepEqual(assigned.members[guest.uid].names, ['G1', 'G2']);
+  for (const [uid, member] of Object.entries(assigned.members)) {
+    assert.equal(protocol.validSlots('pairs', member.slots), true);
+    for (const slot of member.slots) assert.equal(assigned.seats[slot], uid);
+  }
+  await host.store.connected(randomRoom, guest.uid);
+  await host.store.beginMatch(randomRoom, host.uid, {});
+  await assert.rejects(
+    host.store.randomizeSlots(randomRoom, host.uid),
+    /lobby/
+  );
+  await host.store.close(randomRoom);
   const lobby = crypto.randomBytes(10).toString('hex');
   await host.store.create(lobby, host.uid, ['One', 'Two'], 'pairs', [], {});
   await guest.store.claim(lobby, guest.uid, ['Three', 'Four'], []);

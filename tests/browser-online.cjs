@@ -11,6 +11,16 @@ const root = path.resolve(__dirname, '../dist'),
 const rooms = new Map(),
   signals = new Map(),
   candidates = new Map();
+const randomizedPositions = Function(
+  'crypto',
+  fs
+    .readFileSync(
+      path.join(__dirname, '../src/resources/js/online_2v2/protocol.js'),
+      'utf8'
+    )
+    .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\r?\n/gm, '')
+    .replace(/export /g, '') + ';return randomizedPositions;'
+)(require('node:crypto').webcrypto);
 function handle(data) {
   const { action, id, peerId, side } = data;
   const names = Array.isArray(data.name)
@@ -99,6 +109,12 @@ function handle(data) {
         ? ''
         : owner
     );
+    return {};
+  }
+  if (action === 'randomizeSlots') {
+    if (room.hostId !== data.hostId || room.status !== 'lobby')
+      throw Error('Host lobby action only.');
+    Object.assign(room, randomizedPositions(room));
     return {};
   }
   if (action === 'rename') {
@@ -305,6 +321,46 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
     '!!window.__volley && !document.getElementById("create").disabled'
   );
   return page;
+}
+async function randomizeLobby(host, guests) {
+  const pages = [host, ...guests];
+  const before = await host.ev('__volley.room.data.members');
+  await click(host, 'randomize-slots');
+  await host.until(
+    'document.getElementById("status").textContent.includes("Positions randomized") || document.getElementById("status").textContent.includes("무작위로 배정")'
+  );
+  const data = await host.ev('__volley.room.store.peek(__volley.room.id)');
+  for (const page of pages) {
+    await page.until(
+      'JSON.stringify(__volley.room.data.seats)===' +
+        JSON.stringify(JSON.stringify(data.seats))
+    );
+    const me = await page.ev('__volley.room.selfId');
+    const slots = data.members[me].slots;
+    assert.ok(
+      data.layout === 'pairs'
+        ? JSON.stringify(slots) === '[0,1]' || JSON.stringify(slots) === '[2,3]'
+        : slots.length === 1
+    );
+    assert.deepEqual(data.members[me].names, before[me].names);
+    assert.equal(data.members[me].connected, before[me].connected);
+    for (const slot of slots) assert.equal(data.seats[slot], me);
+  }
+  for (const guest of guests)
+    assert.equal(
+      await guest.ev('document.getElementById("randomize-slots").hidden'),
+      true
+    );
+  // Restore the fixture's known slots before testing player-specific controls.
+  for (const page of pages) {
+    await click(page, 'cancel-slot');
+    await page.until(
+      '__volley.room.data.members[__volley.room.selfId].slots.length===0'
+    );
+  }
+  console.log(
+    'Random lobby positions: atomic host assignment, pair integrity, names, readiness and all-peer synchronization passed.'
+  );
 }
 async function liveOption(host, guests, menu, button, condition) {
   const expression =
@@ -513,6 +569,9 @@ async function screenshot(page, name) {
   await host.until(
     '__volley.room.peers.size===3 && Array.from(__volley.room.peers.keys()).every(id=>__volley.room.connected(id))'
   );
+  await randomizeLobby(host, guests);
+  for (const [index, page] of [host, ...guests].entries())
+    await selectSlot(page, String(index));
   await click(guests[0], 'cancel-slot');
   await host.until(
     '!__volley.room.data.members[Object.keys(__volley.room.data.members).find(id=>id!==__volley.room.selfId)].slots.length'
@@ -828,6 +887,9 @@ async function screenshot(page, name) {
   await pairGuest.until(
     'document.getElementById("chat-speaker").options[1].textContent==="Dave"'
   );
+  await randomizeLobby(pairHost, [pairGuest]);
+  await selectSlot(pairHost, '2,3');
+  await selectSlot(pairGuest, '0,1');
   await pairGuest.ev('document.getElementById("chat-speaker").value="1"');
   await click(pairGuest, 'chat-open-btn');
   await pairGuest.ev(

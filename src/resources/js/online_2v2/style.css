@@ -294,3 +294,5 @@ summary:focus-visible {
 #chat-speaker-label { font-size: 0.85rem; margin-bottom: 6px; }
 #chat-speaker { font-size: inherit; }
 #lobby-participants { border-top: 1px solid var(--btn-border-color); margin-top: 15px; }
+
+#randomize-slots { padding: 8px 14px; font-size: inherit; margin-right: 10px; }

@@ -216,6 +216,30 @@ export function setUpClassicUI({
     }
   }
   $('cancel-slot').addEventListener('click', () => selectSlots([]));
+  let randomizing = false;
+  $('randomize-slots').addEventListener('click', async () => {
+    if (
+      randomizing ||
+      room.closed ||
+      !room.isHost ||
+      room.data.status !== 'lobby'
+    )
+      return;
+    randomizing = true;
+    $('randomize-slots').disabled = true;
+    try {
+      await room.store.randomizeSlots(room.id, room.selfId);
+      $('status').textContent = t(
+        'Positions randomized.',
+        '자리를 무작위로 배정했습니다.'
+      );
+    } catch (error) {
+      $('status').textContent = error.message;
+    } finally {
+      randomizing = false;
+      ui.update();
+    }
+  });
   function selected(ids, choice) {
     for (const id of ids) $(id).classList.toggle('selected', id === choice);
   }
@@ -400,7 +424,7 @@ export function setUpClassicUI({
       $('quick-match').click();
     }
   });
-  return {
+  const ui = {
     chat,
     closeMenus,
     update() {
@@ -450,6 +474,12 @@ export function setUpClassicUI({
       );
       const me = connected ? room.data.members[room.selfId] : null;
       $('lobby-editor').hidden = !connected || room.data.status !== 'lobby';
+      $('randomize-slots').hidden = !room.isHost;
+      $('randomize-slots').disabled =
+        randomizing ||
+        !connected ||
+        !room.isHost ||
+        room.data.status !== 'lobby';
       $('slot-choices').replaceChildren();
       $('lobby-participants').replaceChildren();
       if (me) {
@@ -546,4 +576,5 @@ export function setUpClassicUI({
         }
     },
   };
+  return ui;
 }

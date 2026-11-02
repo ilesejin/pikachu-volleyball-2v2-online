@@ -72,6 +72,42 @@ export function validSlots(layout, slots, unassigned = false) {
   return false;
 }
 
+// Lobby randomness is independent of the seeded physics RNG.
+function randomIndex(limit) {
+  const ceiling = Math.floor(0x100000000 / limit) * limit;
+  const value = new Uint32Array(1);
+  do {
+    crypto.getRandomValues(value);
+  } while (value[0] >= ceiling);
+  return value[0] % limit;
+}
+export function randomizedPositions(data, chooseIndex = randomIndex) {
+  const choices =
+    data.layout === 'pairs'
+      ? [
+          [0, 1],
+          [2, 3],
+        ]
+      : [[0], [1], [2], [3]];
+  const ids = Object.keys(data.members);
+  if (!['four', 'pairs'].includes(data.layout) || ids.length > choices.length)
+    throw new Error('Invalid lobby arrangement.');
+  for (let i = choices.length - 1; i > 0; i--) {
+    const j = chooseIndex(i + 1);
+    [choices[i], choices[j]] = [choices[j], choices[i]];
+  }
+  const members = {};
+  const seats = ['', '', '', ''];
+  ids.forEach((id, index) => {
+    const slots = choices[index];
+    members[id] = { ...data.members[id], slots };
+    slots.forEach((slot) => {
+      seats[slot] = id;
+    });
+  });
+  return { members, seats };
+}
+
 export function occupiedSlots(members) {
   return Object.values(members || {}).reduce(
     (all, member) => all.concat(member.slots || []),
