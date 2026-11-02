@@ -1,6 +1,6 @@
 import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
 
-export const ROOM_SCHEMA = 'pikavolley-2v2-v2';
+export const ROOM_SCHEMA = 'pikavolley-2v2-v3';
 export const SERVE_MODES = ['rotate-players', 'rotate-ball', 'fixed'];
 export const PLAYER_KEYS = [
   ['KeyA', 'KeyD', 'KeyW', 'KeyX', 'KeyZ', 'KeyS'],
@@ -18,6 +18,8 @@ export function matchSettings(value = {}) {
   const serveMode = value.serveMode || DOUBLES_CONFIG.serveMode;
   const fps = Number(value.fps || 25);
   const winningScore = Number(value.winningScore || 15);
+  const synchronization =
+    value.synchronization === undefined ? 'lockstep' : value.synchronization;
   const practice = value.practice === undefined ? false : value.practice;
   if (
     !Number.isSafeInteger(courtWidth) ||
@@ -26,11 +28,29 @@ export function matchSettings(value = {}) {
     !SERVE_MODES.includes(serveMode) ||
     ![20, 25, 30].includes(fps) ||
     ![5, 10, 15].includes(winningScore) ||
-    typeof practice !== 'boolean'
+    typeof practice !== 'boolean' ||
+    !['lockstep', 'host'].includes(synchronization)
   ) {
     throw new Error('Invalid match settings.');
   }
-  return { courtWidth, serveMode, fps, winningScore, practice };
+  return {
+    courtWidth,
+    serveMode,
+    fps,
+    winningScore,
+    practice,
+    synchronization,
+  };
+}
+
+// These options affect pacing/scoring policy, without rebuilding the match.
+export function canUpdateLive(current, next) {
+  return (
+    !!current &&
+    ['courtWidth', 'serveMode', 'winningScore', 'synchronization'].every(
+      (key) => current[key] === next[key]
+    )
+  );
 }
 
 export function validSlots(layout, slots, unassigned = false) {

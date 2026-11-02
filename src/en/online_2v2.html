@@ -426,7 +426,7 @@
       aria-modal="true"
       aria-labelledby="match-settings-title"
     >
-      <h2 id="match-settings-title">Court and serve</h2>
+      <h2 id="match-settings-title">Court, serve and synchronization</h2>
       <form id="settings-form">
         <input id="practice-mode" type="checkbox" hidden />
         <label
@@ -447,6 +447,11 @@
               2 · Fixed players, rotating ball
             </option>
             <option value="fixed">3 · Fixed players and ball</option>
+          </select></label
+        ><label
+          >Physics synchronization<select id="synchronization">
+            <option value="lockstep" selected>All browsers (lockstep)</option>
+            <option value="host">Host only (snapshots)</option>
           </select></label
         ><select id="speed" hidden>
           <option value="20">20</option>

@@ -25,6 +25,7 @@ const protocol = load(
     'playerName',
     'lobbyReady',
     'matchSettings',
+    'canUpdateLive',
     'validSlots',
     'occupiedSlots',
     'normalizeInput',
@@ -42,6 +43,7 @@ test('online settings match the preserved 2v2 defaults and validate incoming val
     fps: 25,
     winningScore: 15,
     practice: false,
+    synchronization: 'lockstep',
   });
   for (const invalid of [
     { courtWidth: 215 },
@@ -50,6 +52,7 @@ test('online settings match the preserved 2v2 defaults and validate incoming val
     { serveMode: 'bogus' },
     { fps: 60 },
     { winningScore: 99 },
+    { synchronization: 'bogus' },
   ]) {
     assert.throws(() => protocol.matchSettings(invalid));
   }
@@ -726,4 +729,279 @@ test('authentication is private to each tab, coalesces concurrent sign-ins, and 
   assert.equal(first.count(), 1);
   assert.equal(await first.store.token(), 'tab-token');
   assert.equal(first.count(), 1);
+});
+
+const { Lockstep, INPUT_WINDOW } = load(
+  'online_2v2/lockstep.js',
+  ['Lockstep', 'INPUT_WINDOW'],
+  {
+    normalizeInput: protocol.normalizeInput,
+  }
+);
+function lockstepFixture(layout = 'four') {
+  const members =
+    layout === 'pairs'
+      ? { host: { slots: [2, 3] }, a: { slots: [0, 1] } }
+      : {
+          host: { slots: [0] },
+          a: { slots: [1] },
+          b: { slots: [2] },
+          c: { slots: [3] },
+        };
+  const network = [],
+    nodes = {},
+    logs = {};
+  for (const id of Object.keys(members)) {
+    logs[id] = [];
+    nodes[id] = new Lockstep({
+      epoch: 'match',
+      selfId: id,
+      hostId: 'host',
+      members,
+      send: (to, packet) => network.push({ from: id, to, packet }),
+      broadcast: (packet) =>
+        Object.keys(members)
+          .filter((peer) => peer !== id)
+          .forEach((to) => network.push({ from: id, to, packet })),
+      advance: (inputs, humans, frame) =>
+        logs[id].push(plain({ inputs, humans, frame })),
+    });
+  }
+  const sample = (id, hit = 0) =>
+    nodes[id].sample(
+      members[id].slots.map((slot) => ({
+        slot,
+        xDirection: slot % 2 ? 1 : -1,
+        yDirection: 0,
+        powerHit: hit,
+      }))
+    );
+  const deliver = () => {
+    while (network.length) {
+      const item = network.shift();
+      nodes[item.to].receive(item.from, item.packet);
+    }
+  };
+  return { members, nodes, logs, network, sample, deliver };
+}
+test('lockstep stalls for missing input, pipelines a bounded number of frames and simulates identically on all browsers', () => {
+  for (const layout of ['four', 'pairs']) {
+    const f = lockstepFixture(layout);
+    for (let i = 0; i < INPUT_WINDOW + 5; i++)
+      f.sample('host', i === 0 ? 1 : 0);
+    f.deliver();
+    assert.equal(f.nodes.host.frame, 0);
+    assert.equal(f.nodes.host.sampled, INPUT_WINDOW);
+    for (let round = 0; round < 300; round++) {
+      for (const id of Object.keys(f.members).reverse())
+        f.sample(id, round % 11 === 0 ? 1 : 0);
+      f.deliver();
+    }
+    assert.ok(f.logs.host.length >= 298);
+    for (const id of Object.keys(f.members))
+      assert.deepEqual(f.logs[id], f.logs.host);
+    assert.equal(f.logs.host[0].inputs[layout === 'pairs' ? 2 : 0].powerHit, 1);
+  }
+});
+test('lockstep rejects spoofed slots, stale epochs, duplicate frames and excessive future queues', () => {
+  const f = lockstepFixture('pairs'),
+    host = f.nodes.host;
+  const packet = {
+    type: 'frame-input',
+    epoch: 'match',
+    generation: 0,
+    frame: 1,
+    inputs: [{ slot: 0 }, { slot: 1 }],
+  };
+  for (const bad of [
+    { ...packet, epoch: 'old' },
+    { ...packet, frame: 0 },
+    { ...packet, frame: 4 },
+    { ...packet, inputs: [{ slot: 2 }, { slot: 3 }] },
+    { ...packet, inputs: [null, null] },
+    { ...packet, inputs: [{ slot: 0 }, { slot: 0 }] },
+  ])
+    assert.equal(host.receive('a', bad), false);
+  assert.equal(host.receive('stranger', packet), false);
+  assert.equal(host.receive('a', packet), true);
+  assert.equal(host.receive('a', packet), false);
+  const guest = f.nodes.a;
+  assert.equal(
+    guest.receive('a', {
+      type: 'frame',
+      epoch: 'match',
+      generation: 0,
+      frame: 1,
+      inputs: [0, 0, 0, 0],
+      humans: [0, 1, 2, 3],
+    }),
+    false
+  );
+  assert.equal(host.pending.size, 1);
+});
+test('lockstep pause generations discard queued inputs and reject pre-pause packets; disconnects switch slots to AI on the same frame', () => {
+  const f = lockstepFixture('four');
+  for (const id of Object.keys(f.members)) f.sample(id);
+  f.deliver();
+  for (const node of Object.values(f.nodes)) {
+    assert.equal(node.control(1, true), true);
+    assert.equal(node.control(1, false), false);
+  }
+  f.sample('a', 1);
+  assert.equal(f.network.length, 0);
+  for (const node of Object.values(f.nodes)) node.control(2, false);
+  f.sample('a', 1);
+  const stale = f.network.shift();
+  stale.packet.generation = 0;
+  assert.equal(f.nodes.host.receive('a', stale.packet), false);
+  f.nodes.host.remove('a');
+  for (const id of ['host', 'b', 'c']) f.sample(id);
+  f.deliver();
+  assert.deepEqual(f.logs.host[1].humans, [0, 2, 3]);
+  assert.deepEqual(f.logs.host[1], f.logs.b[1]);
+  assert.deepEqual(f.logs.host[1].inputs[1], {
+    xDirection: 0,
+    yDirection: 0,
+    powerHit: 0,
+  });
+});
+
+test('only speed and practice can change without rebuilding a match', () => {
+  const current = protocol.matchSettings();
+  assert.equal(
+    protocol.canUpdateLive(
+      current,
+      protocol.matchSettings({ fps: 30, practice: true })
+    ),
+    true
+  );
+  assert.equal(protocol.canUpdateLive(current, current), true);
+  for (const changed of [
+    { courtWidth: 500 },
+    { serveMode: 'fixed' },
+    { winningScore: 5 },
+    { synchronization: 'host' },
+  ])
+    assert.equal(
+      protocol.canUpdateLive(current, protocol.matchSettings(changed)),
+      false
+    );
+});
+test('live settings preserve match objects and paused state, persist on the host and synchronize at a lockstep boundary', async () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch'], {
+    matchSettings: protocol.matchSettings,
+    canUpdateLive: protocol.canUpdateLive,
+    setInterval: () => 42,
+    clearInterval: () => {},
+  });
+  for (const lockstep of [false, true]) {
+    const sent = [],
+      persisted = [];
+    const game = {
+      normalFPS: 25,
+      isPracticeMode: false,
+      paused: true,
+      scores: [4, 7],
+      physics: { ball: { x: 123, y: 87 }, nextServer: [1, 0] },
+      frameCounter: 12,
+    };
+    const before = plain(game);
+    const session = Object.assign(Object.create(OnlineMatch.prototype), {
+      game,
+      ticker: { maxFPS: 25 },
+      settings: protocol.matchSettings(),
+      epoch: 'same-match',
+      phase: 'paused',
+      frame: 64,
+      localSlots: [0],
+      room: {
+        id: 'room',
+        isHost: true,
+        closed: false,
+        store: { update: async (...args) => persisted.push(args) },
+        broadcast: (packet) => sent.push(packet),
+      },
+      lockstep: lockstep
+        ? {
+            generation: 2,
+            frame: 64,
+            control(generation, paused) {
+              this.generation = generation;
+              this.paused = paused;
+            },
+          }
+        : null,
+      inputs: [{ reset() {} }],
+      notify() {},
+      sendState() {},
+    });
+    const physics = game.physics,
+      scores = game.scores;
+    await session.updateLiveSettings({ fps: 30, practice: true });
+    assert.equal(session.epoch, 'same-match');
+    assert.equal(session.phase, 'paused');
+    assert.equal(game.physics, physics);
+    assert.equal(game.scores, scores);
+    assert.equal(game.paused, true);
+    assert.equal(game.frameCounter, before.frameCounter);
+    assert.equal(game.normalFPS, 30);
+    assert.equal(session.ticker.maxFPS, 30);
+    assert.equal(game.isPracticeMode, true);
+    assert.equal(persisted.length, 1);
+    assert.equal(sent[0].type, lockstep ? 'frame-control' : 'live-settings');
+    if (lockstep) {
+      assert.equal(sent[0].frame, 64);
+      assert.equal(sent[0].paused, true);
+      assert.equal(sent[0].generation, 3);
+    }
+    await assert.rejects(
+      session.updateLiveSettings({ courtWidth: 700 }),
+      /restart/
+    );
+    assert.equal(persisted.length, 1);
+  }
+});
+
+test('guests accept live options only from the current host and retain a finished match', () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch'], {
+    matchSettings: protocol.matchSettings,
+    canUpdateLive: protocol.canUpdateLive,
+  });
+  let applied = 0;
+  const guest = Object.assign(Object.create(OnlineMatch.prototype), {
+    room: { closed: false, isHost: false, data: { hostId: 'host' } },
+    epoch: 'match',
+    phase: 'finished',
+    settings: protocol.matchSettings(),
+    game: { paused: true },
+    inputs: [],
+    lockstep: lockstepFixture('pairs').nodes.a,
+    applyLiveSettings(settings) {
+      applied++;
+      this.settings = settings;
+    },
+    notify() {},
+  });
+  const packet = {
+    type: 'frame-control',
+    epoch: 'match',
+    frame: 0,
+    generation: 1,
+    paused: true,
+    settings: protocol.matchSettings({ fps: 30, practice: true }),
+  };
+  guest.message('stranger', packet);
+  guest.message('host', { ...packet, epoch: 'old' });
+  guest.message('host', {
+    ...packet,
+    settings: protocol.matchSettings({ synchronization: 'host' }),
+  });
+  assert.equal(applied, 0);
+  guest.message('host', packet);
+  assert.equal(applied, 1);
+  assert.equal(guest.settings.fps, 30);
+  assert.equal(guest.phase, 'finished');
+  assert.equal(guest.game.paused, true);
+  guest.message('host', packet);
+  assert.equal(applied, 1);
 });

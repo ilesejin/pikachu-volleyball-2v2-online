@@ -425,7 +425,7 @@
       aria-modal="true"
       aria-labelledby="match-settings-title"
     >
-      <h2 id="match-settings-title">코트와 서브</h2>
+      <h2 id="match-settings-title">코트, 서브 및 동기화</h2>
       <form id="settings-form">
         <input id="practice-mode" type="checkbox" hidden />
         <label
@@ -446,6 +446,11 @@
               2 · 선수 고정, 공 위치 교대
             </option>
             <option value="fixed">3 · 선수와 공 위치 고정</option>
+          </select></label
+        ><label
+          >물리 동기화<select id="synchronization">
+            <option value="lockstep" selected>모든 브라우저 (록스텝)</option>
+            <option value="host">방장만 (스냅샷)</option>
           </select></label
         ><select id="speed" hidden>
           <option value="20">20</option>

@@ -55,6 +55,7 @@ export function setUpClassicUI({
       fps: Number($('speed').value),
       winningScore: Number($('winning-score').value),
       practice: $('practice-mode').checked,
+      synchronization: $('synchronization').value,
     };
   }
   function setForm(value) {
@@ -63,6 +64,7 @@ export function setUpClassicUI({
     $('speed').value = value.fps;
     $('winning-score').value = value.winningScore;
     $('practice-mode').checked = !!value.practice;
+    $('synchronization').value = value.synchronization;
   }
   const choose = async (value) => {
     if (!room.isHost || room.closed) return;
@@ -407,6 +409,7 @@ export function setUpClassicUI({
       $('flex-container').hidden = !connected;
       $('match-dropdown-btn').disabled = !connected || !room.isHost;
       $('fill-ai-label').hidden = !room.isHost;
+      $('synchronization').disabled = !room.isHost;
       for (const id of [
         'practice-mode-submenu-btn',
         'reset-to-default-btn',

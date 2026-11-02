@@ -10,7 +10,7 @@ service cloud.firestore {
         || (layout == 'pairs' && (slots == [0, 1] || slots == [2, 3])));
     }
     function validRoom(data) {
-      return data.schema == 'pikavolley-2v2-v2' && data.hostId is string && data.members is map
+      return data.schema == 'pikavolley-2v2-v3' && data.hostId is string && data.members is map
         && data.members.size() >= 1 && data.members.size() <= (data.layout == 'pairs' ? 2 : 4) && data.seats is list && data.seats.size() == 4
         && data.layout in ['four', 'pairs'] && data.status in ['lobby', 'playing', 'closed'];
     }

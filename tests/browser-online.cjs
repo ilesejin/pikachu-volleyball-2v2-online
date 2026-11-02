@@ -19,7 +19,7 @@ function handle(data) {
   if (action === 'create') {
     if (rooms.has(id)) throw Error('Room already exists');
     const room = {
-      schema: 'pikavolley-2v2-v2',
+      schema: 'pikavolley-2v2-v3',
       hostId: data.hostId,
       layout: data.layout,
       settings: data.settings,
@@ -306,6 +306,41 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
   );
   return page;
 }
+async function liveOption(host, guests, menu, button, condition) {
+  const expression =
+    'JSON.stringify({epoch:__volley.session.epoch,physics:__volley.game.physics,scores:__volley.game.scores,state:__volley.game.state.name,counter:__volley.game.frameCounter,serve:__volley.game.isPlayer2Serve,slow:[__volley.game.slowMotionFramesLeft,__volley.game.slowMotionNumOfSkippedFrames]})';
+  const before = await host.ev(expression);
+  await click(host, 'options-dropdown-btn');
+  await click(host, menu);
+  await click(host, button);
+  await click(host, 'settings-confirm-yes');
+  for (const page of [host, ...guests]) await page.until(condition);
+  assert.equal(
+    await host.ev(expression),
+    before,
+    'Live options must retain the paused match, score, serving rotation and rally'
+  );
+}
+async function observeLocalSimulation(page) {
+  await page.ev(
+    'window.localSteps=0;const step=__volley.session.step.bind(__volley.session);__volley.session.step=()=>{localSteps++;return step();}'
+  );
+}
+async function assertSameSimulation(host, guests) {
+  if (await host.ev('__volley.session.phase==="playing"'))
+    await click(host, 'pause');
+  for (const guest of guests)
+    await guest.until('__volley.session.phase==="paused"');
+  const expression =
+    'JSON.stringify({frame:__volley.session.lastFrame,physics:__volley.game.physics,scores:__volley.game.scores,state:__volley.game.state.name,counter:__volley.game.frameCounter,slow:[__volley.game.slowMotionFramesLeft,__volley.game.slowMotionNumOfSkippedFrames],roundEnded:__volley.game.roundEnded,serve:__volley.game.isPlayer2Serve,clouds:__volley.game.view.game.cloudArray,wave:__volley.game.view.game.wave})';
+  const expected = await host.ev(expression);
+  for (const guest of guests)
+    assert.equal(
+      await guest.ev(expression),
+      expected,
+      'Every browser must independently reach identical full simulation state'
+    );
+}
 async function click(page, id) {
   if (id === 'back-lobby')
     await page.ev(
@@ -457,6 +492,7 @@ async function screenshot(page, name) {
     true
   );
   await selectSlot(host, '0');
+  await host.ev('document.getElementById("synchronization").value="host"');
   await click(host, 'start');
   await host.until('__volley.session.epoch && __volley.game.view.game.visible');
   assert.deepEqual(
@@ -648,7 +684,7 @@ async function screenshot(page, name) {
   await click(host, 'fast-speed-btn');
   await click(host, 'settings-confirm-yes');
   await host.until(
-    '__volley.session.settings.fps===30 && __volley.session.epoch!==' +
+    '__volley.session.settings.fps===30 && __volley.session.epoch===' +
       JSON.stringify(beforeOptionsEpoch)
   );
   for (const guest of guests)
@@ -659,8 +695,27 @@ async function screenshot(page, name) {
     await host.ev('__volley.game.players.map(p=>p.isComputer)'),
     [false, false, false, false]
   );
+  await liveOption(
+    host,
+    guests,
+    'practice-mode-submenu-btn',
+    'practice-mode-on-btn',
+    '__volley.session.settings.practice===true && __volley.game.isPracticeMode===true'
+  );
+  for (const page of [host, ...guests])
+    assert.deepEqual(
+      await page.ev('__volley.game.view.game.scoreBoards.map(b=>b.visible)'),
+      [false, false]
+    );
+  await liveOption(
+    host,
+    guests,
+    'practice-mode-submenu-btn',
+    'practice-mode-off-btn',
+    '__volley.session.settings.practice===false && __volley.game.isPracticeMode===false'
+  );
   console.log(
-    'Classic UI: original menus, host-only settings confirmation/restart, room-wide chat, local chat disable, and text-safe rendering passed.'
+    'Classic UI: original menus, host-only live speed/practice options, room-wide chat, local chat disable, and text-safe rendering passed.'
   );
   await host.ev(
     'document.getElementById("court-width").value="501";document.getElementById("serve-mode").value="fixed"'
@@ -676,6 +731,55 @@ async function screenshot(page, name) {
     await player3.ev('document.getElementById("game-canvas").width'),
     2004
   );
+  await click(host, 'options-dropdown-btn');
+  await click(host, 'court-submenu-btn');
+  await host.ev('document.getElementById("synchronization").value="lockstep"');
+  await click(host, 'settings-apply');
+  await click(host, 'settings-confirm-yes');
+  for (const page of [host, ...guests]) {
+    await page.until(
+      '__volley.session.lockstep && __volley.session.lastFrame>5'
+    );
+    await observeLocalSimulation(page);
+  }
+  await host.until('__volley.session.lastFrame>110');
+  for (const guest of guests) assert.ok(await guest.ev('localSteps>0'));
+  // Missing input stalls all simulations; restoring the sender resumes them.
+  await guests[0].ev(
+    'window.originalTick=__volley.session.tick.bind(__volley.session);__volley.session.tick=()=>{}'
+  );
+  await delay(600);
+  const stalled = await host.ev('__volley.session.lastFrame');
+  await delay(350);
+  assert.equal(await host.ev('__volley.session.lastFrame'), stalled);
+  await guests[0].ev('__volley.session.tick=window.originalTick');
+  await host.until('__volley.session.lastFrame>' + (stalled + 5));
+  await assertSameSimulation(host, guests);
+  await liveOption(
+    host,
+    guests,
+    'speed-submenu-btn',
+    'slow-speed-btn',
+    '__volley.session.settings.fps===20 && __volley.game.normalFPS===20'
+  );
+  await liveOption(
+    host,
+    guests,
+    'practice-mode-submenu-btn',
+    'practice-mode-on-btn',
+    '__volley.session.settings.practice===true && __volley.game.isPracticeMode===true'
+  );
+  await assertSameSimulation(host, guests);
+  await liveOption(
+    host,
+    guests,
+    'practice-mode-submenu-btn',
+    'practice-mode-off-btn',
+    '__volley.session.settings.practice===false && __volley.game.isPracticeMode===false'
+  );
+  await assertSameSimulation(host, guests);
+  await click(host, 'pause');
+  await host.until('__volley.session.phase==="playing"');
   await click(guests[0], 'leave');
   await host.until(
     '__volley.game.players[1].isComputer && !__volley.room.data.seats[1]'
@@ -684,12 +788,14 @@ async function screenshot(page, name) {
   await host.until(
     '__volley.game.players[3].isComputer && !__volley.room.data.seats[3]'
   );
+  await host.until('__volley.session.lastFrame>' + (stalled + 15));
+  await assertSameSimulation(host, [player3]);
   await click(host, 'leave');
   await player3.until(
     '__volley.room.closed && __volley.session.phase==="idle"'
   );
   console.log(
-    'Four browsers: real WebRTC input, host-only physics, matching snapshots, settings restart, guest AI takeover, and host departure passed.'
+    'Four browsers: real WebRTC input, host snapshots, switching to four-browser lockstep, identical full states, missing-input stalls, pause/resume, AI takeover, and host departure passed.'
   );
   const pairHost = await tab(port, 'ko');
   await pairHost.ev(
@@ -734,6 +840,8 @@ async function screenshot(page, name) {
   await click(pairHost, 'options-dropdown-btn');
   await click(pairHost, 'practice-mode-submenu-btn');
   await click(pairHost, 'practice-mode-on-btn');
+  await observeLocalSimulation(pairHost);
+  await observeLocalSimulation(pairGuest);
   await click(pairHost, 'start');
   await pairGuest.until('__volley.game.isPracticeMode===true');
   assert.deepEqual(
@@ -766,6 +874,8 @@ async function screenshot(page, name) {
   );
   await click(pairHost, 'pause');
   await pairGuest.until('__volley.session.phase==="paused"');
+  await assertSameSimulation(pairHost, [pairGuest]);
+  assert.ok(await pairGuest.ev('localSteps>0'));
   await screenshot(pairHost, 'two-browser-match.png');
   await pairGuest.send('Emulation.setDeviceMetricsOverride', {
     width: 390,
@@ -779,6 +889,21 @@ async function screenshot(page, name) {
       'document.documentElement.scrollWidth<=window.innerWidth+2'
     ),
     'Mobile UI must not overflow horizontally'
+  );
+  await click(pairHost, 'options-dropdown-btn');
+  await click(pairHost, 'court-submenu-btn');
+  await pairHost.ev('document.getElementById("synchronization").value="host"');
+  await click(pairHost, 'settings-apply');
+  await click(pairHost, 'settings-confirm-yes');
+  await pairGuest.until(
+    '!__volley.session.lockstep && __volley.session.settings.synchronization==="host" && __volley.session.lastFrame>5'
+  );
+  const priorGuestSteps = await pairGuest.ev('localSteps');
+  await pairGuest.until('__volley.session.lastFrame>15');
+  assert.equal(
+    await pairGuest.ev('localSteps'),
+    priorGuestSteps,
+    'Host-only mode must not simulate on guests'
   );
   const rosterBeforeReset = await pairHost.ev('__volley.room.data.members');
   await click(pairHost, 'options-dropdown-btn');
@@ -798,6 +923,7 @@ async function screenshot(page, name) {
     await pairGuest.ev('__volley.game.view.game.scoreBoards.map(b=>b.visible)'),
     [true, true]
   );
+  assert.ok(await pairGuest.ev('!!__volley.session.lockstep'));
   console.log(
     'Lobby: unassigned entry, release/reselect, occupied-seat protection, per-player pair names, speaker selection, practice mode and reset preserving roster passed.'
   );
@@ -830,7 +956,7 @@ async function screenshot(page, name) {
   await click(sharedHost, 'leave');
   await sharedGuest.until('__volley.room.closed');
   console.log(
-    'Same browser profile: separate tabs join independently, select different slots, receive host snapshots, and close cleanly.'
+    'Same browser profile: separate tabs join independently, select different slots, run lockstep physics, and close cleanly.'
   );
   if (matchmakingApp) {
     for (const layout of ['four', 'pairs']) {

@@ -1,9 +1,13 @@
+import seedrandom from 'seedrandom';
+import { setCustomRng } from '../offline_2v2/rand.js';
+import { Lockstep, INPUT_WINDOW } from './lockstep.js';
 import { PikaKeyboard } from '../offline_2v2/keyboard.js';
 import { createAliasedKeyboard } from './keyboard_aliases.js';
 import {
   PLAYER_KEYS,
   RemoteInput,
   matchSettings,
+  canUpdateLive,
   ownedInputs,
   lobbyReady,
 } from './protocol.js';
@@ -144,9 +148,13 @@ export class OnlineMatch {
     this.inputSequence = 0;
     this.peerSequences = new Map();
     this.localSlots = [];
+    this.matchSlots = null;
     this.keyboards = [];
     this.controlStyle = 'standard';
     this.events = [];
+    this.lockstep = null;
+    this.inputTimer = null;
+    this.rng = null;
     const play = game.playSoundEffect.bind(game);
     game.playSoundEffect = () => {
       game.players.forEach((player, i) => {
@@ -184,7 +192,7 @@ export class OnlineMatch {
       keyboard.powerHitKeyIsDownPrevious = false;
       keyboard.subscribe();
     });
-    this.inputs.forEach((input) => input.reset());
+    if (!this.lockstep) this.inputs.forEach((input) => input.reset());
   }
   clearKeys() {
     this.keyboards.forEach(({ keyboard }) => keyboard.unsubscribe());
@@ -198,7 +206,11 @@ export class OnlineMatch {
     this.clearKeys();
     const member =
       this.room && this.room.data && this.room.data.members[this.room.selfId];
-    this.localSlots = member ? member.slots.slice() : [];
+    this.localSlots = this.matchSlots
+      ? this.matchSlots.slice()
+      : member
+      ? member.slots.slice()
+      : [];
     this.localSlots.forEach((slot, index) => {
       const keys =
         this.controlStyle === 'position'
@@ -258,25 +270,20 @@ export class OnlineMatch {
     this.epoch = randomId();
     this.phase = 'playing';
     this.frame = 0;
-    this.prepare(checked);
-    this.refreshRoster();
-    const game = this.game;
-    game.frameCounter = 0;
-    game.state = game.startOfNewGame;
-    game.paused = false;
-    game.startOfNewGame();
+    this.initialize(checked, this.room.data.members);
     this.room.broadcast({
       type: 'begin',
       epoch: this.epoch,
       settings: checked,
+      members: this.room.data.members,
     });
-    this.sendState();
+    if (!this.lockstep) this.sendState();
     this.notify();
   }
   refreshRoster() {
     if (!this.room || !this.epoch) return;
     const member = this.room.data.members[this.room.selfId];
-    const slots = member ? member.slots : [];
+    const slots = this.matchSlots || (member ? member.slots : []);
     if (JSON.stringify(slots) !== JSON.stringify(this.localSlots))
       this.bindLocalKeys();
     if (!this.room.isHost) return;
@@ -285,12 +292,21 @@ export class OnlineMatch {
       if (id === this.room.selfId || this.room.connected(id))
         humans.push(...member.slots);
     });
-    this.game.players.forEach((player, i) => {
-      player.isComputer = !humans.includes(i);
-    });
+    if (this.lockstep) {
+      for (const id of this.lockstep.members.keys()) {
+        if (
+          !this.room.data.members[id] ||
+          (id !== this.room.selfId && !this.room.connected(id))
+        )
+          this.lockstep.remove(id);
+      }
+    } else
+      this.game.players.forEach((player, i) => {
+        player.isComputer = !humans.includes(i);
+      });
   }
   peerOpened(id) {
-    if (this.room.isHost && this.epoch) {
+    if (this.room.isHost && this.epoch && !this.lockstep) {
       this.room.send(id, {
         type: 'begin',
         epoch: this.epoch,
@@ -308,7 +324,8 @@ export class OnlineMatch {
     if (!this.room) return;
     if (this.room.isHost) {
       const member = this.room.data.members[id];
-      if (member)
+      if (this.lockstep) this.lockstep.remove(id);
+      if (member && !this.lockstep)
         member.slots.forEach((slot) => {
           this.game.players[slot].isComputer = true;
           this.inputs[slot].reset();
@@ -319,6 +336,45 @@ export class OnlineMatch {
       this.room.shutdown();
       this.notify(new Error('The host disconnected. The room has closed.'));
     }
+    this.notify();
+  }
+  applyLiveSettings(settings) {
+    this.settings = settings;
+    this.game.normalFPS = settings.fps;
+    this.ticker.maxFPS = settings.fps;
+    this.game.isPracticeMode = settings.practice;
+    if (this.lockstep) {
+      this.stopInputTimer();
+      this.inputTimer = setInterval(() => this.tick(true), 1000 / settings.fps);
+    }
+  }
+  async updateLiveSettings(value) {
+    if (!this.room || this.room.closed || !this.room.isHost || !this.epoch)
+      throw new Error('Only the host can change match settings.');
+    const checked = matchSettings(value);
+    if (!canUpdateLive(this.settings, checked))
+      throw new Error('These settings require a match restart.');
+    const epoch = this.epoch;
+    await this.room.store.update(this.room.id, { settings: checked });
+    if (this.room.closed || this.epoch !== epoch) return;
+    if (this.lockstep) {
+      // Reliable ordered delivery puts this change after all preceding frames.
+      // Discard queued inputs on every browser, keeping the match and pause state.
+      const generation = this.lockstep.generation + 1;
+      this.lockstep.control(generation, this.game.paused);
+      this.inputs.forEach((input) => input.reset());
+      this.room.broadcast({
+        type: 'frame-control',
+        epoch,
+        generation,
+        paused: this.game.paused,
+        frame: this.lockstep.frame,
+        settings: checked,
+      });
+    } else
+      this.room.broadcast({ type: 'live-settings', epoch, settings: checked });
+    this.applyLiveSettings(checked);
+    if (!this.lockstep) this.sendState();
     this.notify();
   }
   pause() {
@@ -332,11 +388,94 @@ export class OnlineMatch {
     this.game.paused = !this.game.paused;
     this.phase = this.game.paused ? 'paused' : 'playing';
     this.inputs.forEach((input) => input.reset());
-    this.sendState();
+    if (this.lockstep) {
+      const generation = this.lockstep.generation + 1;
+      this.lockstep.control(generation, this.game.paused);
+      this.room.broadcast({
+        type: 'frame-control',
+        epoch: this.epoch,
+        generation,
+        paused: this.game.paused,
+        frame: this.lockstep.frame,
+      });
+    } else this.sendState();
     this.notify();
   }
-  tick() {
+  withRng(callback) {
+    setCustomRng(this.rng);
+    try {
+      return callback();
+    } finally {
+      setCustomRng(null);
+    }
+  }
+  stopInputTimer() {
+    clearInterval(this.inputTimer);
+    this.inputTimer = null;
+  }
+  initialize(settings, members) {
+    this.stopInputTimer();
+    this.lockstep = null;
+    this.matchSlots = members[this.room.selfId].slots.slice();
+    this.rng =
+      settings.synchronization === 'lockstep'
+        ? seedrandom.alea(this.epoch)
+        : null;
+    this.withRng(() => {
+      this.prepare(settings);
+      const humans = Object.values(members).flatMap((member) => member.slots);
+      this.game.players.forEach((player, slot) => {
+        player.isComputer = !humans.includes(slot);
+      });
+      this.game.frameCounter = 0;
+      this.game.state = this.game.startOfNewGame;
+      this.game.paused = false;
+      this.game.startOfNewGame();
+    });
+    if (settings.synchronization === 'lockstep') {
+      this.lockstep = new Lockstep({
+        epoch: this.epoch,
+        selfId: this.room.selfId,
+        hostId: this.room.data.hostId,
+        members,
+        send: (id, packet) => this.room.send(id, packet),
+        broadcast: (packet) => this.room.broadcast(packet),
+        advance: (inputs, humans, frame) => {
+          this.lastFrame = this.frame = frame;
+          this.game.players.forEach((player, slot) => {
+            player.isComputer = !humans.includes(slot);
+          });
+          inputs.forEach((input, slot) => this.inputs[slot].push(input));
+          this.withRng(() => this.step());
+          this.events = [];
+        },
+      });
+      // Background tabs may suspend requestAnimationFrame, so sample inputs separately.
+      this.inputTimer = setInterval(() => this.tick(true), 1000 / settings.fps);
+    }
+  }
+  step() {
+    this.game.gameLoop();
+    if (this.game.state === this.game.intro) {
+      this.phase = 'finished';
+      this.game.paused = true;
+      if (this.lockstep) this.lockstep.paused = true;
+      this.game.view.intro.visible = false;
+      this.game.view.game.visible = true;
+      this.game.view.game.messages.gameEnd.visible = true;
+      this.notify();
+    }
+  }
+  tick(fromInputTimer = false) {
+    if (this.lockstep && !fromInputTimer) return;
     if (!this.room || this.room.closed || !this.epoch) return;
+    // Do not consume a power-hit edge while the input pipeline is full.
+    if (
+      this.lockstep &&
+      (this.phase !== 'playing' ||
+        this.lockstep.sampled >= this.lockstep.frame + INPUT_WINDOW)
+    )
+      return;
     const typing =
       !!document.querySelector('.fade-in-box:not(.hidden)') ||
       (document.activeElement &&
@@ -354,19 +493,13 @@ export class OnlineMatch {
         powerHit: typing || this.phase !== 'playing' ? 0 : keyboard.powerHit,
       };
     });
+    if (this.lockstep) {
+      if (this.phase === 'playing') this.lockstep.sample(values);
+      return;
+    }
     if (this.room.isHost) {
       values.forEach((value) => this.inputs[value.slot].push(value));
-      if (this.phase === 'playing') {
-        this.game.gameLoop();
-        if (this.game.state === this.game.intro) {
-          this.phase = 'finished';
-          this.game.paused = true;
-          this.game.view.intro.visible = false;
-          this.game.view.game.visible = true;
-          this.game.view.game.messages.gameEnd.visible = true;
-          this.notify();
-        }
-      }
+      if (this.phase === 'playing') this.step();
       this.sendState();
     } else {
       this.room.send(
@@ -382,7 +515,7 @@ export class OnlineMatch {
     }
   }
   sendState() {
-    if (!this.epoch || !this.room || !this.room.isHost) return;
+    if (!this.epoch || !this.room || !this.room.isHost || this.lockstep) return;
     this.room.broadcast(
       captureSnapshot(
         this.game,
@@ -396,7 +529,38 @@ export class OnlineMatch {
   }
   message(id, message) {
     if (!this.room || this.room.closed) return;
+    if (
+      this.lockstep &&
+      ['frame-input', 'frame', 'frame-control'].includes(message.type)
+    ) {
+      if (message.type === 'frame-control') {
+        let settings;
+        if (message.settings !== undefined) {
+          try {
+            settings = matchSettings(message.settings);
+          } catch (_) {
+            return;
+          }
+          if (!canUpdateLive(this.settings, settings)) return;
+        }
+        if (
+          id !== this.room.data.hostId ||
+          message.epoch !== this.epoch ||
+          message.frame !== this.lockstep.frame ||
+          !this.lockstep.control(message.generation, message.paused)
+        )
+          return;
+        if (settings) this.applyLiveSettings(settings);
+        this.game.paused = message.paused;
+        if (this.phase !== 'finished')
+          this.phase = message.paused ? 'paused' : 'playing';
+        this.inputs.forEach((input) => input.reset());
+        this.notify();
+      } else this.lockstep.receive(id, message);
+      return;
+    }
     if (this.room.isHost) {
+      if (this.lockstep) return;
       const member = this.room.data.members[id];
       if (!member || this.phase !== 'playing') return;
       const inputs = ownedInputs(
@@ -411,6 +575,19 @@ export class OnlineMatch {
       return;
     }
     if (id !== this.room.data.hostId) return;
+    if (message.type === 'live-settings') {
+      if (this.lockstep || message.epoch !== this.epoch) return;
+      let settings;
+      try {
+        settings = matchSettings(message.settings);
+      } catch (_) {
+        return;
+      }
+      if (!canUpdateLive(this.settings, settings)) return;
+      this.applyLiveSettings(settings);
+      this.notify();
+      return;
+    }
     if (message.type === 'lobby') {
       this.stop();
       return;
@@ -424,15 +601,33 @@ export class OnlineMatch {
         this.epoch = message.epoch;
         this.lastFrame = -1;
         this.phase = 'playing';
-        this.prepare(settings);
-        this.game.audio.sounds.bgm.play();
+        if (settings.synchronization === 'lockstep') {
+          if (
+            !message.members ||
+            !message.members[this.room.selfId] ||
+            !message.members[this.room.data.hostId]
+          )
+            throw new Error('Invalid lockstep roster.');
+          this.initialize(settings, message.members);
+        } else {
+          this.stopInputTimer();
+          this.lockstep = null;
+          this.matchSlots =
+            message.members && message.members[this.room.selfId]
+              ? message.members[this.room.selfId].slots.slice()
+              : null;
+          this.rng = null;
+          this.prepare(settings);
+          this.game.audio.sounds.bgm.play();
+        }
         this.notify();
       } catch (error) {
         this.notify(error);
       }
       return;
     }
-    if (!validSnapshot(message, this.epoch, this.lastFrame)) return;
+    if (this.lockstep || !validSnapshot(message, this.epoch, this.lastFrame))
+      return;
     this.lastFrame = message.frame;
     const phaseChanged = this.phase !== message.phase;
     this.phase = message.phase;
@@ -492,10 +687,14 @@ export class OnlineMatch {
       });
   }
   stop() {
+    this.stopInputTimer();
     this.clearKeys();
     this.inputs.forEach((input) => input.reset());
     this.phase = 'idle';
+    this.matchSlots = null;
     this.epoch = null;
+    this.lockstep = null;
+    this.rng = null;
     this.lastFrame = -1;
     this.game.paused = true;
     this.game.audio.sounds.bgm.stop();

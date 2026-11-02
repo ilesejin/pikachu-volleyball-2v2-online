@@ -17,6 +17,7 @@ import { FirebaseRoomStore } from './firebase_store.js';
 import { OnlineMatch } from './session.js';
 import {
   matchSettings,
+  canUpdateLive,
   ROOM_SCHEMA,
   lobbyReady,
   playerName,
@@ -56,6 +57,7 @@ function settingsFromForm() {
     fps: $('speed').value,
     winningScore: $('winning-score').value,
     practice: $('practice-mode').checked,
+    synchronization: $('synchronization').value,
   });
 }
 function namesFromForm() {
@@ -76,6 +78,7 @@ function updateSettingsForm(value) {
   $('speed').value = value.fps;
   $('winning-score').value = value.winningScore;
   $('practice-mode').checked = !!value.practice;
+  $('synchronization').value = value.synchronization;
 }
 function update(error) {
   if (error) status(error.message || String(error), true);
@@ -178,7 +181,8 @@ function update(error) {
       ? text('Resume', '계속')
       : text('Pause', '일시정지');
   $('back-lobby').disabled = busy || !session.epoch;
-  if (!room.isHost && data.settings) updateSettingsForm(data.settings);
+  if (!room.isHost && data.settings)
+    updateSettingsForm(session.epoch ? session.settings : data.settings);
   if (classicUI) classicUI.update();
 }
 async function run(action) {
@@ -363,8 +367,13 @@ async function boot() {
     applySettings: (value) =>
       run(async () => {
         if (!room.isHost) return;
-        updateSettingsForm(matchSettings(value));
-        if (session.epoch) await session.start(settingsFromForm());
+        const checked = matchSettings(value);
+        if (session.epoch) {
+          if (canUpdateLive(session.settings, checked))
+            await session.updateLiveSettings(checked);
+          else await session.start(checked);
+        }
+        updateSettingsForm(checked);
         status(text('Game options applied.', '경기 설정을 적용했습니다.'));
       }),
   });

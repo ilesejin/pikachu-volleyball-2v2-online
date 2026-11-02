@@ -26,7 +26,7 @@ Install dependencies with `npm ci`, then use `npm start` and open `/en/` or `/ko
 
 `src/resources/js/data_channel/rtc_configuration.js` supplies the existing STUN configuration. Add your TURN service to its `iceServers` if direct connections fail across restrictive networks. Use short-lived TURN credentials supplied by an appropriate backend for a public deployment; static browser code cannot keep a long-lived TURN password secret.
 
-The host maintains one WebRTC connection per guest. A four-browser match has three host-to-guest connections, and a two-browser match has one. No guest mesh is required. Inputs travel guest → host; authoritative snapshots travel host → guests at the selected 20/25/30 FPS. Host departure ends the room. Abrupt tab closure may leave Firestore room documents because unload cleanup is best effort; production maintenance can remove stale rooms.
+The host maintains one WebRTC connection per guest. A four-browser match has three host-to-guest connections, and a two-browser match has one. No guest mesh is required. By default, each browser sends frame-numbered local inputs to the host, which relays complete four-player input frames. Every browser runs the unchanged physics and AI with synchronized seeded randomness, waiting for missing input (lockstep). The three-frame input pipeline is bounded; slow/backgrounded browsers can stall the match. Alternatively, select Host only in Options → Court / serve: inputs travel guest → host and authoritative snapshots return at the selected 20/25/30 FPS. Changing modes during a match restarts it after host confirmation. Host departure ends the room. Abrupt tab closure may leave Firestore room documents because unload cleanup is best effort; production maintenance can remove stale rooms.
 
 ## Local Firestore rules tests
 
@@ -58,9 +58,9 @@ For local development use `http://localhost:3000`. Published HTTPS pages need an
 
 To run the combined local browser/server integration tests, build with `npx webpack --config webpack.dev.js`, set `PIKA_QUICK_MATCH_SERVER` to the absolute sibling server directory, then run `npm run test:browser`. These tests use the actual server matchmaker/HTTP handler, a local signaling fixture, and real WebRTC, without live Firebase requests.
 
-## Lobby update (protocol v2)
+## Lobby and synchronization update (protocol v3)
 
-Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v2`; create new rooms after upgrading.
+Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v3`; create new rooms after upgrading. Version-1/version-2 clients cannot join version-3 rooms. The Quick Match server and Firestore rules also need this protocol update; npm run deploy publishes only the frontend.
 
 Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
 
