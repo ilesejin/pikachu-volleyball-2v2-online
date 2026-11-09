@@ -8,6 +8,10 @@ import { PikaKeyboard } from './keyboard.js';
 import { PikaAudio } from './audio.js';
 import { DoublesPhysics } from './doubles_physics.js';
 import { DOUBLES_CONFIG } from './doubles_config.js';
+import {
+  createDoublesMenuKeyboards,
+  createDoublesKeyboards,
+} from './doubles_controls.js';
 
 /** @typedef {import('@pixi/display').Container} Container */
 /** @typedef {import('@pixi/loaders').LoaderResource} LoaderResource */
@@ -70,8 +74,10 @@ export class PikachuVolleyball {
     /** @type {number} number of elapsed normal fps frames for rendering slow motion */
     this.slowMotionNumOfSkippedFrames = 0;
 
-    /** @type {number} 0: vs computers, 1: all humans, 2: solo human (2v2 only) */
+    /** @type {number} 2v2: 0 solo, 1 human pair, 2 four humans; original: 0 vs computer, 1 vs human */
     this.selectedWithWho = 0;
+    this.doublesHumanSlots = null;
+    this.doublesFVMode = 'diagonal';
 
     /** @type {number[]} [0] for player 1 score, [1] for player 2 score */
     this.scores = [0, 0];
@@ -139,19 +145,9 @@ export class PikachuVolleyball {
     this.physics = isDoubles
       ? new DoublesPhysics(this.doublesCourtWidth, this.doublesServeMode)
       : new PikaPhysics(true, true);
+    this.doublesHumanSlots = null;
     this.keyboardArray = isDoubles
-      ? [
-          new PikaKeyboard('KeyA', 'KeyD', 'KeyW', 'KeyX', 'KeyZ', 'KeyS'),
-          new PikaKeyboard('KeyG', 'KeyJ', 'KeyY', 'KeyB', 'KeyV', 'KeyH'),
-          new PikaKeyboard('KeyL', 'Quote', 'KeyP', 'Semicolon', 'Comma'),
-          new PikaKeyboard(
-            'ArrowLeft',
-            'ArrowRight',
-            'ArrowUp',
-            'ArrowDown',
-            'Enter'
-          ),
-        ]
+      ? createDoublesMenuKeyboards(this.doublesFVMode)
       : [
           new PikaKeyboard('KeyD', 'KeyG', 'KeyR', 'KeyV', 'KeyZ', 'KeyF'),
           new PikaKeyboard(
@@ -199,6 +195,21 @@ export class PikachuVolleyball {
     if (guide) guide.hidden = !isDoubles;
   }
 
+  configureDoublesKeyboards(humans) {
+    this.keyboardArray.forEach((keyboard) => keyboard.unsubscribe());
+    this.doublesHumanSlots = humans === null ? null : humans.slice();
+    this.keyboardArray =
+      humans === null || humans.length === 0
+        ? createDoublesMenuKeyboards(this.doublesFVMode)
+        : createDoublesKeyboards(humans, this.doublesFVMode);
+  }
+  setDoublesFVMode(mode) {
+    if (!['diagonal', 'down-only'].includes(mode)) return false;
+    if (mode === this.doublesFVMode) return true;
+    this.doublesFVMode = mode;
+    if (this.isDoubles) this.configureDoublesKeyboards(this.doublesHumanSlots);
+    return true;
+  }
   setCourtWidth(width) {
     if (!Number.isInteger(width) || width < 216) return false;
     if (width === this.doublesCourtWidth) return true;
@@ -217,12 +228,14 @@ export class PikachuVolleyball {
 
   restartDoublesMatch() {
     const lineup = this.players.map((player) => player.isComputer);
+    const humans = this.doublesHumanSlots && this.doublesHumanSlots.slice();
     const hadMatch = this.view.game.visible;
     this.setMode(true);
     this.players.forEach((player, i) => {
       player.isComputer = lineup[i];
     });
     if (hadMatch) {
+      this.configureDoublesKeyboards(humans);
       this.state = this.startOfNewGame;
       this.startOfNewGame();
     }
@@ -296,6 +309,7 @@ export class PikachuVolleyball {
   menu() {
     const physics = this.physics;
     if (this.frameCounter === 0) {
+      if (this.isDoubles) this.configureDoublesKeyboards(null);
       this.view.menu.visible = true;
       this.view.fadeInOut.setBlackAlphaTo(0);
       this.selectedWithWho = 0;
@@ -323,9 +337,12 @@ export class PikachuVolleyball {
     }
 
     if (this.isDoubles) {
-      const direction = this.keyboardArray.some(
-        (keyboard) => keyboard.yDirection === -1
-      )
+      const selectionHit = this.keyboardArray.some(
+        (keyboard) => keyboard.powerHit === 1
+      );
+      const direction = selectionHit
+        ? 0
+        : this.keyboardArray.some((keyboard) => keyboard.yDirection === -1)
         ? -1
         : this.keyboardArray.some((keyboard) => keyboard.yDirection === 1)
         ? 1
@@ -375,12 +392,20 @@ export class PikachuVolleyball {
         const humanPosition = this.keyboardArray.findIndex(
           (keyboard) => keyboard.powerHit === 1
         );
+        if (this.selectedWithWho === 1 && ![0, 3].includes(humanPosition))
+          return;
+        const humans =
+          this.selectedWithWho === 0
+            ? [humanPosition]
+            : this.selectedWithWho === 2
+            ? [0, 1, 2, 3]
+            : humanPosition === 0
+            ? [0, 1]
+            : [2, 3];
         this.players.forEach((player, i) => {
-          player.isComputer =
-            this.selectedWithWho === 2
-              ? i !== humanPosition
-              : this.selectedWithWho === 0 && i >= 2;
+          player.isComputer = !humans.includes(i);
         });
+        this.configureDoublesKeyboards(humans);
       } else if (this.selectedWithWho === 1) {
         physics.player1.isComputer = false;
         physics.player2.isComputer = false;

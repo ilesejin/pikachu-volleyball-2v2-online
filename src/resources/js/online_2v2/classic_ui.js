@@ -55,6 +55,7 @@ export function setUpClassicUI({
       fps: Number($('speed').value),
       winningScore: Number($('winning-score').value),
       practice: $('practice-mode').checked,
+      topology: $('topology').value,
       synchronization: $('synchronization').value,
     };
   }
@@ -64,6 +65,7 @@ export function setUpClassicUI({
     $('speed').value = value.fps;
     $('winning-score').value = value.winningScore;
     $('practice-mode').checked = !!value.practice;
+    $('topology').value = value.topology;
     $('synchronization').value = value.synchronization;
   }
   const choose = async (value) => {
@@ -215,6 +217,17 @@ export function setUpClassicUI({
       $('status').textContent = error.message;
     }
   }
+  $('reconnect-network').addEventListener('click', async () => {
+    if (room.closed || !room.isHost || room.data.status !== 'lobby') return;
+    $('reconnect-network').disabled = true;
+    try {
+      await room.rebuildNetwork(room.data.settings);
+    } catch (error) {
+      $('status').textContent = error.message;
+    } finally {
+      ui.update();
+    }
+  });
   $('cancel-slot').addEventListener('click', () => selectSlots([]));
   let randomizing = false;
   $('randomize-slots').addEventListener('click', async () => {
@@ -434,6 +447,16 @@ export function setUpClassicUI({
       $('match-dropdown-btn').disabled = !connected || !room.isHost;
       $('fill-ai-label').hidden = !room.isHost;
       $('synchronization').disabled = !room.isHost;
+      $('topology').disabled = !room.isHost;
+      $('topology-label').hidden = connected && room.data.layout === 'pairs';
+      $('reconnect-network').hidden = !room.isHost;
+      $('reconnect-network').disabled =
+        !connected || room.data.status !== 'lobby';
+      $('network-status').textContent = connected
+        ? room.ready()
+          ? t('Connections ready', '연결 준비 완료')
+          : t('Waiting for required connections', '필요한 연결을 기다리는 중')
+        : '';
       for (const id of [
         'practice-mode-submenu-btn',
         'reset-to-default-btn',

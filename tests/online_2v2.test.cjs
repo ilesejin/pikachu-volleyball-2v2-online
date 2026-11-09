@@ -26,6 +26,9 @@ const protocol = load(
     'lobbyReady',
     'matchSettings',
     'canUpdateLive',
+    'usesMesh',
+    'requiredPeers',
+    'connectionKey',
     'validSlots',
     'occupiedSlots',
     'randomizedPositions',
@@ -39,12 +42,13 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('online settings match the preserved 2v2 defaults and validate incoming values', () => {
   assert.deepEqual(plain(protocol.matchSettings()), {
-    courtWidth: 384,
+    courtWidth: 340,
     serveMode: 'rotate-ball',
     fps: 25,
     winningScore: 15,
     practice: false,
     synchronization: 'lockstep',
+    topology: 'mesh',
   });
   for (const invalid of [
     { courtWidth: 215 },
@@ -54,6 +58,7 @@ test('online settings match the preserved 2v2 defaults and validate incoming val
     { fps: 60 },
     { winningScore: 99 },
     { synchronization: 'bogus' },
+    { topology: 'bogus' },
   ]) {
     assert.throws(() => protocol.matchSettings(invalid));
   }
@@ -152,9 +157,10 @@ function fakeStore() {
           update: (key, value) => {
             const data = documents.get(key);
             for (const [field, entry] of Object.entries(value)) {
-              const [parent, child] = field.split('.');
-              if (child) data[parent][child] = plain(entry);
-              else data[parent] = plain(entry);
+              const parts = field.split('.');
+              let target = data;
+              for (const part of parts.slice(0, -1)) target = target[part];
+              target[parts[parts.length - 1]] = plain(entry);
             }
           },
         })
@@ -739,7 +745,7 @@ const { Lockstep, INPUT_WINDOW } = load(
     normalizeInput: protocol.normalizeInput,
   }
 );
-function lockstepFixture(layout = 'four') {
+function lockstepFixture(layout = 'four', mesh = false) {
   const members =
     layout === 'pairs'
       ? { host: { slots: [2, 3] }, a: { slots: [0, 1] } }
@@ -756,6 +762,7 @@ function lockstepFixture(layout = 'four') {
     logs[id] = [];
     nodes[id] = new Lockstep({
       epoch: 'match',
+      mesh,
       selfId: id,
       hostId: 'host',
       members,
@@ -1091,4 +1098,367 @@ test('host randomization atomically assigns unselected and selected members and 
     await assert.rejects(store.randomizeSlots('random', 'host'), /lobby/);
     assert.deepEqual(documents.get('rooms/random'), playing);
   }
+});
+
+test('mesh creates six distinct links, star creates three, and pairs always use one', () => {
+  const members = { host: {}, a: {}, b: {}, c: {} };
+  for (const topology of ['mesh', 'star']) {
+    const data = {
+      hostId: 'host',
+      layout: 'four',
+      settings: { topology },
+      networkRevision: 4,
+      members,
+    };
+    const links = new Set();
+    for (const id of Object.keys(members))
+      for (const peer of protocol.requiredPeers(data, id))
+        links.add(protocol.connectionKey(data, id, peer));
+    assert.equal(links.size, topology === 'mesh' ? 6 : 3);
+    const newer = { ...data, networkRevision: 5 };
+    for (const id of Object.keys(members))
+      for (const peer of protocol.requiredPeers(data, id))
+        assert.equal(links.has(protocol.connectionKey(newer, id, peer)), false);
+  }
+  const pairs = {
+    hostId: 'host',
+    layout: 'pairs',
+    settings: { topology: 'mesh' },
+    members: { host: {}, a: {} },
+  };
+  assert.equal(protocol.usesMesh(pairs), false);
+  assert.deepEqual(plain(protocol.requiredPeers(pairs, 'a')), ['host']);
+});
+test('full-mesh lockstep exchanges direct inputs without host frame relays and stays identical with delayed peers', () => {
+  const f = lockstepFixture('four', true);
+  for (let frame = 0; frame < 200; frame++) {
+    for (const id of ['host', 'a', 'b', 'c'])
+      f.sample(id, frame % 8 === 0 ? 1 : 0);
+    assert.ok(f.network.every((item) => item.packet.type === 'frame-input'));
+    if (frame % 3 === 0) {
+      // Delay one browser while others receive its already-sampled inputs.
+      const delayed = f.network.filter((item) => item.to === 'c');
+      const immediate = f.network.filter((item) => item.to !== 'c');
+      f.network.splice(0, f.network.length, ...immediate);
+      f.deliver();
+      for (const id of ['host', 'a', 'b']) f.sample(id);
+      f.network.push(...delayed);
+    }
+    f.deliver();
+  }
+  for (const id of ['host', 'a', 'b', 'c'])
+    assert.deepEqual(f.logs[id], f.logs.host);
+  assert.ok(f.logs.host.length > 190);
+});
+test('mesh buffers next-generation inputs arriving before a host checkpoint and drops old generations', () => {
+  const f = lockstepFixture('four', true),
+    guest = f.nodes.a;
+  const packet = {
+    type: 'frame-input',
+    epoch: 'match',
+    generation: 1,
+    frame: 1,
+    inputs: [{ slot: 2, powerHit: 1 }],
+  };
+  assert.equal(guest.receive('b', packet), false);
+  assert.equal(guest.future.size, 1);
+  guest.control(1, false);
+  guest.flushFuture();
+  assert.equal(guest.pending.get(1).get('b')[0].powerHit, 1);
+  assert.equal(guest.receive('b', { ...packet, generation: 0 }), false);
+});
+test('rebuilding topology resets readiness atomically and preserves names and slots', async () => {
+  const { store, documents } = fakeStore();
+  await store.create('network', 'host', 'H', 'four', [0], {});
+  await store.claim('network', 'a', 'A', [2]);
+  await assert.rejects(store.rebuildNetwork('network', 'a', {}), /host/);
+  const before = plain(documents.get('rooms/network'));
+  const updated = await store.rebuildNetwork('network', 'host', {
+    topology: 'star',
+  });
+  assert.equal(updated.networkRevision, 1);
+  assert.equal(updated.settings.topology, 'star');
+  for (const id of ['host', 'a']) {
+    assert.deepEqual(
+      plain(updated.members[id].slots),
+      before.members[id].slots
+    );
+    assert.equal(updated.members[id].connected, false);
+  }
+  await store.networkReady('network', 'a', 0, true);
+  assert.equal(documents.get('rooms/network').members.a.connected, false);
+  await store.networkReady('network', 'a', 1, true);
+  assert.equal(documents.get('rooms/network').members.a.connected, true);
+});
+
+test('mesh checkpoints restore full AI, collision, serve and RNG state without changing physics objects', () => {
+  const seedrandom = require('seedrandom');
+  const { captureCheckpoint, restoreCheckpoint, validCheckpoint } = load(
+    'online_2v2/checkpoint.js',
+    ['captureCheckpoint', 'restoreCheckpoint', 'validCheckpoint'],
+    { seedrandom }
+  );
+  const rngState = { rng: seedrandom.alea('checkpoint', { state: true }) };
+  const { DoublesPhysics } = load(
+    'offline_2v2/doubles_physics.js',
+    ['DoublesPhysics'],
+    { DOUBLES_CONFIG: config, rand: () => Math.floor(32768 * rngState.rng()) }
+  );
+  const physics = new DoublesPhysics(384, 'rotate-ball');
+  physics.initializeRound(false, true);
+  const inputs = Array.from({ length: 4 }, () => new protocol.RemoteInput());
+  const game = {
+    physics,
+    get players() {
+      return physics.players;
+    },
+    scores: [0, 0],
+    frameCounter: 0,
+    paused: false,
+    isPlayer2Serve: false,
+    view: {
+      game: {
+        cloudArray: Array.from({ length: 10 }, () => ({ x: 3 })),
+        wave: { verticalCoord: 4, yCoords: Array(27).fill(314) },
+      },
+    },
+    round() {
+      if (physics.runEngineForNextFrame(inputs)) {
+        this.isPlayer2Serve = !this.isPlayer2Serve;
+        this.scores[Number(this.isPlayer2Serve)]++;
+        physics.initializeRound(this.isPlayer2Serve, false);
+      }
+      this.frameCounter++;
+    },
+  };
+  game.state = game.round;
+  for (let i = 0; i < 200; i++) game.round();
+  const checkpoint = captureCheckpoint(game, inputs, rngState.rng);
+  assert.equal(validCheckpoint(checkpoint, game), true);
+  const player = physics.players[0],
+    ball = physics.ball;
+  for (let i = 0; i < 150; i++) game.round();
+  const expected = JSON.stringify({
+    physics,
+    scores: game.scores,
+    counter: game.frameCounter,
+    rng: rngState.rng.state(),
+  });
+  rngState.rng = restoreCheckpoint(game, inputs, checkpoint);
+  assert.equal(physics.players[0], player);
+  assert.equal(physics.ball, ball);
+  for (let i = 0; i < 150; i++) game.round();
+  assert.equal(
+    JSON.stringify({
+      physics,
+      scores: game.scores,
+      counter: game.frameCounter,
+      rng: rngState.rng.state(),
+    }),
+    expected
+  );
+});
+test('mesh readiness includes every guest-to-guest link and ignores obsolete readiness reports', () => {
+  const { OnlineRoom } = load('online_2v2/room.js', ['OnlineRoom'], {
+    requiredPeers: protocol.requiredPeers,
+  });
+  const data = {
+    hostId: 'host',
+    layout: 'four',
+    networkRevision: 2,
+    settings: { topology: 'mesh' },
+    members: { host: {}, a: {}, b: {}, c: {} },
+  };
+  const host = Object.assign(Object.create(OnlineRoom.prototype), {
+    closed: false,
+    data,
+    isHost: true,
+    selfId: 'host',
+    networkFault: false,
+    rebuildingTarget: null,
+    connected: () => true,
+    readyReports: new Map([
+      ['a', ['host', 'b', 'c']],
+      ['b', ['host', 'a', 'c']],
+      ['c', ['host', 'a']],
+    ]),
+  });
+  assert.equal(host.ready(), false);
+  host.internalMessage('c', {
+    type: 'network-ready',
+    revision: 1,
+    peers: ['host', 'a', 'b'],
+  });
+  assert.equal(host.ready(), false);
+  host.readyReports.set('c', ['host', 'a', 'b']);
+  assert.equal(host.ready(), true);
+});
+test('mesh retains inputs that beat the host start message, with a bounded early queue', () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch'], {
+    usesMesh: protocol.usesMesh,
+    INPUT_WINDOW,
+  });
+  const guest = Object.assign(Object.create(OnlineMatch.prototype), {
+    epoch: null,
+    earlyInputs: [],
+    lockstep: null,
+    room: {
+      closed: false,
+      isHost: false,
+      data: {
+        hostId: 'host',
+        layout: 'four',
+        settings: { topology: 'mesh' },
+        members: { b: { slots: [2] } },
+      },
+    },
+  });
+  const packet = {
+    type: 'frame-input',
+    epoch: 'next-match',
+    generation: 0,
+    frame: 1,
+    inputs: [{ slot: 2, powerHit: 1 }],
+  };
+  guest.message('b', packet);
+  assert.equal(guest.earlyInputs.length, 1);
+  guest.message('b', { ...packet, generation: 2 });
+  assert.equal(guest.earlyInputs.length, 2);
+  guest.message('outsider', packet);
+  assert.equal(guest.earlyInputs.length, 2);
+  for (let i = 0; i < 100; i++) guest.message('b', packet);
+  assert.equal(guest.earlyInputs.length, 4 * INPUT_WINDOW);
+});
+
+test('rapid mesh controls retain inputs that arrive more than one generation ahead', () => {
+  const guest = lockstepFixture('four', true).nodes.a;
+  const packet = {
+    type: 'frame-input',
+    epoch: 'match',
+    generation: 3,
+    frame: 1,
+    inputs: [{ slot: 2, powerHit: 1 }],
+  };
+  guest.receive('b', packet);
+  assert.equal(guest.future.size, 1);
+  guest.control(1, true);
+  guest.flushFuture();
+  assert.equal(guest.future.size, 1);
+  guest.control(2, true);
+  guest.flushFuture();
+  assert.equal(guest.future.size, 1);
+  guest.control(3, false);
+  guest.flushFuture();
+  assert.equal(guest.pending.get(1).get('b')[0].powerHit, 1);
+});
+
+test('readiness restores the latest desired flag after an older write completes', async () => {
+  const { OnlineRoom } = load('online_2v2/room.js', ['OnlineRoom'], {
+    requiredPeers: protocol.requiredPeers,
+  });
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const data = {
+    networkRevision: 0,
+    hostId: 'host',
+    layout: 'four',
+    settings: { topology: 'mesh' },
+    members: { host: { connected: true } },
+  };
+  const oldWrite = gate.then(() => {
+    data.members.host.connected = false;
+  });
+  const host = Object.assign(Object.create(OnlineRoom.prototype), {
+    id: 'room',
+    closed: false,
+    selfId: 'host',
+    isHost: true,
+    data,
+    readyReports: new Map(),
+    readyWrites: new Map([['0:host', false]]),
+    readyTasks: new Map([['host', oldWrite]]),
+    connected: () => true,
+    store: {
+      networkReady: async (id, uid, revision, value) => {
+        data.members[uid].connected = value;
+      },
+    },
+  });
+  host.reportReady();
+  const newest = host.readyTasks.get('host');
+  release();
+  await newest;
+  assert.equal(data.members.host.connected, true);
+});
+test('queued readiness from a departed room cannot write to a new room', async () => {
+  const { OnlineRoom } = load('online_2v2/room.js', ['OnlineRoom'], {
+    requiredPeers: protocol.requiredPeers,
+  });
+  let release,
+    writes = 0;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const host = Object.assign(Object.create(OnlineRoom.prototype), {
+    id: 'old',
+    closed: false,
+    selfId: 'host',
+    isHost: true,
+    data: {
+      networkRevision: 0,
+      hostId: 'host',
+      layout: 'four',
+      settings: { topology: 'mesh' },
+      members: { host: { connected: false } },
+    },
+    readyReports: new Map(),
+    readyWrites: new Map(),
+    readyTasks: new Map([['host', gate]]),
+    connected: () => true,
+    store: {
+      networkReady: async () => {
+        writes++;
+      },
+    },
+  });
+  host.reportReady();
+  const pending = host.readyTasks.get('host');
+  host.id = 'new';
+  release();
+  await pending;
+  assert.equal(writes, 0);
+});
+
+test('an already-open WebRTC channel reports readiness exactly once when attached', () => {
+  const { OnlineRoom } = load('online_2v2/room.js', ['OnlineRoom']);
+  const events = {},
+    peer = { channel: null };
+  let reports = 0,
+    opened = 0;
+  const channel = {
+    readyState: 'open',
+    addEventListener: (name, callback) => {
+      events[name] = callback;
+    },
+    close() {},
+  };
+  const room = Object.assign(Object.create(OnlineRoom.prototype), {
+    closed: false,
+    peers: new Map([['guest', peer]]),
+    reportReady() {
+      reports++;
+    },
+    emit(name) {
+      if (name === 'open') opened++;
+    },
+  });
+  room.attachChannel('guest', channel);
+  assert.equal(reports, 1);
+  assert.equal(opened, 1);
+  events.open();
+  events.open();
+  assert.equal(reports, 1);
+  assert.equal(opened, 1);
 });

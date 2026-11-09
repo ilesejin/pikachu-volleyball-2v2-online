@@ -21,7 +21,15 @@ export class PikaKeyboard extends PikaUserInput {
    *                           when pressing down key and right key at the same time (Only player 1
    *                           has this key)
    */
-  constructor(left, right, up, down, powerHit, downRight = null) {
+  constructor(
+    left,
+    right,
+    up,
+    down,
+    powerHit,
+    downRight = null,
+    downRightDirection = 1
+  ) {
     super();
 
     /** @type {boolean} */
@@ -39,6 +47,7 @@ export class PikaKeyboard extends PikaUserInput {
     this.powerHitKey = new Key(powerHit);
     /** @type {Key} */
     this.downRightKey = new Key(downRight);
+    this.downRightDirection = downRightDirection;
   }
 
   /**
@@ -46,7 +55,10 @@ export class PikaKeyboard extends PikaUserInput {
    * This method is for freezing the keyboard input during the process of one game frame.
    */
   getInput() {
-    if (this.leftKey.isDown) {
+    if (
+      this.leftKey.isDown ||
+      (this.downRightDirection === -1 && this.downRightKey.isDown)
+    ) {
       this.xDirection = -1;
     } else if (
       this.rightKey.isDown ||

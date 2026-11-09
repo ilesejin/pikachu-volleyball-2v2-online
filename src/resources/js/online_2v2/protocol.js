@@ -1,6 +1,6 @@
 import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
 
-export const ROOM_SCHEMA = 'pikavolley-2v2-v3';
+export const ROOM_SCHEMA = 'pikavolley-2v2-v4';
 export const SERVE_MODES = ['rotate-players', 'rotate-ball', 'fixed'];
 export const PLAYER_KEYS = [
   ['KeyA', 'KeyD', 'KeyW', 'KeyX', 'KeyZ', 'KeyS'],
@@ -20,6 +20,7 @@ export function matchSettings(value = {}) {
   const winningScore = Number(value.winningScore || 15);
   const synchronization =
     value.synchronization === undefined ? 'lockstep' : value.synchronization;
+  const topology = value.topology === undefined ? 'mesh' : value.topology;
   const practice = value.practice === undefined ? false : value.practice;
   if (
     !Number.isSafeInteger(courtWidth) ||
@@ -29,7 +30,8 @@ export function matchSettings(value = {}) {
     ![20, 25, 30].includes(fps) ||
     ![5, 10, 15].includes(winningScore) ||
     typeof practice !== 'boolean' ||
-    !['lockstep', 'host'].includes(synchronization)
+    !['lockstep', 'host'].includes(synchronization) ||
+    !['mesh', 'star'].includes(topology)
   ) {
     throw new Error('Invalid match settings.');
   }
@@ -40,6 +42,7 @@ export function matchSettings(value = {}) {
     winningScore,
     practice,
     synchronization,
+    topology,
   };
 }
 
@@ -47,10 +50,26 @@ export function matchSettings(value = {}) {
 export function canUpdateLive(current, next) {
   return (
     !!current &&
-    ['courtWidth', 'serveMode', 'winningScore', 'synchronization'].every(
-      (key) => current[key] === next[key]
-    )
+    [
+      'courtWidth',
+      'serveMode',
+      'winningScore',
+      'synchronization',
+      'topology',
+    ].every((key) => current[key] === next[key])
   );
+}
+
+export function usesMesh(data) {
+  return data.layout === 'four' && data.settings.topology === 'mesh';
+}
+export function requiredPeers(data, selfId) {
+  if (usesMesh(data) || selfId === data.hostId)
+    return Object.keys(data.members).filter((id) => id !== selfId);
+  return [data.hostId];
+}
+export function connectionKey(data, a, b) {
+  return [data.networkRevision, ...[a, b].sort()].join('~');
 }
 
 export function validSlots(layout, slots, unassigned = false) {

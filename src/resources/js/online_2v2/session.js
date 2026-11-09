@@ -1,3 +1,8 @@
+import {
+  captureCheckpoint,
+  restoreCheckpoint,
+  validCheckpoint,
+} from './checkpoint.js';
 import seedrandom from 'seedrandom';
 import { setCustomRng } from '../offline_2v2/rand.js';
 import { Lockstep, INPUT_WINDOW } from './lockstep.js';
@@ -10,6 +15,8 @@ import {
   canUpdateLive,
   ownedInputs,
   lobbyReady,
+  usesMesh,
+  validSlots,
 } from './protocol.js';
 import { randomId } from './room.js';
 
@@ -147,6 +154,7 @@ export class OnlineMatch {
     this.lastFrame = -1;
     this.inputSequence = 0;
     this.peerSequences = new Map();
+    this.earlyInputs = [];
     this.localSlots = [];
     this.matchSlots = null;
     this.keyboards = [];
@@ -222,6 +230,11 @@ export class OnlineMatch {
         this.controlStyle !== 'position' && this.localSlots.length === 1
           ? createAliasedKeyboard(keys, PAIR_FIRST_KEYS)
           : new PikaKeyboard(...keys);
+      if (
+        this.controlStyle !== 'position' &&
+        (this.localSlots.length === 1 || index === 0)
+      )
+        keyboard.downRightDirection = slot >= 2 ? -1 : 1;
       this.keyboards.push({ slot, keyboard });
     });
   }
@@ -257,7 +270,11 @@ export class OnlineMatch {
           'Wait for all players to connect, or remove the disconnected player.'
         );
     }
+    if (!this.room.ready())
+      throw new Error('Wait for all required peer connections to be ready.');
     const checked = matchSettings(settings);
+    if (checked.topology !== this.room.data.settings.topology)
+      throw new Error('Apply the connection layout before starting.');
     if (!lobbyReady(this.room.data))
       throw new Error(
         'Every joined player must select a slot before starting.'
@@ -270,6 +287,7 @@ export class OnlineMatch {
     this.epoch = randomId();
     this.phase = 'playing';
     this.frame = 0;
+    this.lastFrame = -1;
     this.initialize(checked, this.room.data.members);
     this.room.broadcast({
       type: 'begin',
@@ -298,7 +316,8 @@ export class OnlineMatch {
           !this.room.data.members[id] ||
           (id !== this.room.selfId && !this.room.connected(id))
         )
-          this.lockstep.remove(id);
+          if (this.lockstep.mesh) this.meshControl({ remove: id });
+          else this.lockstep.remove(id);
       }
     } else
       this.game.players.forEach((player, i) => {
@@ -324,14 +343,16 @@ export class OnlineMatch {
     if (!this.room) return;
     if (this.room.isHost) {
       const member = this.room.data.members[id];
-      if (this.lockstep) this.lockstep.remove(id);
+      if (this.lockstep && this.lockstep.mesh && this.lockstep.members.has(id))
+        this.meshControl({ remove: id });
+      else if (this.lockstep) this.lockstep.remove(id);
       if (member && !this.lockstep)
         member.slots.forEach((slot) => {
           this.game.players[slot].isComputer = true;
           this.inputs[slot].reset();
         });
       this.room.removeMember(id).catch((error) => this.notify(error));
-    } else {
+    } else if (id === this.room.data.hostId) {
       this.stop();
       this.room.shutdown();
       this.notify(new Error('The host disconnected. The room has closed.'));
@@ -357,6 +378,10 @@ export class OnlineMatch {
     const epoch = this.epoch;
     await this.room.store.update(this.room.id, { settings: checked });
     if (this.room.closed || this.epoch !== epoch) return;
+    if (this.lockstep && this.lockstep.mesh) {
+      this.meshControl({ settings: checked });
+      return;
+    }
     if (this.lockstep) {
       // Reliable ordered delivery puts this change after all preceding frames.
       // Discard queued inputs on every browser, keeping the match and pause state.
@@ -377,6 +402,85 @@ export class OnlineMatch {
     if (!this.lockstep) this.sendState();
     this.notify();
   }
+  meshControl({
+    settings = this.settings,
+    paused = this.game.paused,
+    remove = null,
+  } = {}) {
+    const driver = this.lockstep;
+    if (!this.room.isHost || !driver || !driver.mesh) return;
+    if (remove) {
+      const slots = driver.members.get(remove) || [];
+      driver.members.delete(remove);
+      slots.forEach((slot) => {
+        this.game.players[slot].isComputer = true;
+        this.inputs[slot].reset();
+      });
+    }
+    this.game.paused = paused;
+    if (this.phase !== 'finished') this.phase = paused ? 'paused' : 'playing';
+    this.applyLiveSettings(settings);
+    driver.control(driver.generation + 1, paused);
+    this.room.broadcast({
+      type: 'mesh-control',
+      epoch: this.epoch,
+      generation: driver.generation,
+      frame: driver.frame,
+      settings,
+      members: Object.fromEntries(
+        [...driver.members].map(([id, slots]) => [id, { slots }])
+      ),
+      checkpoint: captureCheckpoint(this.game, this.inputs, this.rng),
+      visual: captureSnapshot(this.game, this.epoch, driver.frame, this.phase),
+    });
+    driver.flushFuture();
+    this.notify();
+  }
+  receiveMeshControl(id, message) {
+    const driver = this.lockstep;
+    if (
+      id !== this.room.data.hostId ||
+      !driver ||
+      !driver.mesh ||
+      message.epoch !== this.epoch ||
+      !Number.isSafeInteger(message.generation) ||
+      message.generation <= driver.generation ||
+      !Number.isSafeInteger(message.frame) ||
+      Math.abs(message.frame - driver.frame) > INPUT_WINDOW * 3 ||
+      !message.members ||
+      !message.members[this.room.selfId] ||
+      !message.members[this.room.data.hostId] ||
+      !Object.values(message.members).every((member) =>
+        validSlots(this.room.data.layout, member.slots)
+      ) ||
+      !validSnapshot(message.visual, this.epoch, -1) ||
+      message.visual.frame !== message.frame ||
+      !validCheckpoint(message.checkpoint, this.game)
+    )
+      return;
+    let settings;
+    try {
+      settings = matchSettings(message.settings);
+    } catch (_) {
+      return;
+    }
+    if (!canUpdateLive(this.settings, settings)) return;
+    this.rng = restoreCheckpoint(this.game, this.inputs, message.checkpoint);
+    this.phase = message.visual.phase;
+    this.frame = this.lastFrame = driver.frame = message.frame;
+    driver.members = new Map(
+      Object.entries(message.members).map(([uid, member]) => [
+        uid,
+        member.slots.slice(),
+      ])
+    );
+    driver.control(message.generation, this.game.paused);
+    this.applyLiveSettings(settings);
+    this.applySnapshot(message.visual);
+    this.events = [];
+    driver.flushFuture();
+    this.notify();
+  }
   pause() {
     if (
       !this.room ||
@@ -385,6 +489,10 @@ export class OnlineMatch {
       this.phase === 'finished'
     )
       return;
+    if (this.lockstep && this.lockstep.mesh) {
+      this.meshControl({ paused: !this.game.paused });
+      return;
+    }
     this.game.paused = !this.game.paused;
     this.phase = this.game.paused ? 'paused' : 'playing';
     this.inputs.forEach((input) => input.reset());
@@ -419,7 +527,7 @@ export class OnlineMatch {
     this.matchSlots = members[this.room.selfId].slots.slice();
     this.rng =
       settings.synchronization === 'lockstep'
-        ? seedrandom.alea(this.epoch)
+        ? seedrandom.alea(this.epoch, { state: true })
         : null;
     this.withRng(() => {
       this.prepare(settings);
@@ -438,6 +546,7 @@ export class OnlineMatch {
         selfId: this.room.selfId,
         hostId: this.room.data.hostId,
         members,
+        mesh: usesMesh(this.room.data),
         send: (id, packet) => this.room.send(id, packet),
         broadcast: (packet) => this.room.broadcast(packet),
         advance: (inputs, humans, frame) => {
@@ -449,6 +558,11 @@ export class OnlineMatch {
           this.withRng(() => this.step());
           this.events = [];
         },
+      });
+      const early = this.earlyInputs;
+      this.earlyInputs = [];
+      early.forEach(({ id, message }) => {
+        if (message.epoch === this.epoch) this.lockstep.receive(id, message);
       });
       // Background tabs may suspend requestAnimationFrame, so sample inputs separately.
       this.inputTimer = setInterval(() => this.tick(true), 1000 / settings.fps);
@@ -529,6 +643,27 @@ export class OnlineMatch {
   }
   message(id, message) {
     if (!this.room || this.room.closed) return;
+    if (
+      message.type === 'frame-input' &&
+      message.epoch !== this.epoch &&
+      usesMesh(this.room.data) &&
+      this.room.data.members[id] &&
+      typeof message.epoch === 'string' &&
+      message.epoch.length <= 64 &&
+      Number.isSafeInteger(message.generation) &&
+      message.generation >= 0 &&
+      Number.isSafeInteger(message.frame) &&
+      message.frame >= 1 &&
+      message.frame <= INPUT_WINDOW
+    ) {
+      if (this.earlyInputs.length < 4 * INPUT_WINDOW)
+        this.earlyInputs.push({ id, message });
+      return;
+    }
+    if (message.type === 'mesh-control') {
+      this.receiveMeshControl(id, message);
+      return;
+    }
     if (
       this.lockstep &&
       ['frame-input', 'frame', 'frame-control'].includes(message.type)
@@ -687,6 +822,7 @@ export class OnlineMatch {
       });
   }
   stop() {
+    this.earlyInputs = [];
     this.stopInputTimer();
     this.clearKeys();
     this.inputs.forEach((input) => input.reset());

@@ -29,11 +29,12 @@ function handle(data) {
   if (action === 'create') {
     if (rooms.has(id)) throw Error('Room already exists');
     const room = {
-      schema: 'pikavolley-2v2-v3',
+      schema: 'pikavolley-2v2-v4',
       hostId: data.hostId,
       layout: data.layout,
       settings: data.settings,
       status: 'lobby',
+      networkRevision: 0,
       members: {
         [data.hostId]: {
           name: names[0],
@@ -111,6 +112,21 @@ function handle(data) {
     );
     return {};
   }
+  if (action === 'networkReady') {
+    if (room.networkRevision === data.revision && room.members[data.clientId])
+      room.members[data.clientId].connected = data.value;
+    return {};
+  }
+  if (action === 'rebuildNetwork') {
+    if (data.hostId !== room.hostId) throw Error('Host only.');
+    room.networkRevision++;
+    room.settings = data.settings;
+    room.status = 'lobby';
+    Object.values(room.members).forEach((member) => {
+      member.connected = false;
+    });
+    return room;
+  }
   if (action === 'randomizeSlots') {
     if (room.hostId !== data.hostId || room.status !== 'lobby')
       throw Error('Host lobby action only.');
@@ -153,7 +169,7 @@ function handle(data) {
     return {};
   }
   if (action === 'offer') {
-    signals.set(key, { offer: data.offer });
+    signals.set(key, { ...data.endpoints, offer: data.offer });
     return {};
   }
   if (action === 'answer') {
@@ -281,7 +297,7 @@ async function cdp(url) {
         '; debug=' +
         JSON.stringify(
           await ev(
-            '({phase:window.__volley?.session.phase,status:window.__volley?.room.data?.status,isHost:window.__volley?.room.isHost,closed:window.__volley?.room.closed,back:window.backDebug})'
+            '({phase:window.__volley?.session.phase,status:window.__volley?.room.data?.status,isHost:window.__volley?.room.isHost,closed:window.__volley?.room.closed,back:window.backDebug,network:__volley?.room&&{revision:__volley.room.data?.networkRevision,hold:__volley.room.rebuildingTarget,fault:__volley.room.networkFault,flags:Object.fromEntries(Object.entries(__volley.room.data?.members||{}).map(([id,m])=>[id,m.connected])),reports:Array.from(__volley.room.readyReports),writes:Array.from(__volley.room.readyWrites),peers:Array.from(__volley.room.peers).map(([id,p])=>({id,pc:p.pc.connectionState,channel:p.channel?.readyState,closed:p.notifiedClosed}))}})'
           )
         )
     );
@@ -321,6 +337,61 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
     '!!window.__volley && !document.getElementById("create").disabled'
   );
   return page;
+}
+async function assertConnections(host, guests, topology) {
+  for (const page of [host, ...guests]) {
+    try {
+      await page.until(
+        '__volley.room.ready() && Object.values(__volley.room.data.members).every(m=>m.connected)'
+      );
+    } catch (error) {
+      for (const item of [host, ...guests])
+        console.error(
+          'Connection diagnostic:',
+          await item.ev(
+            'JSON.stringify({self:__volley.room.selfId,data:__volley.room.data,hold:__volley.room.rebuildingTarget,reports:Array.from(__volley.room.readyReports),peers:Array.from(__volley.room.peers).map(([id,p])=>({id,state:p.pc.connectionState,ice:p.pc.iceConnectionState,signaling:p.pc.signalingState,channel:p.channel?.readyState,closed:p.notifiedClosed,remote:p.pc.remoteDescription?.type,local:p.pc.localDescription?.type,queued:p.candidates.length}))})'
+          )
+        );
+      throw error;
+    }
+    assert.equal(
+      await page.ev('__volley.room.peers.size'),
+      topology === 'mesh' || page === host ? guests.length : 1
+    );
+    assert.equal(
+      await page.ev(
+        'Array.from(__volley.room.peers.keys()).every(id=>__volley.room.connected(id))'
+      ),
+      true
+    );
+  }
+}
+async function switchTopology(host, guests, topology) {
+  const seats = await host.ev('__volley.room.data.seats');
+  const revision = await host.ev('__volley.room.data.networkRevision');
+  const wasPlaying = await host.ev('!!__volley.session.epoch');
+  await click(host, 'options-dropdown-btn');
+  await click(host, 'court-submenu-btn');
+  await screenshot(host, 'network-layout-' + topology + '.png');
+  await host.ev(
+    'document.getElementById("topology").value=' + JSON.stringify(topology)
+  );
+  await click(host, 'settings-apply');
+  if (wasPlaying) await click(host, 'settings-confirm-yes');
+  for (const page of [host, ...guests]) {
+    await page.until(
+      '__volley.room.data.networkRevision>' +
+        revision +
+        ' && __volley.session.phase==="idle" && __volley.room.data.settings.topology===' +
+        JSON.stringify(topology)
+    );
+    assert.deepEqual(await page.ev('__volley.room.data.seats'), seats);
+  }
+  await assertConnections(host, guests, topology);
+  assert.equal(
+    await guests[0].ev('document.getElementById("topology").disabled'),
+    true
+  );
 }
 async function randomizeLobby(host, guests) {
   const pages = [host, ...guests];
@@ -493,6 +564,7 @@ async function screenshot(page, name) {
     executable,
     [
       '--headless=new',
+      '--mute-audio',
       '--disable-gpu',
       '--no-first-run',
       '--no-default-browser-check',
@@ -536,6 +608,26 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_NETWORK_ONLY) {
+    await click(host, 'create');
+    await host.until('!__volley.room.closed && !!__volley.room.data');
+    await selectSlot(host, '0');
+    const guests = [];
+    for (let i = 1; i < 4; i++) {
+      const guest = await tab(port);
+      await join(guest, await host.ev('__volley.room.id'), String(i));
+      guests.push(guest);
+    }
+    await assertConnections(host, guests, 'mesh');
+    for (let i = 0; i < 3; i++) {
+      await switchTopology(host, guests, 'star');
+      await switchTopology(host, guests, 'mesh');
+      console.log('Connection cycle', i);
+    }
+    await click(host, 'leave');
+    console.log('Network-only test passed.');
+    return;
+  }
   await screenshot(host, 'classic-landing.png');
   await click(host, 'create');
   await host.until('!__volley.room.closed && !!__volley.room.data');
@@ -569,6 +661,7 @@ async function screenshot(page, name) {
   await host.until(
     '__volley.room.peers.size===3 && Array.from(__volley.room.peers.keys()).every(id=>__volley.room.connected(id))'
   );
+  await assertConnections(host, guests, 'mesh');
   await randomizeLobby(host, guests);
   for (const [index, page] of [host, ...guests].entries())
     await selectSlot(page, String(index));
@@ -799,9 +892,15 @@ async function screenshot(page, name) {
     await page.until(
       '__volley.session.lockstep && __volley.session.lastFrame>5'
     );
+    assert.equal(await page.ev('__volley.session.lockstep.mesh'), true);
+    await page.ev(
+      'window.peerInputSenders=[];const receive=__volley.session.message.bind(__volley.session);__volley.session.message=(id,msg)=>{if(msg.type==="frame-input")peerInputSenders.push(id);return receive(id,msg);}'
+    );
     await observeLocalSimulation(page);
   }
   await host.until('__volley.session.lastFrame>110');
+  for (const page of [host, ...guests])
+    assert.equal(await page.ev('new Set(peerInputSenders).size'), 3);
   for (const guest of guests) assert.ok(await guest.ev('localSteps>0'));
   // Missing input stalls all simulations; restoring the sender resumes them.
   await guests[0].ev(
@@ -839,6 +938,38 @@ async function screenshot(page, name) {
   await assertSameSimulation(host, guests);
   await click(host, 'pause');
   await host.until('__volley.session.phase==="playing"');
+  await switchTopology(host, guests, 'star');
+  await click(host, 'start');
+  await host.until('__volley.session.lastFrame>95');
+  for (const guest of guests)
+    assert.equal(await guest.ev('__volley.session.lockstep.mesh'), false);
+  await assertSameSimulation(host, guests);
+  await switchTopology(host, guests, 'mesh');
+  await click(host, 'start');
+  await host.until('__volley.session.lastFrame>100');
+  // A broken guest-to-guest edge must not misidentify either guest as the host.
+  const otherGuest = await guests[1].ev('__volley.room.selfId');
+  await guests[0].ev(
+    '__volley.room.peers.get(' +
+      JSON.stringify(otherGuest) +
+      ').channel.close()'
+  );
+  for (const page of [host, ...guests])
+    await page.until(
+      '__volley.session.phase==="idle" && __volley.room.data.status==="lobby"'
+    );
+  assert.equal(
+    await host.ev('Object.keys(__volley.room.data.members).length'),
+    4
+  );
+  assert.equal(
+    await host.ev('document.getElementById("start").disabled'),
+    true
+  );
+  await click(host, 'reconnect-network');
+  await assertConnections(host, guests, 'mesh');
+  await click(host, 'start');
+  await host.until('__volley.session.lastFrame>110');
   await click(guests[0], 'leave');
   await host.until(
     '__volley.game.players[1].isComputer && !__volley.room.data.seats[1]'
@@ -1015,6 +1146,15 @@ async function screenshot(page, name) {
   await sharedHost.send('Page.bringToFront');
   await click(sharedHost, 'start');
   await sharedGuest.until('__volley.session.lastFrame>2');
+  await click(sharedHost, 'leave');
+  await sharedGuest.until('__volley.room.closed');
+  await click(sharedHost, 'create');
+  await sharedHost.until('!__volley.room.closed && !!__volley.room.data');
+  await selectSlot(sharedHost, '0');
+  await join(sharedGuest, await sharedHost.ev('__volley.room.id'), '1');
+  await assertConnections(sharedHost, [sharedGuest], 'mesh');
+  await click(sharedHost, 'start');
+  await sharedGuest.until('__volley.session.lastFrame>3');
   await click(sharedHost, 'leave');
   await sharedGuest.until('__volley.room.closed');
   console.log(

@@ -1,7 +1,7 @@
 /**
  * 2v2 adaptation of physics.js. The legacy file stays byte-for-byte unchanged.
  * Geometry, player orchestration, coverage inputs, opponent selection, and round setup differ.
- * All movement, collision, prediction and AI helper bodies are copied unchanged.
+ * All legacy helper bodies are copied unchanged; 2v2 adds its own shot selection.
  */
 /**
  * The Model part in the MVC pattern
@@ -16,7 +16,7 @@
  *
  * ** Some useful infos below **
  *
- *  Ground width: twice the per-match half-width (default 768)
+ *  Ground width: twice the per-match half-width (default 680)
  *  Ground height: 304 = 0x130
  *
  *  X position coordinate: [0, twice the half-width], right-direction increasing
@@ -366,6 +366,7 @@ export function createDoublesRules(courtWidth) {
       if (player.isComputer) {
         letComputerDecideUserInput(player, ball, opponent, userInputArray[i]);
         applyCoverageInput(player, ball, userInputArray[i]);
+        prepareDoublesAttack(player, ball, opponents, userInputArray[i]);
         // The original movement helper also calls the AI; its input is already prepared.
         player.isComputer = false;
         try {
@@ -392,6 +393,18 @@ export function createDoublesRules(courtWidth) {
       const player = players[i];
       if (isCollisionBetweenBallAndPlayerHappened(ball, player.x, player.y)) {
         if (!player.isCollisionWithBallHappened) {
+          // Aim at actual contact, after movement and any earlier player's hit.
+          // Shot direction no longer doubles as a movement command this frame.
+          if (player.isComputer && player.state === 2) {
+            const shot = chooseDoublesShot(
+              player,
+              ball,
+              players.filter((other) => other.isPlayer2 !== player.isPlayer2),
+              false
+            );
+            userInputArray[i].xDirection = shot.input.xDirection;
+            userInputArray[i].yDirection = shot.input.yDirection;
+          }
           processCollisionBetweenBallAndPlayer(
             ball,
             player.x,
@@ -405,6 +418,123 @@ export function createDoublesRules(courtWidth) {
       }
     }
     return isBallTouchingGround;
+  }
+
+  /** 2v2 decisions only: world, movement and hit-response helpers below stay intact. */
+  function prepareDoublesAttack(player, ball, opponents, input) {
+    if (
+      (player.state !== 1 && player.state !== 2) ||
+      Math.abs(ball.x - player.x) >= 48 ||
+      Math.abs(ball.y - player.y) >= 48
+    )
+      return;
+    const shot = chooseDoublesShot(player, ball, opponents, player.state === 1);
+    input.powerHit = Number(shot.powerHit);
+    // Safe default until actual contact; an ongoing smash must never inherit
+    // the idle coverage input's neutral/downward shot accidentally.
+    if (shot.powerHit) input.yDirection = -1;
+  }
+
+  /** Forecast a return using the real hit and world helpers on private copies.
+   * No player collisions are forecast: opponents may still intercept the shot.
+   * Zero-speed normal hits consider all three random outcomes without consuming RNG.
+   */
+  function predictDoublesShot(player, ball, input, powerHit) {
+    const copy = { ...ball, sound: { ...ball.sound } };
+    const dx = ball.x - player.x;
+    const randomNormal =
+      !powerHit && (dx === 0 ? ball.xVelocity === 0 : Math.abs(dx) < 3);
+    // A power hit overwrites horizontal bounce speed. This equivalent nonzero
+    // contact offset avoids consuming random numbers for a discarded bounce.
+    const contactX = powerHit || randomNormal ? ball.x - 3 : player.x;
+    processCollisionBetweenBallAndPlayer(
+      copy,
+      contactX,
+      input,
+      powerHit ? 2 : 1
+    );
+    const velocities = randomNormal ? [-1, 0, 1] : [copy.xVelocity];
+    let worst = null;
+    for (const velocity of velocities) {
+      const future = { ...copy, xVelocity: velocity, sound: { ...copy.sound } };
+      let netTouched = false;
+      let result = {
+        safe: false,
+        landingX: future.x,
+        frames: INFINITE_LOOP_LIMIT,
+        netTouched: false,
+      };
+      for (let frame = 1; frame <= INFINITE_LOOP_LIMIT; frame++) {
+        if (
+          Math.abs(future.x - GROUND_HALF_WIDTH) < NET_PILLAR_HALF_WIDTH &&
+          future.y > NET_PILLAR_TOP_TOP_Y_COORD
+        )
+          netTouched = true;
+        if (processCollisionBetweenBallAndWorldAndSetBallPosition(future)) {
+          const opponentSide = player.isPlayer2
+            ? future.x < GROUND_HALF_WIDTH
+            : future.x > GROUND_HALF_WIDTH;
+          result = {
+            safe: opponentSide && !netTouched,
+            landingX: future.x,
+            frames: frame,
+            netTouched,
+          };
+          break;
+        }
+      }
+      // A normal return is safe only if every possible random bounce is safe.
+      if (
+        !worst ||
+        (!result.safe && worst.safe) ||
+        (result.safe === worst.safe && result.frames > worst.frames)
+      )
+        worst = result;
+    }
+    return worst;
+  }
+
+  function chooseDoublesShot(player, ball, opponents, allowNormal = true) {
+    let best = null;
+    // Upward returns are considered first; equal scores keep the safer arc.
+    // Both speeds and all vertical directions use the existing smash rules.
+    for (const yDirection of [-1, 0, 1]) {
+      for (const speed of [1, 0]) {
+        const input = {
+          xDirection: speed * (player.isPlayer2 ? -1 : 1),
+          yDirection,
+          powerHit: 1,
+        };
+        const prediction = predictDoublesShot(player, ball, input, true);
+        if (!prediction.safe) continue;
+        // Score the harder-to-cover landing against BOTH defenders, with travel
+        // time allowing defenders to move at the original walking speed.
+        const gap = Math.min(
+          ...opponents.map((other) => Math.abs(other.x - prediction.landingX))
+        );
+        const score = gap - Math.min(GROUND_HALF_WIDTH, prediction.frames * 6);
+        if (!best || score > best.score)
+          best = { ...prediction, input, powerHit: true, score };
+      }
+    }
+    if (best) return best;
+    if (allowNormal) {
+      const input = { xDirection: 0, yDirection: 0, powerHit: 0 };
+      const prediction = predictDoublesShot(player, ball, input, false);
+      if (prediction.safe) return { ...prediction, input, powerHit: false };
+    }
+    // Some low contacts cannot clear the pillar. Lift rather than deliberately
+    // driving the ball down; never change a physical state to rescue a bad shot.
+    const input = {
+      xDirection: player.isPlayer2 ? -1 : 1,
+      yDirection: -1,
+      powerHit: 1,
+    };
+    return {
+      ...predictDoublesShot(player, ball, input, true),
+      input,
+      powerHit: true,
+    };
   }
 
   function applyCoverageInput(player, ball, input) {
@@ -1123,6 +1253,8 @@ export function createDoublesRules(courtWidth) {
     PikaUserInput,
     doublesPhysicsEngine,
     applyCoverageInput,
+    chooseDoublesShot,
+    predictDoublesShot,
     processCollisionBetweenBallAndWorldAndSetBallPosition,
     processPlayerMovementAndSetPlayerPosition,
     processCollisionBetweenBallAndPlayer,

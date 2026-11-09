@@ -26,7 +26,7 @@ Install dependencies with `npm ci`, then use `npm start` and open `/en/` or `/ko
 
 `src/resources/js/data_channel/rtc_configuration.js` supplies the existing STUN configuration. Add your TURN service to its `iceServers` if direct connections fail across restrictive networks. Use short-lived TURN credentials supplied by an appropriate backend for a public deployment; static browser code cannot keep a long-lived TURN password secret.
 
-The host maintains one WebRTC connection per guest. A four-browser match has three host-to-guest connections, and a two-browser match has one. No guest mesh is required. By default, each browser sends frame-numbered local inputs to the host, which relays complete four-player input frames. Every browser runs the unchanged physics and AI with synchronized seeded randomness, waiting for missing input (lockstep). The three-frame input pipeline is bounded; slow/backgrounded browsers can stall the match. Alternatively, select Host only in Options → Court / serve: inputs travel guest → host and authoritative snapshots return at the selected 20/25/30 FPS. Changing modes during a match restarts it after host confirmation. Host departure ends the room. Abrupt tab closure may leave Firestore room documents because unload cleanup is best effort; production maintenance can remove stale rooms.
+Four-browser rooms default to a full mesh (six connections); the host can choose a three-connection star instead. Two-browser local pairs always use one connection. Mesh lockstep sends inputs directly between every pair; star lockstep relays complete input frames through the host. Host-only physics uses host snapshots in either layout. Mesh control events use full simulation/RNG checkpoints; this can produce a small position correction. Changing topology returns everyone to the lobby and rebuilds links after an acknowledgment handshake. A guest-to-guest failure returns to the lobby for retry or a host-selected star layout; actual guest departures use AI. Host departure ends the room. Abrupt closure can leave stale Firestore documents because cleanup is best effort.
 
 ## Local Firestore rules tests
 
@@ -58,9 +58,9 @@ For local development use `http://localhost:3000`. Published HTTPS pages need an
 
 To run the combined local browser/server integration tests, build with `npx webpack --config webpack.dev.js`, set `PIKA_QUICK_MATCH_SERVER` to the absolute sibling server directory, then run `npm run test:browser`. These tests use the actual server matchmaker/HTTP handler, a local signaling fixture, and real WebRTC, without live Firebase requests.
 
-## Lobby and synchronization update (protocol v3)
+## Lobby and synchronization update (protocol v4)
 
-Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v3`; create new rooms after upgrading. Version-1/version-2 clients cannot join version-3 rooms. The Quick Match server and Firestore rules also need this protocol update; npm run deploy publishes only the frontend.
+Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v4`; create new rooms after upgrading. Version-1/version-2/version-3 clients cannot join version-4 rooms. The Quick Match server and Firestore rules also need this protocol update; npm run deploy publishes only the frontend.
 
 Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
 
@@ -71,3 +71,11 @@ firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json
 ```
 
 This uses a demo project and the local Authentication emulator, without reading the frontend's real Firebase configuration.
+
+The v4 rules authorize signaling using the connection’s two endpoints and its network revision. Guest-to-guest links are allowed only in mesh rooms. Offers, answers and ICE have separate endpoint permissions; stale revisions are rejected. Publish these rules before using the updated frontend. Old connection paths are incompatible.
+
+## Offline engine source
+
+Keep the offline checkout at `../pikachu-volleyball-2v2`, or set `$env:PIKA_OFFLINE_ROOT='C:\path\to\pikachu-volleyball-2v2'` in PowerShell. Shared engine code is synchronized automatically before webpack builds and `npm test`; webpack watch also follows offline edits. Use `npm run sync:offline` to update the vendored snapshot and `npm run check:offline` for a read-only parity check. Commit `src/resources/js/offline_2v2/` and `offline-engine.manifest.json` together.
+
+Without the default sibling checkout, a fresh clone or CI build verifies the manifest and builds the committed snapshot. It cannot fetch future offline edits automatically. A configured-but-missing source or a corrupt snapshot stops the build. Redeploy the frontend after engine changes; this synchronization does not publish anything or modify Firebase configuration.

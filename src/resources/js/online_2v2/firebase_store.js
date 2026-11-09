@@ -90,6 +90,7 @@ export class FirebaseRoomStore {
       layout,
       settings: matchSettings(settings),
       status: 'lobby',
+      networkRevision: 0,
       members: { [hostId]: { name, names, slots, connected: true } },
       createdAt: serverTimestamp(),
       seats: [0, 1, 2, 3].map((slot) => (slots.includes(slot) ? hostId : '')),
@@ -215,6 +216,49 @@ export class FirebaseRoomStore {
     });
     return result;
   }
+  async rebuildNetwork(
+    id,
+    hostId,
+    settings,
+    expectedRevision,
+    expectedMembers
+  ) {
+    let result;
+    await runTransaction(this.db, async (transaction) => {
+      const snapshot = await transaction.get(this.room(id));
+      if (!snapshot.exists()) throw new Error('Room not found.');
+      const data = snapshot.data();
+      if (data.hostId !== hostId || data.status === 'closed')
+        throw new Error('Only the host can rebuild connections.');
+      if (
+        expectedRevision !== undefined &&
+        (data.networkRevision !== expectedRevision ||
+          JSON.stringify(Object.keys(data.members).sort()) !==
+            JSON.stringify(expectedMembers.slice().sort()))
+      )
+        throw new Error(
+          'Lobby membership changed. Retry the connection change.'
+        );
+      const members = Object.fromEntries(
+        Object.entries(data.members).map(([uid, member]) => [
+          uid,
+          {
+            ...member,
+            connected: uid === hostId && Object.keys(data.members).length === 1,
+          },
+        ])
+      );
+      const patch = {
+        settings: matchSettings(settings),
+        status: 'lobby',
+        members,
+        networkRevision: data.networkRevision + 1,
+      };
+      transaction.update(this.room(id), patch);
+      result = { ...data, ...patch };
+    });
+    return result;
+  }
   watch(id, receive, error) {
     return onSnapshot(
       this.room(id),
@@ -236,8 +280,25 @@ export class FirebaseRoomStore {
       });
     });
   }
-  connected(id, clientId) {
-    return this.update(id, { [`members.${clientId}.connected`]: true });
+  async networkReady(id, clientId, revision, value) {
+    return runTransaction(this.db, async (transaction) => {
+      const snapshot = await transaction.get(this.room(id));
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      if (
+        data.networkRevision !== revision ||
+        !data.members[clientId] ||
+        data.status === 'closed' ||
+        data.members[clientId].connected === value
+      )
+        return;
+      transaction.update(this.room(id), {
+        [`members.${clientId}.connected`]: value,
+      });
+    });
+  }
+  connected(id, clientId, value = true) {
+    return this.update(id, { [`members.${clientId}.connected`]: value });
   }
   watchSignal(roomId, peerId, receive, error) {
     return onSnapshot(
@@ -248,8 +309,9 @@ export class FirebaseRoomStore {
       error
     );
   }
-  offer(roomId, peerId, offer) {
+  offer(roomId, peerId, offer, endpoints) {
     return setDoc(this.connection(roomId, peerId), {
+      ...endpoints,
       offer: { type: offer.type, sdp: offer.sdp },
     });
   }

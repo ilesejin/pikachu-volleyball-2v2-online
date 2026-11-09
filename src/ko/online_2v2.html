@@ -367,6 +367,10 @@
           채우기</label
         >
         <div id="lobby-editor">
+          <p id="network-status"></p>
+          <button id="reconnect-network" type="button" hidden>
+            연결 다시 시도
+          </button>
           <h3>내 자리 선택</h3>
           <p>
             입장 시 자리가 지정되지 않습니다. 빈 자리 또는 팀을 선택하고,
@@ -431,11 +435,17 @@
       <h2 id="match-settings-title">코트, 서브 및 동기화</h2>
       <form id="settings-form">
         <input id="practice-mode" type="checkbox" hidden />
+        <label id="topology-label"
+          >브라우저 4개 연결 방식<select id="topology">
+            <option value="mesh" selected>전체 연결 · 6개 (기본값)</option>
+            <option value="star">방장 중심 · 3개</option>
+          </select></label
+        >
         <label
           >한쪽 코트 너비<input
             id="court-width"
             type="number"
-            value="384"
+            value="340"
             min="216"
             max="10000"
             step="1"
@@ -465,7 +475,10 @@
           <option selected>15</option>
         </select>
       </form>
-      <p>경기 중 적용하면 같은 선수 구성으로 경기를 다시 시작합니다.</p>
+      <p>
+        연결 방식을 바꾸면 모두 대기실로 돌아갑니다. 코트 너비, 서브 또는 물리
+        모드를 바꾸면 경기를 다시 시작합니다.
+      </p>
       <div class="dialog-actions">
         <button type="button" id="settings-apply" class="btn-in-box">
           적용</button

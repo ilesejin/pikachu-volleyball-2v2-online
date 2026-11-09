@@ -1,7 +1,7 @@
 /** 2v2-only settings. Original 1v1 geometry and physics are unchanged. */
 export const DOUBLES_CONFIG = {
   // Width of EACH half in engine units (original half: 216).
-  courtWidth: 384,
+  courtWidth: 340,
   // 'rotate-players', 'rotate-ball', or 'fixed'.
   serveMode: 'rotate-ball',
   playerTints: [0xffdf72, 0xffa080, 0x70ffff, 0xff70ff],

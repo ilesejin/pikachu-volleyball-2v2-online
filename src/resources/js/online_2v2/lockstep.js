@@ -3,8 +3,26 @@ import { normalizeInput } from './protocol.js';
 // A small input pipeline hides a little jitter. Never predict a missing input.
 export const INPUT_WINDOW = 3;
 export class Lockstep {
-  constructor({ epoch, selfId, hostId, members, send, broadcast, advance }) {
-    Object.assign(this, { epoch, selfId, hostId, send, broadcast, advance });
+  constructor({
+    epoch,
+    selfId,
+    hostId,
+    members,
+    send,
+    broadcast,
+    advance,
+    mesh = false,
+  }) {
+    Object.assign(this, {
+      epoch,
+      selfId,
+      hostId,
+      send,
+      broadcast,
+      advance,
+      mesh,
+    });
+    this.future = new Map();
     this.members = new Map(
       Object.entries(members).map(([id, member]) => [id, member.slots.slice()])
     );
@@ -23,10 +41,37 @@ export class Lockstep {
       frame: ++this.sampled,
       inputs: values,
     };
-    if (this.selfId === this.hostId) this.receive(this.selfId, packet);
+    if (this.mesh) {
+      this.broadcast(packet);
+      this.receive(this.selfId, packet);
+    } else if (this.selfId === this.hostId) this.receive(this.selfId, packet);
     else this.send(this.hostId, packet);
   }
   receive(id, packet) {
+    // Control checkpoints and peer inputs travel on different reliable channels.
+    // Retain a bounded amount of next-generation input until the host control arrives.
+    if (
+      this.mesh &&
+      this.members.has(id) &&
+      packet &&
+      packet.type === 'frame-input' &&
+      packet.epoch === this.epoch &&
+      Number.isSafeInteger(packet.generation) &&
+      packet.generation > this.generation &&
+      Number.isSafeInteger(packet.frame) &&
+      packet.frame >= 1 &&
+      packet.frame <= this.frame + INPUT_WINDOW * 3
+    ) {
+      const key = id + ':' + packet.frame;
+      if (
+        (this.future.size < this.members.size * INPUT_WINDOW ||
+          this.future.has(key)) &&
+        (!this.future.has(key) ||
+          this.future.get(key).packet.generation <= packet.generation)
+      )
+        this.future.set(key, { id, packet });
+      return false;
+    }
     if (
       !packet ||
       packet.epoch !== this.epoch ||
@@ -34,7 +79,7 @@ export class Lockstep {
       this.paused
     )
       return false;
-    if (this.selfId !== this.hostId) {
+    if (!this.mesh && this.selfId !== this.hostId) {
       if (
         id !== this.hostId ||
         packet.type !== 'frame' ||
@@ -62,7 +107,7 @@ export class Lockstep {
       packet.type !== 'frame-input' ||
       !Number.isSafeInteger(packet.frame) ||
       packet.frame <= this.frame ||
-      packet.frame > this.frame + INPUT_WINDOW ||
+      packet.frame > this.frame + INPUT_WINDOW * (this.mesh ? 2 : 1) ||
       !Array.isArray(packet.inputs) ||
       packet.inputs.length !== slots.length ||
       new Set(packet.inputs.map((input) => input && input.slot)).size !==
@@ -105,9 +150,14 @@ export class Lockstep {
         inputs,
         humans,
       };
-      this.broadcast(packet);
+      if (!this.mesh) this.broadcast(packet);
       this.advance(inputs, humans, this.frame);
     }
+  }
+  flushFuture() {
+    const packets = [...this.future.values()];
+    this.future.clear();
+    packets.forEach(({ id, packet }) => this.receive(id, packet));
   }
   remove(id) {
     this.members.delete(id);

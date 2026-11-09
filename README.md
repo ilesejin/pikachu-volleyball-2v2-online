@@ -4,7 +4,7 @@
 
 The current offline 2v2 game, playable through WebRTC rooms. Choose four browsers with one player each, or two browsers with two local players each. English and Korean pages are included.
 
-By default, every browser runs the preserved offline physics and AI in deterministic lockstep. The host collects numbered inputs from each browser and relays the complete input frame; all browsers wait for that frame before simulating it, using the same seeded random sequence. A host-controlled setting also supports host-only physics, where guests send controls and display snapshots without simulating. Each guest connects directly to the host through a WebRTC data channel. Firebase Anonymous Authentication identifies participants, and Firestore handles rooms and WebRTC signaling. Gameplay inputs and snapshots do not pass through Firestore. Both modes use peer-to-peer networking with a host-to-guest star topology and no dedicated game server.
+By default, every browser runs the preserved offline physics and AI in deterministic lockstep. Four-browser rooms default to a full mesh: six WebRTC connections, with each browser sending its own numbered inputs directly to the other three. All browsers wait for every participant’s inputs before simulating the frame with the same seeded randomness. The host can select a three-connection star instead, collecting inputs and relaying complete frames. A host-controlled setting also supports host-only physics, where guests send controls and display snapshots without simulating. Local-pair matches use one connection between their two browsers. The connection layout and physics mode are separate settings; host-only physics uses the host links even when mesh links are present. Firebase Anonymous Authentication identifies participants, and Firestore handles rooms and WebRTC signaling. Gameplay inputs and snapshots do not pass through Firestore. Neither layout needs a dedicated game server.
 
 ## Playing
 
@@ -16,7 +16,7 @@ By default, every browser runs the preserved offline physics and AI in determini
 
 The host controls start/restart, pause, return to lobby, court width, serve mode, synchronization mode, game speed, and winning score. The interface uses the original P2P page, menu bar, Options submenus, theme switch, and chat bar. In the lobby, match options apply on the next start. During a match, the host confirms shared option changes in the original-style dialog. Speed and Practice mode apply immediately while preserving scores, serving rotation, the current rally and pause state. Changes to court width, serve mode, winning score or synchronization restart the match. A disconnected guest is replaced with AI. If the host leaves, the room closes; host migration is not implemented. Return to the lobby to admit new players.
 
-The default court width is 384 per side. Fixed starting positions run P1–P2–P3–P4 from left to right; P4 serves first on the right. Teammates pass through one another. Computers use front/back midpoint zones determined by their round-start positions.
+The default court width is 340 per side. Fixed starting positions run P1–P2–P3–P4 from left to right; P4 serves first on the right. Teammates pass through one another. Computers use front/back midpoint zones determined by their round-start positions. The shared 2v2 AI forecasts attacks with the real collision rules, avoids net/own-side failures when a safe shot exists, and aims away from both defenders. Unsafe low smashes fall back to upward returns; original movement and collision helpers remain unchanged.
 
 Serve choices:
 
@@ -26,7 +26,7 @@ Serve choices:
 
 ## Controls
 
-By default, one local player can use both arrows/Enter and R/D/F/G/V/Z (jump/left/down-right/right/down/hit). Both key sets work simultaneously for the same player. For two local players, the first uses R/D/F/G/V/Z (jump/left/down-right/right/down/hit), and the second uses arrows and Enter. The local controls panel can instead use the original slot-specific bindings:
+By default, one local player can use both arrows/Enter and R/D/F/G/V/Z (jump/left/down+toward-net/right/down/hit). Both key sets work simultaneously for the same player. For two local players, the first uses R/D/F/G/V/Z (jump/left/down+toward-net/right/down/hit), and the second uses arrows and Enter. The local controls panel can instead use the original slot-specific bindings:
 
 | Slot | Jump | Left | Down      | Right | Hit   | Down-right   |
 | ---- | ---- | ---- | --------- | ----- | ----- | ------------ |
@@ -41,18 +41,18 @@ Use the physical punctuation keys without Shift.
 
 Press **Space** or click **Chat** to type a room-wide message. Press **Enter** to send, **Escape** to close, or **Disable chat** to suppress chat on this browser. All connected browsers receive messages in both the lobby and during play. In local pairs, each player has an editable name. Choose which local player speaks using **Chat as**. Names can be edited by their own browser in the lobby and follow local player order when switching teams. Messages use reliable WebRTC through the host; they are not stored in Firestore. The browser keeps the latest 100 messages while the room is open and displays temporary messages over the court. Like the original, each message gets random coordinates on its sender’s side, replaces that player’s previous message, and uses a speech bubble only in menus/dialogs. The host sends the chosen coordinates so every browser sees the same placement; this randomness never uses the physics RNG.
 
-**Options** restores Graphic (sharp/soft), BGM (on/off), SFX (stereo/mono/off), Speed, Winning score, and Practice mode submenus, plus Reset to defaults. Court / serve opens a matching dialog for width, serving rules, and physics synchronization: **All browsers (lockstep)** (default) or **Host only (snapshots)**. Switching synchronization during play requires confirmation and restarts the same lineup. Match options are host-only; graphics, sound, theme, and controls are local to each browser. During a match, shared option changes ask for confirmation. Speed and Practice mode keep the current match; other match options restart the same lineup. Live changes are synchronized at a shared frame boundary in lockstep mode. **Game** contains start/restart, pause/resume, and return to lobby; **Exit** leaves the room. Escape hides/shows the menu bar when no dialog is open. Practice mode uses the existing offline behavior: scoreboards are hidden and winning-score termination is disabled. Reset restores options while keeping player names and slot assignments.
+**Options** restores Graphic (sharp/soft), BGM (on/off), SFX (stereo/mono/off), Speed, Winning score, and Practice mode submenus, plus Reset to defaults. Court / serve opens a matching dialog for width, serving rules, connection layout (six-link mesh by default or three-link star for four browsers), and physics synchronization: **All browsers (lockstep)** (default) or **Host only (snapshots)**. Switching synchronization during play requires confirmation and restarts the same lineup. Match options are host-only; graphics, sound, theme, and controls are local to each browser. During a match, shared option changes ask for confirmation. Speed and Practice mode keep the current match. Court/serve/score/physics changes restart the same lineup; connection-layout changes return everyone to the lobby. Mesh pauses, live changes and AI takeover use a host checkpoint containing complete simulation state and RNG state. This can make a small position correction; normal frame inputs are still exchanged directly. Star mode uses ordered frame-boundary controls. **Game** contains start/restart, pause/resume, and return to lobby; **Exit** leaves the room. Escape hides/shows the menu bar when no dialog is open. Practice mode uses the existing offline behavior: scoreboards are hidden and winning-score termination is disabled. Reset restores options while keeping player names and slot assignments.
 
 ## Implementation and physics preservation
 
 - `src/resources/js/offline_2v2/`: copied offline game, rendering, audio, and physics.
-- `src/resources/js/online_2v2/`: original P2P UI integration, lobby, authenticated Firestore signaling, WebRTC host connections, validated numbered frame inputs, deterministic lockstep, optional snapshot rendering, and room-wide chat.
+- `src/resources/js/online_2v2/`: original P2P UI integration, lobby, authenticated Firestore signaling, WebRTC mesh/star connections, validated numbered frame inputs, deterministic lockstep, optional snapshot rendering, and room-wide chat.
 - `src/resources/js/main_online_2v2.js`: current entry point. Older online/replay modules remain in the repository.
 - `firestore.2v2.rules`: rules for the new Firebase project, with no public room listing and per-participant signaling access.
 
 The original `physics.js` is unchanged in the copied core. The separate `doubles_physics.js` retains movement, ball collisions, and their existing quirks, adapting court geometry and four-player orchestration. Hits are processed in P1/P2/P3/P4 order with individual collision latches. This can make simultaneous overlapping hits order-dependent; it is intentionally preserved. The ball advances once per simulation step. Neither synchronization mode changes these physics rules. Lockstep uses the existing custom-RNG hook; no physics code is modified.
 
-Lockstep never predicts missing inputs: slow or backgrounded browsers can stall the match until their input arrives or they disconnect. At most three input frames are pipelined; a disconnected guest is removed at a shared frame boundary and its players become AI. Pause/resume discards queued inputs using a new generation number. In host-only mode, guests have no prediction or interpolation: a remote control must reach the host before its result returns in a snapshot. Internet latency and the selected simulation rate determine responsiveness; completion within one frame is not guaranteed. Existing STUN configuration may not connect every network; configure TURN for restrictive networks (see setup).
+Lockstep never predicts missing inputs: slow or backgrounded browsers can stall the match until their input arrives or they disconnect. At most three input frames are pipelined; a disconnected guest’s players become AI with a synchronized checkpoint in mesh mode. Pause/resume discards queued inputs using a new generation number. In host-only mode, guests have no prediction or interpolation: a remote control must reach the host before its result returns in a snapshot. Internet latency and the selected simulation rate determine responsiveness; completion within one frame is not guaranteed. Existing STUN configuration may not connect every network; configure TURN for restrictive networks (see setup).
 
 ## Validation
 
@@ -73,6 +73,22 @@ Choose an arrangement and region, then press **Quick Match**. The first browser 
 
 ## Updating an existing deployment
 
-Selectable physics synchronization uses protocol `pikavolley-2v2-v3`. Update both the frontend and Quick Match server, and publish the updated `firestore.2v2.rules` before creating new rooms. Old version-1/version-2 rooms are not compatible; finish those games and create fresh rooms after upgrading. No live Firebase rules are published by the build or tests.
+Selectable physics synchronization uses protocol `pikavolley-2v2-v4`. Update both the frontend and Quick Match server, and publish the updated `firestore.2v2.rules` before creating new rooms. Old version-1/version-2/version-3 rooms are not compatible; finish those games and create fresh rooms after upgrading. No live Firebase rules are published by the build or tests.
 
 Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
+
+## Connection layout
+
+For four solo browsers, the host selects **Full mesh · 6 connections** (default) or **Through host · 3 connections** in Options → Court / serve. With fewer browsers, only the necessary links are created; AI has no connection. Pair matches always need one link. All required links must be ready before starting. Changing layout during a match returns everyone to the lobby, preserving names and slots, and rebuilds connections after all browsers acknowledge the transition.
+
+If a guest-to-guest link fails while both browsers still reach the host, everyone returns to the lobby; neither player is removed. The host can press **Retry connections** or select the three-link layout. An actual guest departure still replaces its players with AI. Host departure closes the room. Signaling documents include both endpoints and a network revision, so obsolete offers and ICE candidates cannot be used after a layout change.
+
+## Keeping the offline engine synchronized
+
+The sibling `../pikachu-volleyball-2v2` project is the source of truth for the shared engine. Online `npm start`, `npm run build` (including deploy), and `npm test` synchronize it automatically. The development server also watches the offline source and rebuilds when it changes. Direct webpack commands use the same synchronization plugin.
+
+`npm run sync:offline` synchronizes immediately. `npm run check:offline` checks without changing files and fails if the copy has drifted. To use another checkout, set `PIKA_OFFLINE_ROOT` to its project directory before running these commands. Shared entry points and their relative imports are copied into `src/resources/js/offline_2v2/`; new imported helper modules are included automatically. Edit shared behavior in the offline project, since edits to the online copy are replaced by the next synchronization. Online entry points, lobby, networking and settings integration remain in their own files.
+
+Commit the synchronized files and `offline-engine.manifest.json` together. If the default sibling checkout is absent, builds verify and use that bundled snapshot, so the online repository can build independently. A missing explicitly configured checkout, incomplete source, or a modified bundled snapshot fails instead of silently using stale code. Hashes ignore checkout line-ending differences. Published games get offline changes after rebuilding and deploying the frontend; they cannot read files from your local offline checkout.
+
+Automated browser tests launch Chrome with audio muted.

@@ -1,6 +1,11 @@
 import { FirebaseRoomStore } from './firebase_store.js';
 import { rtcConfiguration } from '../data_channel/rtc_configuration.js';
-import { ROOM_SCHEMA } from './protocol.js';
+import {
+  ROOM_SCHEMA,
+  usesMesh,
+  requiredPeers,
+  connectionKey,
+} from './protocol.js';
 
 export function randomId() {
   const bytes = new Uint8Array(20);
@@ -22,6 +27,11 @@ export class OnlineRoom {
     this.peers = new Map();
     this.departed = new Set();
     this.closed = true;
+    this.readyReports = new Map();
+    this.readyWrites = new Map();
+    this.readyTasks = new Map();
+    this.networkFault = false;
+    this.rebuildingTarget = null;
   }
   emit(name, ...args) {
     if (this.callbacks[name]) this.callbacks[name](...args);
@@ -70,10 +80,15 @@ export class OnlineRoom {
     }
   }
   subscribe() {
+    const watchedRoomId = this.id;
+    clearInterval(this.reportTimer);
+    this.reportTimer = setInterval(() => {
+      if (!this.closed && this.id === watchedRoomId) this.reportReady();
+    }, 1000);
     this.unsubscribe = this.store.watch(
       this.id,
       (data) => {
-        if (this.closed) return;
+        if (this.closed || this.id !== watchedRoomId) return;
         if (
           !data ||
           data.schema !== ROOM_SCHEMA ||
@@ -85,26 +100,273 @@ export class OnlineRoom {
           this.emit('ended');
           return;
         }
-        this.data = data;
-        if (this.isHost) {
-          Object.keys(data.members).forEach((id) => {
-            if (
-              id !== this.selfId &&
-              !this.peers.has(id) &&
-              !this.departed.has(id)
-            )
-              this.makePeer(id, true).catch((error) => this.fail(error));
-          });
-        } else if (!this.peers.has(data.hostId)) {
-          this.makePeer(data.hostId, false).catch((error) => this.fail(error));
-        }
-        this.peers.forEach((peer, id) => {
-          if (!data.members[id]) this.dropPeer(id);
-        });
-        this.emit('change', data);
+        this.acceptData(data);
       },
       (error) => this.fail(error)
     );
+  }
+  acceptData(data) {
+    if (this.data && data.networkRevision < this.data.networkRevision) return;
+    const reset =
+      this.data && data.networkRevision !== this.data.networkRevision;
+    this.data = data;
+    if (reset) {
+      this.peers.forEach((peer, id) => this.dropPeer(id));
+      this.readyReports.clear();
+      this.readyWrites.clear();
+      this.networkFault = false;
+      this.rebuildingTarget = null;
+      clearTimeout(this.rebuildTimer);
+      this.emit('networkReset');
+    }
+    const wanted = requiredPeers(data, this.selfId);
+    this.peers.forEach((peer, id) => {
+      if (!wanted.includes(id)) this.dropPeer(id);
+    });
+    for (const id of wanted) {
+      if (this.peers.has(id) || this.departed.has(id)) continue;
+      const offerer =
+        this.selfId === data.hostId || (id !== data.hostId && this.selfId < id);
+      const revision = data.networkRevision;
+      this.makePeer(id, offerer).catch((error) => {
+        if (!this.closed && this.data.networkRevision === revision)
+          this.fail(error);
+      });
+    }
+    this.reportReady();
+    this.emit('change', data);
+  }
+  ready() {
+    if (
+      this.closed ||
+      !this.data ||
+      this.networkFault ||
+      this.rebuildingTarget !== null
+    )
+      return false;
+    if (
+      !requiredPeers(this.data, this.selfId).every((id) => this.connected(id))
+    )
+      return false;
+    if (!this.isHost) return true;
+    return Object.keys(this.data.members).every(
+      (id) => id === this.selfId || this.reportComplete(id)
+    );
+  }
+  reportComplete(id) {
+    const reported = this.readyReports.get(id) || [];
+    return (
+      this.connected(id) &&
+      requiredPeers(this.data, id).every((peerId) => reported.includes(peerId))
+    );
+  }
+  reportReady() {
+    if (this.closed || !this.data) return;
+    const peers = requiredPeers(this.data, this.selfId).filter((id) =>
+      this.connected(id)
+    );
+    const roomId = this.id;
+    if (this.isHost) {
+      for (const id of Object.keys(this.data.members)) {
+        const value =
+          id === this.selfId
+            ? peers.length === requiredPeers(this.data, id).length
+            : this.reportComplete(id);
+        const key = this.data.networkRevision + ':' + id;
+        if (this.readyWrites.get(key) === value) continue;
+        this.readyWrites.set(key, value);
+        this.readyTasks.set(
+          id,
+          (this.readyTasks.get(id) || Promise.resolve())
+            .then(() => {
+              if (
+                this.closed ||
+                this.id !== roomId ||
+                this.readyWrites.get(key) !== value
+              )
+                return;
+              return this.store.networkReady(
+                roomId,
+                id,
+                Number(key.split(':')[0]),
+                value
+              );
+            })
+            .catch((error) => {
+              this.readyWrites.delete(key);
+              this.fail(error);
+            })
+        );
+      }
+    } else
+      this.send(this.data.hostId, {
+        type: 'network-ready',
+        revision: this.data.networkRevision,
+        peers,
+      });
+  }
+  internalMessage(id, message) {
+    if (
+      message.type === 'network-rebuild' &&
+      !this.isHost &&
+      id === this.data.hostId &&
+      message.revision === this.data.networkRevision + 1
+    ) {
+      this.rebuildingTarget = message.revision;
+      this.emit('networkReset');
+      clearTimeout(this.rebuildTimer);
+      this.rebuildTimer = setTimeout(() => {
+        this.rebuildingTarget = null;
+        if (!this.connected(this.data.hostId))
+          this.emit('peerClosed', this.data.hostId);
+      }, 12000);
+      this.send(id, {
+        type: 'network-rebuild-ready',
+        revision: message.revision,
+      });
+      return true;
+    }
+    if (message.type === 'network-rebuild-ready' && this.isHost) {
+      const wait = this.rebuildWait;
+      if (wait && message.revision === wait.revision) {
+        wait.pending.delete(id);
+        if (!wait.pending.size) wait.resolve();
+      }
+      return true;
+    }
+    if (
+      message.type === 'network-rebuild-cancel' &&
+      !this.isHost &&
+      id === this.data.hostId
+    ) {
+      this.rebuildingTarget = null;
+      clearTimeout(this.rebuildTimer);
+      return true;
+    }
+    if (!['network-ready', 'network-failed'].includes(message.type))
+      return false;
+    if (
+      !this.isHost ||
+      message.revision !== this.data.networkRevision ||
+      !this.data.members[id]
+    )
+      return true;
+    if (
+      message.type === 'network-ready' &&
+      Array.isArray(message.peers) &&
+      message.peers.length <= 3
+    ) {
+      this.readyReports.set(
+        id,
+        message.peers.filter((peerId) => !!this.data.members[peerId])
+      );
+      this.reportReady();
+      this.emit('change', this.data);
+    } else if (
+      message.type === 'network-failed' &&
+      this.data.members[message.peerId] &&
+      message.peerId !== this.selfId
+    ) {
+      this.meshLinkFailed(id, message.peerId);
+    }
+    return true;
+  }
+  meshLinkFailed(a, b) {
+    const roomId = this.id;
+    const revision = this.data.networkRevision;
+    setTimeout(() => {
+      if (
+        !this.closed &&
+        this.id === roomId &&
+        this.data.networkRevision === revision &&
+        this.data.members[a] &&
+        this.data.members[b]
+      )
+        this.handleMeshLinkFailure(a, b);
+    }, 500);
+  }
+  handleMeshLinkFailure(a, b) {
+    if (
+      !this.isHost ||
+      this.rebuildingTarget !== null ||
+      !usesMesh(this.data) ||
+      this.networkFault ||
+      !this.connected(a) ||
+      !this.connected(b)
+    )
+      return;
+    this.networkFault = true;
+    this.emit('networkReset');
+    this.broadcast({ type: 'lobby' });
+    this.store
+      .update(this.id, { status: 'lobby' })
+      .catch((error) => this.fail(error));
+    this.fail(
+      new Error(
+        'A guest-to-guest connection failed. Retry connections in the lobby or select the three-connection layout.'
+      )
+    );
+    this.emit('change', this.data);
+  }
+  async rebuildNetwork(settings) {
+    if (!this.isHost || this.closed || this.rebuildingTarget !== null)
+      throw new Error('Only the host can rebuild connections.');
+    const roomId = this.id;
+    const revision = this.data.networkRevision;
+    const members = Object.keys(this.data.members);
+    this.rebuildingTarget = revision + 1;
+    this.emit('networkReset');
+    try {
+      await new Promise((resolve, reject) => {
+        const pending = new Set(members.filter((id) => id !== this.selfId));
+        const timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Wait for all host connections, or remove disconnected players before retrying.'
+              )
+            ),
+          8000
+        );
+        this.rebuildWait = {
+          revision: revision + 1,
+          pending,
+          resolve: () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          timer,
+          reject: (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        };
+        this.broadcast({ type: 'network-rebuild', revision: revision + 1 });
+        if (!pending.size) this.rebuildWait.resolve();
+      });
+      const data = await this.store.rebuildNetwork(
+        roomId,
+        this.selfId,
+        settings,
+        revision,
+        members
+      );
+      if (
+        !this.closed &&
+        this.id === roomId &&
+        data.networkRevision > this.data.networkRevision
+      )
+        this.acceptData(data);
+    } catch (error) {
+      if (this.id === roomId) {
+        this.rebuildingTarget = null;
+        this.broadcast({ type: 'network-rebuild-cancel' });
+        if (!this.closed) await this.store.update(roomId, { status: 'lobby' });
+      }
+      throw error;
+    } finally {
+      if (this.id === roomId) this.rebuildWait = null;
+    }
   }
   async makePeer(id, host) {
     if (this.closed) return;
@@ -120,14 +382,32 @@ export class OnlineRoom {
       timer: null,
     };
     this.peers.set(id, peer);
-    const signalId = host ? id : this.selfId;
+    const revision = this.data.networkRevision;
+    const signalId = connectionKey(this.data, this.selfId, id);
+    const endpoints = {
+      revision,
+      offererId: host ? this.selfId : id,
+      answererId: host ? id : this.selfId,
+    };
+    let signalReady = !host;
+    const localCandidates = [];
+    const current = () =>
+      !this.closed &&
+      this.peers.get(id) === peer &&
+      this.data.networkRevision === revision;
     const localSide = host ? 'hostCandidates' : 'guestCandidates';
     const remoteSide = host ? 'guestCandidates' : 'hostCandidates';
     pc.addEventListener('icecandidate', (event) => {
-      if (event.candidate && !this.closed)
-        this.store
-          .candidate(this.id, signalId, localSide, event.candidate.toJSON())
-          .catch((error) => this.fail(error));
+      if (!event.candidate || !current()) return;
+      if (!signalReady) {
+        localCandidates.push(event.candidate.toJSON());
+        return;
+      }
+      this.store
+        .candidate(this.id, signalId, localSide, event.candidate.toJSON())
+        .catch((error) => {
+          if (current()) this.fail(error);
+        });
     });
     peer.unsubs.push(
       this.store.watchCandidates(
@@ -135,7 +415,7 @@ export class OnlineRoom {
         signalId,
         remoteSide,
         async (candidate) => {
-          if (this.closed || pc.signalingState === 'closed') return;
+          if (!current() || pc.signalingState === 'closed') return;
           if (!peer.remoteSet) {
             peer.candidates.push(candidate);
             return;
@@ -143,7 +423,7 @@ export class OnlineRoom {
           try {
             await pc.addIceCandidate(candidate);
           } catch (error) {
-            this.fail(error);
+            if (current()) this.fail(error);
           }
         },
         (error) => this.fail(error)
@@ -160,16 +440,16 @@ export class OnlineRoom {
         this.id,
         signalId,
         async (data) => {
-          if (this.closed || peer.negotiating || peer.remoteSet) return;
+          if (!current() || peer.negotiating || peer.remoteSet) return;
           const description = host ? data.answer : data.offer;
           if (!description) return;
           peer.negotiating = true;
           try {
             await remote(description);
-            if (!host) {
+            if (!host && current()) {
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
-              await this.store.answer(this.id, signalId, answer);
+              if (current()) await this.store.answer(this.id, signalId, answer);
             }
           } catch (error) {
             this.fail(error);
@@ -179,6 +459,7 @@ export class OnlineRoom {
       )
     );
     pc.addEventListener('connectionstatechange', () => {
+      if (!current()) return;
       if (pc.connectionState === 'connected') {
         clearTimeout(peer.timer);
         peer.timer = null;
@@ -196,11 +477,19 @@ export class OnlineRoom {
       );
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (!this.closed) await this.store.offer(this.id, signalId, offer);
+      if (current()) {
+        await this.store.offer(this.id, signalId, offer, endpoints);
+        signalReady = true;
+        for (const candidate of localCandidates.splice(0)) {
+          if (current())
+            await this.store.candidate(this.id, signalId, localSide, candidate);
+        }
+      }
     } else {
-      pc.addEventListener('datachannel', (event) =>
-        this.attachChannel(id, event.channel)
-      );
+      pc.addEventListener('datachannel', (event) => {
+        if (current()) this.attachChannel(id, event.channel);
+        else event.channel.close();
+      });
     }
   }
   attachChannel(id, channel) {
@@ -210,15 +499,19 @@ export class OnlineRoom {
       return;
     }
     peer.channel = channel;
-    channel.addEventListener('open', () => {
-      if (this.closed) return;
-      if (this.isHost)
-        this.store.connected(this.id, id).catch((error) => this.fail(error));
+    const opened = () => {
+      if (this.closed || this.peers.get(id) !== peer || peer.openNotified)
+        return;
+      peer.openNotified = true;
+      this.reportReady();
       this.emit('open', id);
-    });
+    };
+    channel.addEventListener('open', opened);
+    if (channel.readyState === 'open') opened();
     channel.addEventListener('message', (event) => {
       if (
         this.closed ||
+        this.peers.get(id) !== peer ||
         typeof event.data !== 'string' ||
         event.data.length > 65536
       )
@@ -229,16 +522,34 @@ export class OnlineRoom {
       } catch (error) {
         return;
       }
-      if (message && typeof message.type === 'string')
+      if (
+        message &&
+        typeof message.type === 'string' &&
+        !this.internalMessage(id, message)
+      )
         this.emit('message', id, message);
     });
-    channel.addEventListener('close', () => this.peerClosed(id));
-    channel.addEventListener('error', () => this.peerClosed(id));
+    channel.addEventListener('close', () => {
+      if (this.peers.get(id) === peer) this.peerClosed(id);
+    });
+    channel.addEventListener('error', () => {
+      if (this.peers.get(id) === peer) this.peerClosed(id);
+    });
   }
   peerClosed(id) {
     const peer = this.peers.get(id);
     if (this.closed || !peer || peer.notifiedClosed) return;
     peer.notifiedClosed = true;
+    if (this.rebuildingTarget !== null) return;
+    this.reportReady();
+    if (!this.isHost && id !== this.data.hostId) {
+      this.send(this.data.hostId, {
+        type: 'network-failed',
+        revision: this.data.networkRevision,
+        peerId: id,
+      });
+      return;
+    }
     this.emit('peerClosed', id);
   }
   dropPeer(id) {
@@ -252,7 +563,12 @@ export class OnlineRoom {
   }
   connected(id) {
     const peer = this.peers.get(id);
-    return !!peer && !!peer.channel && peer.channel.readyState === 'open';
+    return (
+      !!peer &&
+      !peer.notifiedClosed &&
+      !!peer.channel &&
+      peer.channel.readyState === 'open'
+    );
   }
   send(id, message, disposable = false) {
     const peer = this.peers.get(id);
@@ -286,7 +602,16 @@ export class OnlineRoom {
     else await this.store.remove(id, this.selfId);
   }
   shutdown() {
+    clearInterval(this.reportTimer);
+    clearTimeout(this.rebuildTimer);
+    if (this.rebuildWait)
+      this.rebuildWait.reject(new Error('The room has closed.'));
     this.closed = true;
+    this.readyReports.clear();
+    this.readyWrites.clear();
+    this.readyTasks.clear();
+    this.rebuildingTarget = null;
+    this.networkFault = false;
     if (this.unsubscribe) this.unsubscribe();
     this.peers.forEach((peer, id) => this.dropPeer(id));
   }

@@ -38,6 +38,7 @@ const protocol = load(
     'matchSettings',
     'playerNames',
     'lobbyReady',
+    'connectionKey',
   ],
   { DOUBLES_CONFIG }
 );
@@ -104,25 +105,35 @@ async function denied(action) {
       seats: [host.uid, other.uid, '', ''],
     })
   );
-  await host.store.offer(id, guest.uid, { type: 'offer', sdp: 'test-offer' });
-  await denied(
-    dbSDK.getDoc(dbSDK.doc(other.db, 'rooms', id, 'connections', guest.uid))
+  const signalId = protocol.connectionKey(
+    await host.store.peek(id),
+    host.uid,
+    guest.uid
   );
-  await guest.store.answer(id, guest.uid, {
+  await host.store.offer(
+    id,
+    signalId,
+    { type: 'offer', sdp: 'test-offer' },
+    { revision: 0, offererId: host.uid, answererId: guest.uid }
+  );
+  await denied(
+    dbSDK.getDoc(dbSDK.doc(other.db, 'rooms', id, 'connections', signalId))
+  );
+  await guest.store.answer(id, signalId, {
     type: 'answer',
     sdp: 'test-answer',
   });
-  await guest.store.candidate(id, guest.uid, 'guestCandidates', {
+  await guest.store.candidate(id, signalId, 'guestCandidates', {
     candidate: 'guest-ice',
     sdpMid: '0',
     sdpMLineIndex: 0,
   });
   await denied(
-    guest.store.candidate(id, guest.uid, 'hostCandidates', {
+    guest.store.candidate(id, signalId, 'hostCandidates', {
       candidate: 'spoofed-host-ice',
     })
   );
-  await host.store.candidate(id, guest.uid, 'hostCandidates', {
+  await host.store.candidate(id, signalId, 'hostCandidates', {
     candidate: 'host-ice',
     sdpMid: '0',
     sdpMLineIndex: 0,
@@ -136,6 +147,73 @@ async function denied(action) {
     (await dbSDK.getDoc(dbSDK.doc(host.db, 'rooms', id))).exists(),
     false
   );
+  const meshRoom = crypto.randomBytes(10).toString('hex');
+  await host.store.create(meshRoom, host.uid, 'Host', 'four', [0], {});
+  await guest.store.claim(meshRoom, guest.uid, 'Guest', [1]);
+  await other.store.claim(meshRoom, other.uid, 'Other', [2]);
+  const offerer = guest.uid < other.uid ? guest : other;
+  const answerer = offerer === guest ? other : guest;
+  const linkId = protocol.connectionKey(
+    await host.store.peek(meshRoom),
+    guest.uid,
+    other.uid
+  );
+  // A member may subscribe before the offer document exists.
+  assert.equal(
+    (
+      await dbSDK.getDoc(
+        dbSDK.doc(answerer.db, 'rooms', meshRoom, 'connections', linkId)
+      )
+    ).exists(),
+    false
+  );
+  await offerer.store.offer(
+    meshRoom,
+    linkId,
+    { type: 'offer', sdp: 'guest-to-guest' },
+    { revision: 0, offererId: offerer.uid, answererId: answerer.uid }
+  );
+  await answerer.store.answer(meshRoom, linkId, {
+    type: 'answer',
+    sdp: 'direct-answer',
+  });
+  await denied(
+    offerer.store.answer(meshRoom, linkId, {
+      type: 'answer',
+      sdp: 'wrong-role',
+    })
+  );
+  await offerer.store.candidate(meshRoom, linkId, 'hostCandidates', {
+    candidate: 'offerer-ice',
+  });
+  await answerer.store.candidate(meshRoom, linkId, 'guestCandidates', {
+    candidate: 'answerer-ice',
+  });
+  await denied(
+    answerer.store.candidate(meshRoom, linkId, 'hostCandidates', {
+      candidate: 'spoof',
+    })
+  );
+  await host.store.rebuildNetwork(meshRoom, host.uid, { topology: 'star' });
+  await denied(
+    dbSDK.getDoc(
+      dbSDK.doc(answerer.db, 'rooms', meshRoom, 'connections', linkId)
+    )
+  );
+  const starPeerLink = protocol.connectionKey(
+    await host.store.peek(meshRoom),
+    guest.uid,
+    other.uid
+  );
+  await denied(
+    offerer.store.offer(
+      meshRoom,
+      starPeerLink,
+      { type: 'offer', sdp: 'forbidden-star-mesh' },
+      { revision: 1, offererId: offerer.uid, answererId: answerer.uid }
+    )
+  );
+  await host.store.close(meshRoom);
   const pairs = crypto.randomBytes(10).toString('hex');
   await host.store.create(pairs, host.uid, 'Host', 'pairs', [2, 3], {});
   await guest.store.claim(pairs, guest.uid, 'Guest', [0, 1]);

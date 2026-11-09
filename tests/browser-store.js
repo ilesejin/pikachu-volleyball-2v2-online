@@ -41,6 +41,12 @@ class BrowserTestStore {
   rename(id, clientId, names) {
     return this.request('rename', { id, clientId, names });
   }
+  rebuildNetwork(id, hostId, settings) {
+    return this.request('rebuildNetwork', { id, hostId, settings });
+  }
+  networkReady(id, clientId, revision, value) {
+    return this.request('networkReady', { id, clientId, revision, value });
+  }
   beginMatch(id, hostId, settings) {
     return this.request('beginMatch', { id, hostId, settings });
   }
@@ -97,8 +103,8 @@ class BrowserTestStore {
       error
     );
   }
-  offer(id, peerId, offer) {
-    return this.request('offer', { id, peerId, offer });
+  offer(id, peerId, offer, endpoints) {
+    return this.request('offer', { id, peerId, offer, endpoints });
   }
   answer(id, peerId, answer) {
     return this.request('answer', { id, peerId, answer });

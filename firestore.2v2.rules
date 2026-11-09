@@ -10,9 +10,27 @@ service cloud.firestore {
         || (layout == 'pairs' && (slots == [0, 1] || slots == [2, 3])));
     }
     function validRoom(data) {
-      return data.schema == 'pikavolley-2v2-v3' && data.hostId is string && data.members is map
+      return data.schema == 'pikavolley-2v2-v4' && data.hostId is string && data.members is map
         && data.members.size() >= 1 && data.members.size() <= (data.layout == 'pairs' ? 2 : 4) && data.seats is list && data.seats.size() == 4
+        && data.networkRevision is int && data.networkRevision >= 0 && data.settings.topology in ['mesh', 'star']
         && data.layout in ['four', 'pairs'] && data.status in ['lobby', 'playing', 'closed'];
+    }
+    function linkAllowed(roomId, linkId) {
+      let room = roomData(roomId);
+      let parts = linkId.split('~');
+      return parts.size() == 3 && parts[0] == string(room.networkRevision)
+        && parts[1] != parts[2] && parts[1] in room.members && parts[2] in room.members
+        && request.auth.uid in [parts[1], parts[2]]
+        && (room.layout == 'four' && room.settings.topology == 'mesh' || room.hostId in [parts[1], parts[2]]);
+    }
+    function link(roomId, linkId) { return get(/databases/$(database)/documents/rooms/$(roomId)/connections/$(linkId)).data; }
+    function validLink(roomId, linkId, data) {
+      let room = roomData(roomId);
+      let parts = linkId.split('~');
+      return linkAllowed(roomId, linkId) && data.revision == room.networkRevision
+        && data.offererId in [parts[1], parts[2]] && data.answererId in [parts[1], parts[2]]
+        && data.offererId != data.answererId
+        && (room.hostId in [parts[1], parts[2]] ? data.offererId == room.hostId : data.offererId == parts[1]);
     }
     function ownSeat(data, i, slots) { return (data.seats[i] == request.auth.uid) == (i in slots); }
     function ownSeats(data, slots) {
@@ -70,16 +88,22 @@ service cloud.firestore {
             || (resource.data.status == 'lobby' && validOwnMember(request.resource.data, resource.data)))
         ));
       allow delete: if signedIn() && resource.data.hostId == request.auth.uid;
-      match /connections/{peerId} {
-        allow get: if member(roomId) && (host(roomId) || request.auth.uid == peerId);
+      match /connections/{linkId} {
+        allow get: if host(roomId) || (member(roomId) && linkAllowed(roomId, linkId));
         allow list: if host(roomId);
-        allow create, delete: if host(roomId);
-        allow update: if host(roomId) || (member(roomId) && request.auth.uid == peerId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer']));
+        allow create: if member(roomId) && validLink(roomId, linkId, request.resource.data)
+          && request.resource.data.offererId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['offererId','answererId','revision','offer']);
+        allow update: if member(roomId) && validLink(roomId, linkId, resource.data)
+          && request.auth.uid == resource.data.answererId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer']);
+        allow delete: if host(roomId);
         match /{side}/{candidateId} {
-          allow read: if member(roomId) && (host(roomId) || request.auth.uid == peerId);
-          allow create: if member(roomId) && request.resource.data.candidate is string && request.resource.data.candidate.size() < 8192
-            && ((side == 'hostCandidates' && host(roomId)) || (side == 'guestCandidates' && request.auth.uid == peerId));
+          allow read: if host(roomId) || (member(roomId) && linkAllowed(roomId, linkId));
+          allow create: if member(roomId) && linkAllowed(roomId, linkId)
+            && request.resource.data.candidate is string && request.resource.data.candidate.size() < 8192
+            && ((side == 'hostCandidates' && request.auth.uid == link(roomId, linkId).offererId)
+              || (side == 'guestCandidates' && request.auth.uid == link(roomId, linkId).answererId));
           allow delete: if host(roomId);
         }
       }

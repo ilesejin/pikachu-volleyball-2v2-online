@@ -123,7 +123,7 @@ export class MenuView {
     this.initializeVisibles();
 
     this.sittingPikachuTilesDisplacement = 0;
-    this.selectedWithWho = -1; // 0: vs computers, 1: all humans, 2: solo human, -1: not selected
+    this.selectedWithWho = -1; // 2v2: 0 solo, 1 human pair, 2 four humans, -1: not selected
     this.selectedWithWhoMessageSizeIncrement = 2;
     this.originalChoiceTextures = this.messages.withWho
       .slice(0, 2)
@@ -145,16 +145,8 @@ export class MenuView {
       this.menuWidth = width;
     }
     const labels = korean
-      ? [
-          '사람 2명 vs 컴퓨터 2명',
-          '사람 2명 vs 사람 2명',
-          '사람 1명 + 컴퓨터 3명',
-        ]
-      : [
-          '2 Humans vs 2 Computers',
-          '2 Humans vs 2 Humans',
-          '1 Human + 3 Computers',
-        ];
+      ? ['사람 1명 + 컴퓨터 3명', '사람 2명 + 컴퓨터 2명', '사람 4명']
+      : ['1 Player + 3 Computers', '2 Players + 2 Computers', '4 Players'];
     this.messages.withWho.forEach((sprite, i) => {
       sprite.visible = false;
       if (!enabled) {
@@ -384,7 +376,7 @@ export class MenuView {
 
   /**
    * Select with who for the effect that selected option gets bigger
-   * @param {number} i 0: vs computers, 1: all humans, 2: solo human (2v2 only)
+   * @param {number} i 2v2: 0 solo, 1 human pair, 2 four humans
    */
   selectWithWho(i) {
     this.selectedWithWho = i;

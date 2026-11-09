@@ -13,7 +13,9 @@ const adapted = read('doubles_physics.js');
 function load(source, names, bindings = {}) {
   const context = vm.createContext(bindings);
   vm.runInContext(
-    source.replace(/^import .*?;\r?\n/gm, '').replace(/export /g, '') +
+    source
+      .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\r?\n/gm, '')
+      .replace(/export /g, '') +
       '\nthis.result = {' +
       names.join(',') +
       '};',
@@ -51,6 +53,7 @@ function physics(doubles = true, halfWidth = 432) {
   return {
     ...result,
     config,
+    rngState: () => seed,
     resetRng: () => {
       seed = 123;
     },
@@ -418,6 +421,11 @@ function controller() {
       IntroView: FakeView,
       FadeInOut: FakeView,
       PikaKeyboard: FakeKeyboard,
+      ...load(
+        read('doubles_controls.js'),
+        ['createDoublesMenuKeyboards', 'createDoublesKeyboards'],
+        { PikaKeyboard: FakeKeyboard }
+      ),
       PikaAudio: class {
         constructor() {
           this.sounds = Object.fromEntries(
@@ -447,23 +455,29 @@ function controller() {
 test('2v2 defaults, both match choices, mode switching and input cleanup', () => {
   const { game, getWidth } = controller();
   assert.equal(game.isDoubles, true);
-  assert.equal(getWidth(), 768);
+  assert.equal(getWidth(), 680);
   assert.equal(game.keyboardArray.length, 4);
-  // Confirm the default human-human vs computer-computer selection.
+  // Enter chooses the right human team against the left computer team.
   game.menu();
+  assert.equal(game.selectedWithWho, 0);
   game.frameCounter = 72;
+  game.selectedWithWho = 1;
   game.keyboardArray[3].powerHit = 1;
   game.menu();
   assert.deepEqual(plain(game.players.map((p) => p.isComputer)), [
-    false,
-    false,
     true,
     true,
+    false,
+    false,
   ]);
   game.keyboardArray[3].powerHit = 0;
   game.frameCounter = 0;
   game.menu();
   game.frameCounter = 72;
+  game.keyboardArray[0].yDirection = 1;
+  game.menu();
+  game.keyboardArray[0].yDirection = 0;
+  game.menu();
   game.keyboardArray[0].yDirection = 1;
   game.menu();
   game.keyboardArray[0].yDirection = 0;
@@ -499,7 +513,7 @@ test('2v2 defaults, both match choices, mode switching and input cleanup', () =>
   assert.equal(game.physics.player2.isComputer, false);
   game.setMode(true);
   assert.equal(game.players.length, 4);
-  assert.equal(getWidth(), 768);
+  assert.equal(getWidth(), 680);
 });
 
 test('team scoring, serve side, match winners and practice use the widened midpoint', () => {
@@ -678,7 +692,7 @@ test('all serve modes preserve drop physics and independent team sequences at di
 
 test('serve default is option 2; applying changes restarts the same lineup and preserves width', () => {
   const { game, getWidth } = controller();
-  assert.equal(game.doublesCourtWidth, 384);
+  assert.equal(game.doublesCourtWidth, 340);
   assert.equal(game.doublesServeMode, 'rotate-ball');
   assert.equal(game.physics.serveMode, 'rotate-ball');
   game.players.forEach((p, i) => {
@@ -688,7 +702,7 @@ test('serve default is option 2; applying changes restarts the same lineup and p
   game.scores = [2, 4];
   assert.equal(game.setServeMode('rotate-players'), true);
   assert.deepEqual(plain(game.scores), [0, 0]);
-  assert.equal(getWidth(), 768);
+  assert.equal(getWidth(), 680);
   assert.deepEqual(plain(game.players.map((p) => p.isComputer)), [
     false,
     false,
@@ -717,18 +731,7 @@ test('solo 2v2 mode assigns the confirming key position and preserves its lineup
     const { game } = controller();
     game.menu();
     game.frameCounter = 72;
-    game.keyboardArray[0].yDirection = 1;
-    game.menu();
-    assert.equal(game.selectedWithWho, 1);
-    game.menu();
-    game.menu(); // Holding down must not skip another row.
-    assert.equal(game.selectedWithWho, 1);
-    game.keyboardArray[0].yDirection = 0;
-    game.menu();
-    game.keyboardArray[0].yDirection = 1;
-    game.menu();
-    assert.equal(game.selectedWithWho, 2);
-    game.keyboardArray[0].yDirection = 0;
+    assert.equal(game.selectedWithWho, 0);
     game.keyboardArray[human].powerHit = 1;
     game.menu();
     const expected = [0, 1, 2, 3].map((i) => i !== human);
@@ -793,5 +796,361 @@ test('fixed-position modes start P1-P2-P3-P4 left to right with P4 serving first
           : width * 2 - Math.floor(width / 2) - 20
       );
     }
+  }
+});
+
+function realControls() {
+  const listeners = { keydown: new Set(), keyup: new Set() };
+  const { PikaKeyboard } = load(read('keyboard.js'), ['PikaKeyboard'], {
+    PikaUserInput: physics(false).PikaUserInput,
+    window: {
+      addEventListener: (name, handler) => listeners[name].add(handler),
+      removeEventListener: (name, handler) => listeners[name].delete(handler),
+    },
+  });
+  const controls = load(
+    read('doubles_controls.js'),
+    ['createDoublesKeyboards', 'createDoublesMenuKeyboards'],
+    { PikaKeyboard }
+  );
+  return {
+    ...controls,
+    listeners,
+    event(type, code) {
+      for (const listener of [...listeners[type]])
+        listener({ code, preventDefault() {} });
+    },
+  };
+}
+test('two-human mode selects a complete left or right team and preserves it across width/serve changes', () => {
+  for (const [confirm, humans] of [
+    [0, [0, 1]],
+    [3, [2, 3]],
+  ]) {
+    const { game } = controller();
+    game.menu();
+    game.frameCounter = 72;
+    game.selectedWithWho = 1;
+    game.keyboardArray[confirm].powerHit = 1;
+    game.menu();
+    assert.deepEqual(plain(game.doublesHumanSlots), humans);
+    assert.deepEqual(
+      plain(game.players.map((p) => p.isComputer)),
+      [0, 1, 2, 3].map((i) => !humans.includes(i))
+    );
+    assert.equal(game.keyboardArray[humans[0]].keys[0], 'KeyD');
+    assert.equal(game.keyboardArray[humans[1]].keys[0], 'ArrowLeft');
+    game.frameCounter = 0;
+    game.startOfNewGame();
+    game.setCourtWidth(400);
+    game.setServeMode('fixed');
+    assert.deepEqual(plain(game.doublesHumanSlots), humans);
+    assert.equal(game.keyboardArray[humans[0]].keys[0], 'KeyD');
+    assert.equal(game.keyboardArray[humans[1]].keys[0], 'ArrowLeft');
+  }
+  for (const invalid of [1, 2]) {
+    const { game } = controller();
+    game.menu();
+    game.frameCounter = 72;
+    game.selectedWithWho = 1;
+    game.keyboardArray[invalid].powerHit = 1;
+    game.menu();
+    assert.equal(game.state, game.menu);
+    assert.equal(game.selectedWithWho, 1);
+    assert.equal(game.doublesHumanSlots, null);
+  }
+});
+test('solo aliases share one hit edge, F points inward on either side, and alternative F/V controls release every listener', () => {
+  for (const slot of [0, 1, 2, 3])
+    for (const mode of ['diagonal', 'down-only']) {
+      const controls = realControls();
+      const keys = controls.createDoublesKeyboards([slot], mode);
+      const keyboard = keys[slot];
+      controls.event('keydown', 'KeyF');
+      keyboard.getInput();
+      assert.equal(keyboard.yDirection, 1);
+      assert.equal(
+        keyboard.xDirection,
+        mode === 'down-only' ? 0 : slot < 2 ? 1 : -1
+      );
+      controls.event('keyup', 'KeyF');
+      controls.event('keydown', 'KeyV');
+      keyboard.getInput();
+      assert.equal(keyboard.yDirection, mode === 'down-only' ? 0 : 1);
+      assert.equal(keyboard.xDirection, 0);
+      controls.event('keyup', 'KeyV');
+      controls.event('keydown', 'KeyZ');
+      keyboard.getInput();
+      assert.equal(keyboard.powerHit, 1);
+      controls.event('keydown', 'Enter');
+      keyboard.getInput();
+      assert.equal(keyboard.powerHit, 0);
+      controls.event('keyup', 'KeyZ');
+      keyboard.getInput();
+      assert.equal(keyboard.powerHit, 0);
+      controls.event('keyup', 'Enter');
+      keyboard.getInput();
+      controls.event('keydown', 'ArrowUp');
+      keyboard.getInput();
+      assert.equal(keyboard.yDirection, -1);
+      keys.forEach((key) => key.unsubscribe());
+      assert.equal(controls.listeners.keydown.size, 0);
+      assert.equal(controls.listeners.keyup.size, 0);
+    }
+});
+test('pair controllers are independent and menu selection keys remain available with F-down enabled', () => {
+  const controls = realControls();
+  const keys = controls.createDoublesKeyboards([2, 3], 'down-only');
+  controls.event('keydown', 'KeyG');
+  controls.event('keydown', 'ArrowLeft');
+  keys.forEach((key) => key.getInput());
+  assert.equal(keys[2].xDirection, 1);
+  assert.equal(keys[3].xDirection, -1);
+  assert.equal(keys[0].xDirection, 0);
+  keys.forEach((key) => key.unsubscribe());
+  for (const [slot, code] of [
+    [0, 'KeyZ'],
+    [1, 'KeyV'],
+    [2, 'Comma'],
+    [3, 'Enter'],
+  ]) {
+    const menu = controls.createDoublesMenuKeyboards('down-only');
+    controls.event('keydown', code);
+    menu.forEach((key) => key.getInput());
+    assert.equal(menu[slot].powerHit, 1);
+    controls.event('keyup', code);
+    menu.forEach((key) => key.unsubscribe());
+  }
+  assert.equal(controls.listeners.keydown.size, 0);
+});
+test('changing F/V controls preserves an active match and leaves original 1v1 bindings intact', () => {
+  const { game } = controller();
+  game.menu();
+  game.frameCounter = 72;
+  game.selectedWithWho = 1;
+  game.keyboardArray[3].powerHit = 1;
+  game.menu();
+  game.frameCounter = 0;
+  game.startOfNewGame();
+  game.scores = [4, 6];
+  const model = game.physics,
+    state = game.state,
+    ball = plain(game.physics.ball),
+    players = plain(game.players);
+  assert.equal(game.setDoublesFVMode('down-only'), true);
+  assert.equal(game.physics, model);
+  assert.equal(game.state, state);
+  assert.deepEqual(plain(game.scores), [4, 6]);
+  assert.deepEqual(plain(game.physics.ball), ball);
+  assert.deepEqual(plain(game.players), players);
+  assert.equal(game.keyboardArray[2].keys[3], 'KeyF');
+  assert.equal(game.keyboardArray[2].keys[5], null);
+  game.setMode(false);
+  const originalKeys = game.keyboardArray;
+  game.setDoublesFVMode('diagonal');
+  assert.equal(game.keyboardArray, originalKeys);
+  assert.deepEqual(plain(game.keyboardArray[0].keys), [
+    'KeyD',
+    'KeyG',
+    'KeyR',
+    'KeyV',
+    'KeyZ',
+    'KeyF',
+  ]);
+});
+
+test('selected speed survives mode switches, width/serve restarts and a game restart', () => {
+  for (const fps of [20, 25, 30]) {
+    const { game } = controller();
+    game.normalFPS = fps;
+    game.setMode(false);
+    assert.equal(game.normalFPS, fps);
+    game.setMode(true);
+    assert.equal(game.normalFPS, fps);
+    game.setCourtWidth(360);
+    game.setServeMode('fixed');
+    game.restart();
+    assert.equal(game.normalFPS, fps);
+  }
+});
+
+test('2v2 near-net attacks lift over the pillar instead of hitting its lower face on either side', () => {
+  for (const half of [216, 340, 501])
+    for (const right of [false, true]) {
+      const module = physics(true, half);
+      const engine = new module.DoublesPhysics(half);
+      engine.initializeRound(false, true);
+      const player = engine.players[right ? 2 : 1];
+      player.x = half + (right ? 32 : -32);
+      player.y = 195;
+      player.state = 2;
+      const ball = {
+        ...engine.ball,
+        x: half + (right ? 35 : -35),
+        y: 195,
+        xVelocity: right ? -3 : 3,
+        yVelocity: 8,
+      };
+      const opponents = engine.players.filter((p) => p.isPlayer2 !== right);
+      const shot = engine.rules.chooseDoublesShot(
+        player,
+        ball,
+        opponents,
+        false
+      );
+      assert.equal(shot.safe, true, 'a safe lift exists at width ' + half);
+      assert.equal(shot.input.yDirection, -1);
+      assert.equal(shot.netTouched, false);
+      assert.equal(right ? shot.landingX < half : shot.landingX > half, true);
+      for (const yDirection of [0, 1]) {
+        const bad = engine.rules.predictDoublesShot(
+          player,
+          ball,
+          { xDirection: right ? -1 : 1, yDirection, powerHit: 1 },
+          true
+        );
+        assert.equal(
+          bad.safe,
+          false,
+          'flat/downward shots must not be selected'
+        );
+      }
+    }
+});
+
+test('2v2 shot forecasts agree with actual hits/world collisions and do not mutate state or consume RNG', () => {
+  for (const half of [216, 340, 501])
+    for (const right of [false, true]) {
+      const module = physics(true, half);
+      const engine = new module.DoublesPhysics(half);
+      engine.initializeRound(false, true);
+      const player = engine.players[right ? 2 : 1];
+      const opponents = engine.players.filter((p) => p.isPlayer2 !== right);
+      for (const y of [80, 175, 195, 235])
+        for (const vy of [-20, 0, 18]) {
+          const ball = {
+            ...engine.ball,
+            x: half + (right ? 35 : -35),
+            y,
+            xVelocity: 0,
+            yVelocity: vy,
+            sound: { ...engine.ball.sound },
+          };
+          player.x = ball.x; // Exercise the discarded random zero-speed bounce.
+          const before = plain([player, ball, opponents]);
+          const seed = module.rngState();
+          const shot = engine.rules.chooseDoublesShot(
+            player,
+            ball,
+            opponents,
+            false
+          );
+          assert.equal(module.rngState(), seed);
+          assert.deepEqual(plain([player, ball, opponents]), before);
+          const actual = { ...ball, sound: { ...ball.sound } };
+          engine.rules.processCollisionBetweenBallAndPlayer(
+            actual,
+            player.x,
+            shot.input,
+            2
+          );
+          let netTouched = false,
+            landed = false;
+          for (let frame = 1; frame <= 1000; frame++) {
+            if (Math.abs(actual.x - half) < 25 && actual.y > 176)
+              netTouched = true;
+            if (
+              engine.rules.processCollisionBetweenBallAndWorldAndSetBallPosition(
+                actual
+              )
+            ) {
+              assert.equal(frame, shot.frames);
+              assert.equal(actual.x, shot.landingX);
+              assert.equal(netTouched, shot.netTouched);
+              assert.equal(
+                shot.safe,
+                !netTouched && (right ? actual.x < half : actual.x > half)
+              );
+              landed = true;
+              break;
+            }
+          }
+          assert.equal(landed, true);
+        }
+    }
+});
+
+test('2v2 shot choice considers the second defender, and impossible contacts fall back to an upward return', () => {
+  const module = physics(true, 340),
+    engine = new module.DoublesPhysics(340);
+  engine.initializeRound(false, true);
+  const player = engine.players[1];
+  player.x = 308;
+  const ball = { ...engine.ball, x: 318, y: 80, xVelocity: 3, yVelocity: 8 };
+  const a = engine.rules.chooseDoublesShot(
+    player,
+    ball,
+    [{ x: 360 }, { x: 400 }],
+    false
+  );
+  const b = engine.rules.chooseDoublesShot(
+    player,
+    ball,
+    [{ x: 360 }, { x: 650 }],
+    false
+  );
+  assert.equal(a.safe && b.safe, true);
+  assert.notDeepEqual(plain(a.input), plain(b.input));
+  const impossible = engine.rules.chooseDoublesShot(
+    player,
+    { ...ball, x: 325, y: 235 },
+    [{ x: 360 }, { x: 650 }],
+    false
+  );
+  assert.equal(impossible.safe, false);
+  assert.equal(impossible.input.yDirection, -1);
+});
+
+test('an ongoing AI smash is aimed at actual contact even when coverage cleared its inputs', () => {
+  for (const right of [false, true]) {
+    const module = physics(true, 340),
+      engine = new module.DoublesPhysics(340);
+    engine.initializeRound(false, true);
+    engine.players.forEach((p) => {
+      p.isComputer = false;
+    });
+    const player = engine.players[right ? 2 : 1];
+    player.isComputer = true;
+    player.x = 340 + (right ? 32 : -32);
+    player.y = 195;
+    player.yVelocity = 0;
+    player.state = 2;
+    player.frameNumber = 1;
+    player.delayBeforeNextFrame = 5;
+    Object.assign(engine.ball, {
+      x: 340 + (right ? 38 : -38),
+      y: 187,
+      xVelocity: right ? -3 : 3,
+      yVelocity: 8,
+    });
+    const input = inputs();
+    engine.runEngineForNextFrame(input);
+    assert.equal(player.isCollisionWithBallHappened, true);
+    assert.equal(engine.ball.isPowerHit, true);
+    assert.equal(input[right ? 2 : 1].yDirection, -1);
+    assert.ok(engine.ball.yVelocity < 0);
+    let hitGround = false;
+    for (let frame = 0; frame < 1000; frame++) {
+      if (
+        engine.rules.processCollisionBetweenBallAndWorldAndSetBallPosition(
+          engine.ball
+        )
+      ) {
+        assert.equal(right ? engine.ball.x < 340 : engine.ball.x > 340, true);
+        hitGround = true;
+        break;
+      }
+    }
+    assert.equal(hitGround, true);
   }
 });

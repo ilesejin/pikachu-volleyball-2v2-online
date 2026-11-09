@@ -369,6 +369,10 @@
           with computers</label
         >
         <div id="lobby-editor">
+          <p id="network-status"></p>
+          <button id="reconnect-network" type="button" hidden>
+            Retry connections
+          </button>
           <h3>Choose your slot</h3>
           <p>
             You entered without a slot. Select an empty position or team; cancel
@@ -432,11 +436,19 @@
       <h2 id="match-settings-title">Court, serve and synchronization</h2>
       <form id="settings-form">
         <input id="practice-mode" type="checkbox" hidden />
+        <label id="topology-label"
+          >Connections for four browsers<select id="topology">
+            <option value="mesh" selected>
+              Full mesh · 6 connections (default)
+            </option>
+            <option value="star">Through host · 3 connections</option>
+          </select></label
+        >
         <label
           >Width per court<input
             id="court-width"
             type="number"
-            value="384"
+            value="340"
             min="216"
             max="10000"
             step="1"
@@ -466,7 +478,10 @@
           <option selected>15</option>
         </select>
       </form>
-      <p>Applying during a match restarts the match with the same players.</p>
+      <p>
+        Connection changes return everyone to the lobby. Width, serve and
+        physics-mode changes restart the match.
+      </p>
       <div class="dialog-actions">
         <button type="button" id="settings-apply" class="btn-in-box">
           Apply</button

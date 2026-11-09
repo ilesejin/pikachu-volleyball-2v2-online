@@ -57,6 +57,7 @@ function settingsFromForm() {
     fps: $('speed').value,
     winningScore: $('winning-score').value,
     practice: $('practice-mode').checked,
+    topology: $('topology').value,
     synchronization: $('synchronization').value,
   });
 }
@@ -78,6 +79,7 @@ function updateSettingsForm(value) {
   $('speed').value = value.fps;
   $('winning-score').value = value.winningScore;
   $('practice-mode').checked = !!value.practice;
+  $('topology').value = value.topology;
   $('synchronization').value = value.synchronization;
 }
 function update(error) {
@@ -99,6 +101,8 @@ function update(error) {
   $('start').disabled =
     busy ||
     !lobbyReady(room.data) ||
+    !room.ready() ||
+    Object.values(room.data.members).some((member) => !member.connected) ||
     Object.keys(room.data.members).some(
       (id) => id !== room.selfId && !room.connected(id)
     );
@@ -205,7 +209,9 @@ async function run(action) {
 function makeRoom(store) {
   return new OnlineRoom(
     {
+      networkReset: () => session.stop(),
       change: () => {
+        if (session.epoch && room.data.status === 'lobby') session.stop();
         session.refreshRoster();
         update();
       },
@@ -368,7 +374,9 @@ async function boot() {
       run(async () => {
         if (!room.isHost) return;
         const checked = matchSettings(value);
-        if (session.epoch) {
+        if (checked.topology !== room.data.settings.topology) {
+          await room.rebuildNetwork(checked);
+        } else if (session.epoch) {
           if (canUpdateLive(session.settings, checked))
             await session.updateLiveSettings(checked);
           else await session.start(checked);
@@ -377,6 +385,7 @@ async function boot() {
         status(text('Game options applied.', '경기 설정을 적용했습니다.'));
       }),
   });
+  updateSettingsForm(matchSettings());
   renderPositions();
   update();
   status(
