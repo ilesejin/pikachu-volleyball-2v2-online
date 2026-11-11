@@ -92,3 +92,5 @@ The sibling `../pikachu-volleyball-2v2` project is the source of truth for the s
 Commit the synchronized files and `offline-engine.manifest.json` together. If the default sibling checkout is absent, builds verify and use that bundled snapshot, so the online repository can build independently. A missing explicitly configured checkout, incomplete source, or a modified bundled snapshot fails instead of silently using stale code. Hashes ignore checkout line-ending differences. Published games get offline changes after rebuilding and deploying the frontend; they cannot read files from your local offline checkout.
 
 Automated browser tests launch Chrome with audio muted.
+
+Submitting an empty or whitespace-only chat closes the chat input without sending a message. Player position labels hide with the Game start! message by default. Use **Options → Player position labels → Always show** to keep them visible; this preference is saved locally and does not affect other players or restart the match. Clouds travel across the full configured court width.

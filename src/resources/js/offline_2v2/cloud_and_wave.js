@@ -13,8 +13,8 @@ import { rand } from './rand.js';
  * Class represents a cloud
  */
 export class Cloud {
-  constructor() {
-    this.topLeftPointX = -68 + (rand() % (432 + 68));
+  constructor(courtWidth = 432) {
+    this.topLeftPointX = -68 + (rand() % (courtWidth + 68));
     this.topLeftPointY = rand() % 152;
     this.topLeftPointXVelocity = 1 + (rand() % 2);
     this.sizeDiffTurnNumber = rand() % 11;
@@ -62,10 +62,10 @@ export class Wave {
  * @param {Cloud[]} cloudArray
  * @param {Wave} wave
  */
-export function cloudAndWaveEngine(cloudArray, wave) {
+export function cloudAndWaveEngine(cloudArray, wave, courtWidth = 432) {
   for (let i = 0; i < 10; i++) {
     cloudArray[i].topLeftPointX += cloudArray[i].topLeftPointXVelocity;
-    if (cloudArray[i].topLeftPointX > 432) {
+    if (cloudArray[i].topLeftPointX > courtWidth) {
       cloudArray[i].topLeftPointX = -68;
       cloudArray[i].topLeftPointY = rand() % 152;
       cloudArray[i].topLeftPointXVelocity = 1 + (rand() % 2);

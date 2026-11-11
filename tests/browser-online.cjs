@@ -647,6 +647,56 @@ async function screenshot(page, name) {
     await host.ev('__volley.game.players.map(p=>p.isComputer)'),
     [false, true, true, true]
   );
+  assert.equal(
+    await host.ev(
+      'getComputedStyle(document.getElementById("player-names")).display==="none"'
+    ),
+    false
+  );
+  await host.until(
+    '__volley.game.state===__volley.game.round && !__volley.game.view.game.messages.gameStart.visible'
+  );
+  await host.until(
+    'getComputedStyle(document.getElementById("player-names")).display==="none"'
+  );
+  // Cloud sprites must survive crossing the original 432-unit boundary.
+  assert.equal(
+    await host.ev(
+      '(()=>{const v=__volley.game.view.game;const c=v.cloudArray[0];c.topLeftPointX=431;c.topLeftPointXVelocity=2;v.drawCloudsAndWave();return c.topLeftPointX===433 && v.cloudContainer.getChildAt(0).x>425;})()'
+    ),
+    true
+  );
+  await click(host, 'player-labels-always-btn');
+  assert.equal(
+    await host.ev(
+      'getComputedStyle(document.getElementById("player-names")).display==="none"'
+    ),
+    false
+  );
+  assert.equal(
+    await host.ev('localStorage.getItem("pv-online-player-labels")'),
+    'always'
+  );
+  const preferencePage = await tab(port, 'ko', true, host.contextId);
+  assert.equal(
+    await preferencePage.ev(
+      'document.getElementById("player-labels-always-btn").classList.contains("selected")'
+    ),
+    true
+  );
+  await preferencePage.send('Page.reload', { ignoreCache: true });
+  await preferencePage.until(
+    '!!window.__volley && document.getElementById("player-labels-always-btn").classList.contains("selected")'
+  );
+  await click(preferencePage, 'player-labels-auto-btn');
+  await browser.send('Target.closeTarget', {
+    targetId: preferencePage.targetId,
+  });
+  await host.send('Page.bringToFront');
+  await click(host, 'player-labels-auto-btn');
+  await host.until(
+    'getComputedStyle(document.getElementById("player-names")).display==="none"'
+  );
   await click(host, 'back-lobby');
   await host.until(
     '__volley.session.phase==="idle" && __volley.room.data.status==="lobby"'
@@ -683,6 +733,32 @@ async function screenshot(page, name) {
   await host.until(
     'Object.values(__volley.room.data.members).every(m=>m.slots.length===1)'
   );
+  // Empty submissions dismiss chat without producing a room message.
+  for (const blank of ['', '   ', '\t \n']) {
+    const count = await host.ev(
+      'document.getElementById("chat-log").children.length'
+    );
+    await click(guests[0], 'chat-open-btn');
+    await guests[0].ev(
+      'document.getElementById("chat-input").value=' + JSON.stringify(blank)
+    );
+    await key(guests[0], 'Enter', 'keyDown');
+    await key(guests[0], 'Enter', 'keyUp');
+    assert.equal(
+      await guests[0].ev(
+        'document.activeElement.id!=="chat-input" && document.getElementById("chat-input-and-send-btn-container").classList.contains("hidden")'
+      ),
+      true
+    );
+    assert.equal(
+      await guests[0].ev('document.getElementById("chat-input").value'),
+      ''
+    );
+    assert.equal(
+      await host.ev('document.getElementById("chat-log").children.length'),
+      count
+    );
+  }
   await screenshot(host, 'four-browser-lobby.png');
   await click(guests[0], 'chat-open-btn');
   await guests[0].ev(
@@ -760,6 +836,31 @@ async function screenshot(page, name) {
       'window.guestPhysicsSteps=0; const original=__volley.game.physics.runEngineForNextFrame.bind(__volley.game.physics);__volley.game.physics.runEngineForNextFrame=(...args)=>{guestPhysicsSteps++;return original(...args);}'
     );
   await host.until('__volley.game.state === __volley.game.round');
+  for (const page of [host, ...guests])
+    await page.until(
+      '!__volley.game.view.game.messages.gameStart.visible && getComputedStyle(document.getElementById("player-names")).display==="none"'
+    );
+  const labelEpoch = await guests[0].ev('__volley.session.epoch');
+  await click(guests[0], 'player-labels-always-btn');
+  assert.equal(
+    await guests[0].ev(
+      'getComputedStyle(document.getElementById("player-names")).display==="none"'
+    ),
+    false
+  );
+  assert.equal(
+    await host.ev(
+      'getComputedStyle(document.getElementById("player-names")).display==="none"'
+    ),
+    true,
+    'label preference must not change another browser'
+  );
+  assert.equal(
+    await guests[0].ev('__volley.session.epoch'),
+    labelEpoch,
+    'local visual preference must not restart a match'
+  );
+  await click(guests[0], 'player-labels-auto-btn');
   const player3 = guests[1],
     before = await host.ev('__volley.game.players[2].x');
   await key(player3, 'ArrowLeft', 'keyDown');
@@ -869,6 +970,13 @@ async function screenshot(page, name) {
   console.log(
     'Classic UI: original menus, host-only live speed/practice options, room-wide chat, local chat disable, and text-safe rendering passed.'
   );
+  if (process.env.PIKA_UI_ONLY) {
+    await click(host, 'leave');
+    console.log(
+      'UI checks passed: actual rendered label visibility, local preference persistence, and chat behavior.'
+    );
+    return;
+  }
   await host.ev(
     'document.getElementById("court-width").value="501";document.getElementById("serve-mode").value="fixed"'
   );

@@ -146,6 +146,8 @@ export class MenuView {
     }
     const labels = korean
       ? ['사람 1명 + 컴퓨터 3명', '사람 2명 + 컴퓨터 2명', '사람 4명']
+      : document.documentElement.lang === 'zh'
+      ? ['1位玩家＋3位電腦', '2位玩家＋2位電腦', '4位玩家']
       : ['1 Player + 3 Computers', '2 Players + 2 Computers', '4 Players'];
     this.messages.withWho.forEach((sprite, i) => {
       sprite.visible = false;
@@ -511,7 +513,7 @@ export class GameView {
     // since it is not dependent on user input, and only used for rendering.
     this.cloudArray = [];
     for (let i = 0; i < NUM_OF_CLOUDS; i++) {
-      this.cloudArray.push(new Cloud());
+      this.cloudArray.push(new Cloud(width));
     }
     this.wave = new Wave();
   }
@@ -626,7 +628,7 @@ export class GameView {
     const cloudArray = this.cloudArray;
     const wave = this.wave;
 
-    cloudAndWaveEngine(cloudArray, wave);
+    cloudAndWaveEngine(cloudArray, wave, this.width);
 
     for (let i = 0; i < NUM_OF_CLOUDS; i++) {
       const cloud = cloudArray[i];

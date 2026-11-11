@@ -344,7 +344,7 @@ test('confirmed physical keyboard bindings and combined down-right input', () =>
   assert.equal(listeners.keyup.size, 0);
 });
 
-function controller() {
+function controller(lang = 'en') {
   const legacy = physics(false);
   const doubles = physics();
   class FakeContainer {
@@ -442,7 +442,7 @@ function controller() {
           );
         }
       },
-      document: { documentElement: { lang: 'en' }, getElementById: () => null },
+      document: { documentElement: { lang }, getElementById: () => null },
     }
   );
   let width;
@@ -1152,5 +1152,62 @@ test('an ongoing AI smash is aimed at actual contact even when coverage cleared 
       }
     }
     assert.equal(hitGround, true);
+  }
+});
+
+test('clouds span the configured court, pass the old boundary and wrap only at the far edge', () => {
+  for (const width of [432, 680, 1002]) {
+    let randomCalls = 0;
+    const module = load(
+      read('cloud_and_wave.js'),
+      ['Cloud', 'Wave', 'cloudAndWaveEngine'],
+      {
+        rand: () => {
+          randomCalls++;
+          return 650;
+        },
+      }
+    );
+    const clouds = Array.from({ length: 10 }, () => new module.Cloud(width));
+    assert.equal(clouds[0].topLeftPointX, -68 + (650 % (width + 68)));
+    assert.equal(randomCalls, 40);
+    const wave = new module.Wave();
+    const cloud = clouds[0];
+    cloud.topLeftPointX = width > 432 ? 431 : width - 1;
+    cloud.topLeftPointXVelocity = 2;
+    module.cloudAndWaveEngine(clouds, wave, width);
+    assert.equal(cloud.topLeftPointX, width > 432 ? 433 : -68);
+    cloud.topLeftPointXVelocity = 2;
+    cloud.topLeftPointX = width - 2;
+    module.cloudAndWaveEngine(clouds, wave, width);
+    assert.equal(cloud.topLeftPointX, width);
+    module.cloudAndWaveEngine(clouds, wave, width);
+    assert.equal(cloud.topLeftPointX, -68);
+    assert.equal(
+      wave.yCoords.length,
+      27,
+      'wave/snapshot shape stays unchanged'
+    );
+  }
+  const module = load(
+    read('cloud_and_wave.js'),
+    ['Cloud', 'Wave', 'cloudAndWaveEngine'],
+    { rand: () => 0 }
+  );
+  const clouds = Array.from({ length: 10 }, () => new module.Cloud());
+  clouds[0].topLeftPointX = 432;
+  module.cloudAndWaveEngine(clouds, new module.Wave());
+  assert.equal(clouds[0].topLeftPointX, -68, 'original 1v1 default stays 432');
+});
+
+test('English, Korean and Chinese all start in 2v2 and retain the original mode switch', () => {
+  for (const lang of ['en', 'ko', 'zh']) {
+    const { game } = controller(lang);
+    assert.equal(game.isDoubles, true);
+    assert.equal(game.players.length, 4);
+    game.setMode(false);
+    assert.equal(game.players.length, 2);
+    game.setMode(true);
+    assert.equal(game.players.length, 4);
   }
 });

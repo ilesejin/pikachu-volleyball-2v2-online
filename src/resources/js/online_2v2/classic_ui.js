@@ -1,3 +1,4 @@
+import { localStorageWrapper } from '../offline_version_js/utils/local_storage_wrapper.js';
 import { RoomChat } from './chat.js';
 import { playerName, matchSettings } from './protocol.js';
 
@@ -11,6 +12,8 @@ export function setUpClassicUI({
   const $ = (id) => document.getElementById(id);
   const ko = document.documentElement.lang === 'ko';
   const t = (en, korean) => (ko ? korean : en);
+  let showPlayerLabels =
+    localStorageWrapper.get('pv-online-player-labels') === 'always';
   let pending = null,
     courtBefore = null,
     lastEpoch = undefined,
@@ -177,6 +180,7 @@ export function setUpClassicUI({
     );
   let resetLocalPending = false;
   const resetLocal = () => {
+    $('player-labels-auto-btn').click();
     $('graphic-sharp-btn').click();
     $('bgm-on-btn').click();
     $('stereo-btn').click();
@@ -359,6 +363,7 @@ export function setUpClassicUI({
   $('chat-open-btn').addEventListener('click', openChat);
   $('send-btn').addEventListener('click', () => {
     if (
+      !$('chat-input').value.trim() ||
       chat.send($('chat-input').value, Number($('chat-speaker').value || 0))
     ) {
       $('chat-input').value = '';
@@ -437,7 +442,32 @@ export function setUpClassicUI({
       $('quick-match').click();
     }
   });
+  const renderLabels = () => {
+    $('player-names').classList.toggle(
+      'hidden',
+      !!session.epoch &&
+        !showPlayerLabels &&
+        !game.view.game.messages.gameStart.visible
+    );
+  };
+  for (const mode of ['auto', 'always']) {
+    $('player-labels-' + mode + '-btn').addEventListener('click', () => {
+      showPlayerLabels = mode === 'always';
+      localStorageWrapper.set('pv-online-player-labels', mode);
+      selected(
+        ['player-labels-auto-btn', 'player-labels-always-btn'],
+        'player-labels-' + mode + '-btn'
+      );
+      renderLabels();
+      closeMenus();
+    });
+  }
+  selected(
+    ['player-labels-auto-btn', 'player-labels-always-btn'],
+    'player-labels-' + (showPlayerLabels ? 'always' : 'auto') + '-btn'
+  );
   const ui = {
+    render: renderLabels,
     chat,
     closeMenus,
     update() {
@@ -583,6 +613,7 @@ export function setUpClassicUI({
         [5, 10, 15].map((n) => 'winning-score-' + n + '-btn'),
         'winning-score-' + current.winningScore + '-btn'
       );
+      renderLabels();
       $('player-names').replaceChildren();
       if (connected)
         for (let slot = 0; slot < 4; slot++) {

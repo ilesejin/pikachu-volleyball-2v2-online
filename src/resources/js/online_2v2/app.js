@@ -360,6 +360,7 @@ async function boot() {
   ticker.maxFPS = 25;
   ticker.add(() => {
     session.tick();
+    if (classicUI) classicUI.render();
     renderer.render(stage);
   });
   ticker.start();

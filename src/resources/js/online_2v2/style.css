@@ -183,6 +183,10 @@
   pointer-events: none;
   text-align: center;
 }
+/* Override the original nickname grid rule when labels are hidden. */
+#player-names.hidden {
+  display: none;
+}
 #player-names .nickname {
   font-size: clamp(10px, 1.25vw, 18px);
   text-shadow: 1px 1px 2px #000;

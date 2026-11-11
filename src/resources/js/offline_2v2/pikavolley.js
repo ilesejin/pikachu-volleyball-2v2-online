@@ -125,8 +125,8 @@ export class PikachuVolleyball {
      * @type {GameState}
      */
     this.state = this.intro;
-    // Chinese pages retain the original game; EN/KO default to 2v2.
-    if (document.documentElement.lang !== 'zh') this.setMode(true);
+    // All localized pages open in 2v2; original 1v1 remains available.
+    this.setMode(true);
   }
 
   get players() {
