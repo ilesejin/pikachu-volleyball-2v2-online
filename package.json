@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https: //github.com/ilesejin/pikachu-volleyball-2v2-online.git"
+    "url": "git+https://github.com/ilesejin/pikachu-volleyball-2v2-online.git"
   },
   "keywords": [
     "game"
@@ -24,9 +24,9 @@
   "author": "Kyutae Lee",
   "license": "UNLICENSED",
   "bugs": {
-    "url": "https: //github.com/ilesejin/pikachu-volleyball-2v2-online/issues"
+    "url": "https://github.com/ilesejin/pikachu-volleyball-2v2-online/issues"
   },
-  "homepage": "https: //github.com/ilesejin/pikachu-volleyball-2v2-online",
+  "homepage": "https://ilesejin.github.io/pikachu-volleyball-2v2-online/",
   "devDependencies": {
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^11.0.0",

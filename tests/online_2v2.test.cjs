@@ -44,7 +44,7 @@ test('online settings match the preserved 2v2 defaults and validate incoming val
   assert.deepEqual(plain(protocol.matchSettings()), {
     courtWidth: 340,
     serveMode: 'rotate-ball',
-    fps: 25,
+    fps: 30,
     winningScore: 15,
     practice: false,
     synchronization: 'lockstep',

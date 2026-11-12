@@ -52,7 +52,7 @@ module.exports = {
       chunkFilename: '[id].[contenthash].css',
     }),
     new HtmlWebpackPlugin({
-      template: 'src/en/online_2v2.html',
+      template: 'src/en/index.html',
       filename: 'en/index.html',
       chunks: ['runtime', 'main'],
       chunksSortMode: 'manual',
@@ -62,7 +62,7 @@ module.exports = {
       },
     }),
     new HtmlWebpackPlugin({
-      template: 'src/ko/online_2v2.html',
+      template: 'src/ko/index.html',
       filename: 'ko/index.html',
       chunks: ['runtime', 'main'],
       chunksSortMode: 'manual',
@@ -70,6 +70,20 @@ module.exports = {
         collapseWhitespace: true,
         removeComments: true,
       },
+    }),
+    new HtmlWebpackPlugin({
+      template: 'src/zh/index.html',
+      filename: 'zh/index.html',
+      chunks: ['runtime', 'main'],
+      chunksSortMode: 'manual',
+      minify: { collapseWhitespace: true, removeComments: true },
+    }),
+    new HtmlWebpackPlugin({
+      template: 'src/zh/update-history/index.html',
+      filename: 'zh/update-history/index.html',
+      chunks: ['main_update_history', 'dark_color_scheme'],
+      chunksSortMode: 'manual',
+      minify: { collapseWhitespace: true, removeComments: true },
     }),
     new HtmlWebpackPlugin({
       template: 'src/en/replay/index.html',

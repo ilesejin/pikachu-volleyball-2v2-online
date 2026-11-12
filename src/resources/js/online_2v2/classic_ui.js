@@ -1,6 +1,13 @@
+import { savePlayerName } from './preferences.js';
+import { translate, translateMessage } from './i18n.js';
 import { localStorageWrapper } from '../offline_version_js/utils/local_storage_wrapper.js';
 import { RoomChat } from './chat.js';
-import { playerName, matchSettings } from './protocol.js';
+import {
+  playerName,
+  playerNames,
+  matchSettings,
+  canUpdateLive,
+} from './protocol.js';
 
 export function setUpClassicUI({
   room,
@@ -10,8 +17,7 @@ export function setUpClassicUI({
   applySettings,
 }) {
   const $ = (id) => document.getElementById(id);
-  const ko = document.documentElement.lang === 'ko';
-  const t = (en, korean) => (ko ? korean : en);
+  const t = translate;
   let showPlayerLabels =
     localStorageWrapper.get('pv-online-player-labels') === 'always';
   let pending = null,
@@ -80,6 +86,18 @@ export function setUpClassicUI({
         'Apply the selected game options to everyone?',
         '선택한 경기 설정을 모두에게 적용할까요?'
       );
+      $('settings-confirm-impact').textContent =
+        value.topology !== session.settings.topology
+          ? t(
+              'Changing connections returns everyone to the lobby.',
+              '연결 방식을 변경하면 모두 대기실로 돌아갑니다.'
+            )
+          : canUpdateLive(session.settings, value)
+          ? t('The current match will continue.', '현재 경기가 유지됩니다.')
+          : t(
+              'The current match will restart.',
+              '현재 경기가 다시 시작됩니다.'
+            );
       openDialog('settings-confirm');
     } else await applySettings(value);
   };
@@ -203,14 +221,17 @@ export function setUpClassicUI({
   });
   $('names-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const names =
+    const names = playerNames(
       room.data.layout === 'pairs'
         ? [$('local-name-1').value, $('local-name-2').value]
-        : [$('local-name-1').value];
+        : [$('local-name-1').value],
+      room.data.layout
+    );
     try {
       await room.store.rename(room.id, room.selfId, names);
+      names.forEach((name, index) => savePlayerName(index, name));
     } catch (error) {
-      $('status').textContent = error.message;
+      $('status').textContent = translateMessage(error.message);
     }
   });
   async function selectSlots(slots) {
@@ -218,7 +239,7 @@ export function setUpClassicUI({
     try {
       await room.store.selectSlots(room.id, room.selfId, slots);
     } catch (error) {
-      $('status').textContent = error.message;
+      $('status').textContent = translateMessage(error.message);
     }
   }
   $('reconnect-network').addEventListener('click', async () => {
@@ -227,7 +248,7 @@ export function setUpClassicUI({
     try {
       await room.rebuildNetwork(room.data.settings);
     } catch (error) {
-      $('status').textContent = error.message;
+      $('status').textContent = translateMessage(error.message);
     } finally {
       ui.update();
     }
@@ -251,7 +272,7 @@ export function setUpClassicUI({
         '자리를 무작위로 배정했습니다.'
       );
     } catch (error) {
-      $('status').textContent = error.message;
+      $('status').textContent = translateMessage(error.message);
     } finally {
       randomizing = false;
       ui.update();
@@ -541,7 +562,7 @@ export function setUpClassicUI({
         if (key !== editedNamesKey) {
           editedNamesKey = key;
           $('nickname').value = names[0];
-          $('pair-name').value = names[1] || 'Player 2';
+          if (names[1] !== undefined) $('pair-name').value = names[1];
           $('local-name-1').value = names[0];
           $('local-name-2').value = names[1] || '';
           $('local-name-2-label').hidden = room.data.layout !== 'pairs';

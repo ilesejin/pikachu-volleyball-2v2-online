@@ -79,3 +79,5 @@ The v4 rules authorize signaling using the connection’s two endpoints and its 
 Keep the offline checkout at `../pikachu-volleyball-2v2`, or set `$env:PIKA_OFFLINE_ROOT='C:\path\to\pikachu-volleyball-2v2'` in PowerShell. Shared engine code is synchronized automatically before webpack builds and `npm test`; webpack watch also follows offline edits. Use `npm run sync:offline` to update the vendored snapshot and `npm run check:offline` for a read-only parity check. Commit `src/resources/js/offline_2v2/` and `offline-engine.manifest.json` together.
 
 Without the default sibling checkout, a fresh clone or CI build verifies the manifest and builds the committed snapshot. It cannot fetch future offline edits automatically. A configured-but-missing source or a corrupt snapshot stops the build. Redeploy the frontend after engine changes; this synchronization does not publish anything or modify Firebase configuration.
+
+Page templates: edit `src/en/index.html`, `src/ko/index.html`, or `src/zh/index.html` for the English, Korean, or Traditional Chinese online UI. `npm run build` creates the corresponding language directories in `dist/`.

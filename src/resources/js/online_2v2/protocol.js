@@ -16,7 +16,7 @@ export function matchSettings(value = {}) {
       : value.courtWidth
   );
   const serveMode = value.serveMode || DOUBLES_CONFIG.serveMode;
-  const fps = Number(value.fps || 25);
+  const fps = Number(value.fps || 30);
   const winningScore = Number(value.winningScore || 15);
   const synchronization =
     value.synchronization === undefined ? 'lockstep' : value.synchronization;

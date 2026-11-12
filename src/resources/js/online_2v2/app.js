@@ -1,3 +1,6 @@
+import { loadPlayerNames, savePlayerName } from './preferences.js';
+import { translate, translateMessage } from './i18n.js';
+import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
 import { settings } from '@pixi/settings';
 import { SCALE_MODES } from '@pixi/constants';
 import { Renderer, BatchRenderer, autoDetectRenderer } from '@pixi/core';
@@ -21,6 +24,7 @@ import {
   ROOM_SCHEMA,
   lobbyReady,
   playerName,
+  playerNames,
 } from './protocol.js';
 import { QuickMatch } from './quick_match.js';
 import { quickMatchServerURL } from './quick_match_config.js';
@@ -36,10 +40,10 @@ const matchmakingURL =
     ? window.__PIKA_TEST_MATCH_URL__
     : quickMatchServerURL;
 const ko = document.documentElement.lang === 'ko';
-const text = (en, korean) => (ko ? korean : en);
+const text = translate;
 const $ = (id) => document.getElementById(id);
 const status = (message, error = false) => {
-  $('status').textContent = message;
+  $('status').textContent = translateMessage(message);
   $('status').classList.toggle('error', error);
 };
 const params = new URLSearchParams(location.search);
@@ -62,9 +66,14 @@ function settingsFromForm() {
   });
 }
 function namesFromForm() {
-  return $('layout').value === 'pairs'
-    ? [$('nickname').value, $('pair-name').value]
-    : [$('nickname').value];
+  const names = playerNames(
+    $('layout').value === 'pairs'
+      ? [$('nickname').value, $('pair-name').value]
+      : [$('nickname').value],
+    $('layout').value
+  );
+  names.forEach((name, index) => savePlayerName(index, name));
+  return names;
 }
 function slotsFromForm() {
   return [];
@@ -247,6 +256,11 @@ function makeRoom(store) {
 }
 
 async function boot() {
+  const savedNames = loadPlayerNames();
+  ['nickname', 'pair-name'].forEach((id, index) => {
+    if (savedNames[index] !== null) $(id).value = savedNames[index];
+    $(id).addEventListener('input', () => savePlayerName(index, $(id).value));
+  });
   Renderer.registerPlugin('prepare', Prepare);
   Renderer.registerPlugin('batch', BatchRenderer);
   CanvasRenderer.registerPlugin('prepare', CanvasPrepare);
@@ -267,7 +281,7 @@ async function boot() {
     }))
       ASSETS_PATH.TEXTURES[name] = 'messages/ko/' + file + '.png';
   const renderer = autoDetectRenderer({
-    width: 768,
+    width: DOUBLES_CONFIG.courtWidth * 2,
     height: 304,
     antialias: false,
     backgroundColor: 0,
@@ -357,7 +371,7 @@ async function boot() {
       return data;
     },
   });
-  ticker.maxFPS = 25;
+  ticker.maxFPS = matchSettings().fps;
   ticker.add(() => {
     session.tick();
     if (classicUI) classicUI.render();
@@ -424,7 +438,7 @@ async function boot() {
   $('create').addEventListener('click', () =>
     run(async () => {
       await room.create(
-        $('nickname').value || 'Player',
+        namesFromForm(),
         $('layout').value,
         slotsFromForm(),
         settingsFromForm()
@@ -469,11 +483,7 @@ async function boot() {
     run(async () => {
       if (!inspected)
         throw new Error(text('Find the room first.', '먼저 방을 찾으세요.'));
-      await room.join(
-        inspected.id,
-        $('nickname').value || 'Player',
-        slotsFromForm()
-      );
+      await room.join(inspected.id, namesFromForm(), slotsFromForm());
       status(text('Connecting to the host…', '방장에게 연결 중…'));
       update();
     })

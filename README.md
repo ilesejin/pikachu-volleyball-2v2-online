@@ -2,7 +2,7 @@
 
 [한국어](README.ko.md) · [Firebase and deployment setup](ONLINE_SETUP.md)
 
-The current offline 2v2 game, playable through WebRTC rooms. Choose four browsers with one player each, or two browsers with two local players each. English and Korean pages are included.
+The current offline 2v2 game, playable through WebRTC rooms. Choose four browsers with one player each, or two browsers with two local players each. English, Korean, and Traditional Chinese pages are included.
 
 By default, every browser runs the preserved offline physics and AI in deterministic lockstep. Four-browser rooms default to a full mesh: six WebRTC connections, with each browser sending its own numbered inputs directly to the other three. All browsers wait for every participant’s inputs before simulating the frame with the same seeded randomness. The host can select a three-connection star instead, collecting inputs and relaying complete frames. A host-controlled setting also supports host-only physics, where guests send controls and display snapshots without simulating. Local-pair matches use one connection between their two browsers. The connection layout and physics mode are separate settings; host-only physics uses the host links even when mesh links are present. Firebase Anonymous Authentication identifies participants, and Firestore handles rooms and WebRTC signaling. Gameplay inputs and snapshots do not pass through Firestore. Neither layout needs a dedicated game server.
 
@@ -94,3 +94,7 @@ Commit the synchronized files and `offline-engine.manifest.json` together. If th
 Automated browser tests launch Chrome with audio muted.
 
 Submitting an empty or whitespace-only chat closes the chat input without sending a message. Player position labels hide with the Game start! message by default. Use **Options → Player position labels → Always show** to keep them visible; this preference is saved locally and does not affect other players or restart the match. Clouds travel across the full configured court width.
+
+The active page templates are `src/en/index.html`, `src/ko/index.html`, and `src/zh/index.html`. The build publishes them as `/en/`, `/ko/`, and `/zh/`; the old duplicate templates have been removed. Credits, related-version links, source links, release placeholders, and update-history pages match the offline 2v2 edition.
+
+The default game speed is **Fast (30 FPS)**. Each browser remembers its first nickname using the original P2P `myNickname` localStorage key and its second local-player name using `mySecondNickname`. Names restore after reopening, including names saved in the lobby. Room membership and per-tab identity are not restored.

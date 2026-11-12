@@ -628,6 +628,77 @@ async function screenshot(page, name) {
     console.log('Network-only test passed.');
     return;
   }
+  // The original P2P nickname key must migrate, and both local names survive reopening.
+  let nicknamePage = await tab(port, 'zh');
+  assert.equal(
+    await nicknamePage.ev('document.getElementById("speed").value'),
+    '30'
+  );
+  assert.equal(
+    await nicknamePage.ev(
+      'document.getElementById("fast-speed-btn").classList.contains("selected")'
+    ),
+    true
+  );
+  await nicknamePage.ev(
+    'localStorage.setItem("myNickname","  Legacy nickname  ")'
+  );
+  await nicknamePage.send('Page.reload', { ignoreCache: true });
+  await nicknamePage.until(
+    '!!window.__volley && document.getElementById("nickname").value==="Legacy nickname"'
+  );
+  await nicknamePage.ev(
+    'document.getElementById("nickname").value="重新開啟的玩家";document.getElementById("nickname").dispatchEvent(new Event("input"));document.getElementById("pair-name").value="第二位隊友";document.getElementById("pair-name").dispatchEvent(new Event("input"))'
+  );
+  const nicknameContext = nicknamePage.contextId;
+  await browser.send('Target.closeTarget', { targetId: nicknamePage.targetId });
+  nicknamePage = await tab(port, 'zh', true, nicknameContext);
+  assert.deepEqual(
+    await nicknamePage.ev(
+      '[document.getElementById("nickname").value,document.getElementById("pair-name").value]'
+    ),
+    ['重新開啟的玩家', '第二位隊友']
+  );
+  await nicknamePage.ev('document.getElementById("room-id").value="bad"');
+  await click(nicknamePage, 'find');
+  await nicknamePage.until(
+    'document.getElementById("status").textContent.includes("請輸入20")'
+  );
+  assert.equal(
+    await nicknamePage.ev('document.querySelector(".source-code-on a").href'),
+    'https://github.com/ilesejin/pikachu-volleyball-2v2-online'
+  );
+  await nicknamePage.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await nicknamePage.ev('document.documentElement.dataset.colorScheme="dark"');
+  assert.equal(
+    await nicknamePage.ev(
+      'document.getElementById("before-connection").scrollWidth<=document.getElementById("before-connection").clientWidth+1'
+    ),
+    true,
+    'Chinese landing page fits mobile width'
+  );
+  await screenshot(nicknamePage, 'classic-landing-zh-mobile.png');
+  await nicknamePage.send('Page.navigate', {
+    url: 'http://127.0.0.1:' + server.address().port + '/zh/update-history/',
+  });
+  await nicknamePage.until(
+    '!!document.getElementById("update-history-container")'
+  );
+  assert.equal(await nicknamePage.ev('document.documentElement.lang'), 'zh');
+  assert.equal(
+    await nicknamePage.ev('document.body.textContent.includes("2026-??-??")'),
+    true
+  );
+  await browser.send('Target.closeTarget', { targetId: nicknamePage.targetId });
+  await host.send('Page.bringToFront');
+  console.log(
+    'Chinese landing/history, fast default, legacy nickname migration, and both names after reopening passed.'
+  );
   await screenshot(host, 'classic-landing.png');
   await click(host, 'create');
   await host.until('!__volley.room.closed && !!__volley.room.data');
@@ -704,7 +775,7 @@ async function screenshot(page, name) {
   const id = await host.ev('__volley.room.id');
   const guests = [];
   for (let slot = 1; slot < 4; slot++) {
-    const guest = await tab(port, slot === 2 ? 'ko' : 'en');
+    const guest = await tab(port, slot === 2 ? 'ko' : slot === 3 ? 'zh' : 'en');
     await join(guest, id, String(slot));
     guests.push(guest);
   }
@@ -782,6 +853,15 @@ async function screenshot(page, name) {
         'Array.from(document.getElementById("chat-bubbles").children).map(b=>[b.style.top,b.style.left,b.style.right])'
       ),
       chatPosition
+    );
+  await click(guests[2], 'chat-open-btn');
+  await guests[2].ev(
+    'document.getElementById("chat-input").value="中文房間聊天"'
+  );
+  await click(guests[2], 'send-btn');
+  for (const page of [host, ...guests])
+    await page.until(
+      'document.getElementById("chat-log").textContent.includes("中文房間聊天")'
     );
   await click(guests[1], 'chat-disabling-btn');
   await click(host, 'chat-open-btn');
@@ -1099,9 +1179,16 @@ async function screenshot(page, name) {
   await pairHost.ev(
     'document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"))'
   );
+  await pairHost.ev(
+    'document.getElementById("nickname").value="기억하는 이름";document.getElementById("pair-name").value="기억하는 친구"'
+  );
   await click(pairHost, 'create');
   await pairHost.until(
     '!__volley.room.closed && !!__volley.room.data && !!__volley.room.data.members[__volley.room.selfId]'
+  );
+  assert.deepEqual(
+    await pairHost.ev('__volley.room.data.members[__volley.room.selfId].names'),
+    ['기억하는 이름', '기억하는 친구']
   );
   await pairHost.ev(
     'document.getElementById("local-name-1").value="Alice";document.getElementById("local-name-2").value="Bob";document.getElementById("names-form").requestSubmit()'
@@ -1114,6 +1201,9 @@ async function screenshot(page, name) {
   assert.deepEqual(
     await pairHost.ev('__volley.room.data.members[__volley.room.selfId].names'),
     ['Alice', 'Bob']
+  );
+  await pairHost.until(
+    'localStorage.getItem("myNickname")==="Alice" && localStorage.getItem("mySecondNickname")==="Bob"'
   );
   const pairGuest = await tab(port);
   await join(pairGuest, await pairHost.ev('__volley.room.id'), '0,1');
