@@ -66,6 +66,9 @@ export class RoomChat {
         top: 20 + 30 * this.random(),
         offset: 55 + 25 * this.random(),
         side: slots.length ? (slots[0] < 2 ? 'left' : 'right') : 'unassigned',
+        ...(this.room.data.layout === 'four' && slots.length
+          ? { area: slots[0] }
+          : {}),
       },
     };
     if (this.room.replay) this.room.replay.chat(packet);
@@ -112,7 +115,16 @@ export class RoomChat {
       packet.slots.length <= 1 &&
       packet.slots.every(
         (slot) => Number.isInteger(slot) && slot >= 0 && slot < 4
-      )
+      ) &&
+      (packet.position.area === undefined ||
+        (this.room.data.layout === 'four' &&
+          Number.isInteger(packet.position.area) &&
+          packet.position.area >= 0 &&
+          packet.position.area < 4 &&
+          packet.slots.length === 1 &&
+          packet.position.area === packet.slots[0] &&
+          packet.position.side ===
+            (packet.position.area < 2 ? 'left' : 'right')))
     ) {
       this.lastSequence = packet.seq;
       if (this.room.replay) this.room.replay.chat(packet);

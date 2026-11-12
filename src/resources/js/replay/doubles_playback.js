@@ -1,3 +1,4 @@
+import { applyChatPosition } from '../online_2v2/chat_position.js';
 import { PikachuVolleyball } from '../offline_2v2/pikavolley.js';
 import { ASSETS_PATH as DOUBLES_ASSETS } from '../offline_2v2/assets_path.js';
 import { ASSETS_PATH } from '../offline_version_js/assets_path.js';
@@ -313,15 +314,7 @@ export class DoublesPlayback {
         bubble.className = 'chat-box pre-wrap';
         bubble.textContent = packet.text;
         bubble.title = packet.name;
-        bubble.style.top = packet.position.top + '%';
-        if (packet.position.side === 'left')
-          bubble.style.right = packet.position.offset + '%';
-        else if (packet.position.side === 'right')
-          bubble.style.left = packet.position.offset + '%';
-        else {
-          bubble.style.left = '50%';
-          bubble.style.transform = 'translateX(-50%)';
-        }
+        applyChatPosition(bubble, packet.position);
         this.chatLayer.append(bubble);
       }
     this.owner.renderer.render(this.owner.stage);

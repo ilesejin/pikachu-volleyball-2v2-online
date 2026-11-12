@@ -662,6 +662,86 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_CHAT_AREAS_ONLY) {
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    await selectSlot(host, '0');
+    const id = await host.ev('__volley.room.id'),
+      guests = [];
+    for (let i = 1; i < 4; i++) {
+      const guest = await tab(port);
+      guests.push(guest);
+      await guest.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+      await join(guest, id, String(i));
+    }
+    await host.until(
+      '__volley.room.ready() && !document.getElementById("start").disabled'
+    );
+    await click(host, 'start');
+    await host.until('__volley.session.lastFrame>40');
+    const pages = [host, ...guests];
+    for (let i = 0; i < 4; i++) {
+      await click(pages[i], 'chat-open-btn');
+      await pages[i].ev(
+        'document.getElementById("chat-input").value=' +
+          JSON.stringify('P' + (i + 1) + ' ' + 'A'.repeat(46))
+      );
+      await click(pages[i], 'send-btn');
+    }
+    const bounds =
+      '(()=>{const court=document.getElementById("game-canvas-container").getBoundingClientRect();return Array.from(document.querySelectorAll("#chat-bubbles .chat-box")).map(b=>{const r=b.getBoundingClientRect();const slot=Number(b.title.match(/P([1-4])/)[1])-1;return {slot,left:(r.left-court.left)/court.width*100,right:(r.right-court.left)/court.width*100,top:(r.top-court.top)/court.height*100,bottom:(r.bottom-court.top)/court.height*100,style:[b.style.left,b.style.right,b.style.top,b.style.transform]};});})()';
+    for (const page of pages) {
+      await page.until(
+        'document.querySelectorAll("#chat-bubbles .chat-box").length===4'
+      );
+      const boxes = await page.ev(bounds);
+      for (const box of boxes) {
+        assert.ok(box.left >= box.slot * 25 - 0.1);
+        assert.ok(box.right <= (box.slot + 1) * 25 + 0.1);
+        assert.ok(box.top >= -0.1);
+        assert.ok(box.bottom <= 100.1);
+      }
+    }
+    const styles = await host.ev(bounds);
+    for (const guest of guests)
+      assert.deepEqual(
+        (await guest.ev(bounds)).map((b) => b.style),
+        styles.map((b) => b.style)
+      );
+    const packets = await host.ev(
+      '__volley.session.replay.pack.events.filter(e=>e.type==="chat").map(e=>e.packet)'
+    );
+    assert.deepEqual(
+      packets.map((p) => p.position.area),
+      [0, 1, 2, 3]
+    );
+    await screenshot(host, 'chat-assigned-quarters.png');
+    await host.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    for (const box of await host.ev(bounds)) {
+      assert.ok(box.left >= box.slot * 25 - 0.1);
+      assert.ok(box.right <= (box.slot + 1) * 25 + 0.1);
+      assert.ok(box.top >= -0.1);
+      assert.ok(box.bottom <= 100.1);
+    }
+    await screenshot(host, 'chat-assigned-quarters-mobile.png');
+    await assertSameSimulation(host, guests);
+    for (const guest of guests) await click(guest, 'leave');
+    await click(host, 'leave');
+    console.log(
+      'Solo chat: all four slot areas, long-message wrapping, synchronized positions, responsive bounds, recorded area metadata, and unchanged lockstep physics passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_VERSION_ONLY) {
     const current = JSON.parse(
       fs.readFileSync(path.join(root, 'version.json'), 'utf8')
