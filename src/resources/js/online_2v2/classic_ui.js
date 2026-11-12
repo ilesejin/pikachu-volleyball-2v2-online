@@ -327,11 +327,12 @@ export function setUpClassicUI({
   let bubbleSequence = 0;
   function display(packet) {
     const prefix =
+      packet.name +
+      '(' +
       (packet.slots.length
         ? packet.slots.map((slot) => 'P' + (slot + 1)).join('+')
         : t('Lobby', '대기실')) +
-      ' · ' +
-      packet.name;
+      ')';
     const line = document.createElement('li');
     line.textContent = prefix + ': ' + packet.text;
     $('chat-log').appendChild(line);

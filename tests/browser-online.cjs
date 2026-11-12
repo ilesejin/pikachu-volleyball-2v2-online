@@ -1641,7 +1641,7 @@ async function screenshot(page, name) {
   );
   await click(pairGuest, 'send-btn');
   await pairHost.until(
-    'document.getElementById("chat-log").textContent.includes("P2 · Dave: Dave speaking")'
+    'document.getElementById("chat-log").textContent.includes("Dave(P2): Dave speaking")'
   );
   await click(pairHost, 'options-dropdown-btn');
   await click(pairHost, 'practice-mode-submenu-btn');

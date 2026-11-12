@@ -429,7 +429,7 @@
           </div>
           <div class="relative-container" id="replay-save-container">
             <button class="btn" disabled="" id="save-replay-btn" type="button">
-              리플레이 저장
+              <span class="no-wrap">리플레이</span> <span class="no-wrap">저장</span>
             </button>
           </div>
           <div class="color-scheme-toggle-switch-container">
@@ -480,7 +480,7 @@
       </div>
       <details id="room-panel" open="">
         <summary>
-          방 · <output id="room-code"></output> <span id="phase"></span>
+          방&nbsp;-&nbsp;<output id="room-code"></output> <span id="phase"></span>
         </summary>
         <p id="arrangement"></p>
         <ul id="roster"></ul>
@@ -546,7 +546,7 @@
           ><button id="chat-disabling-btn" type="button">채팅 끄기</button>
         </div>
       </div>
-      <details id="chat-history">
+      <details id="chat-history" open>
         <summary>채팅 기록</summary>
         <ol aria-live="polite" id="chat-log"></ol>
       </details>
