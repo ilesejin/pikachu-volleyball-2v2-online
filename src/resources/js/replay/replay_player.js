@@ -26,6 +26,12 @@ import {
 } from './ui_replay.js';
 import '../../style.css';
 import { serialize } from '../utils/serialize.js';
+import { DoublesPlayback } from './doubles_playback.js';
+import {
+  decodeReplay,
+  REPLAY_VERSION,
+  MAX_REPLAY_BYTES,
+} from '../online_2v2/replay_format.js';
 import { getHashCode } from '../utils/hash_code.js';
 
 class ReplayPlayer {
@@ -61,6 +67,10 @@ class ReplayPlayer {
   }
 
   readFile(file) {
+    if (!file || file.size > MAX_REPLAY_BYTES) {
+      noticeFileOpenError();
+      return;
+    }
     // To show two "with friend" on the menu
     const TEXTURES = ASSETS_PATH.TEXTURES;
     TEXTURES.WITH_COMPUTER = TEXTURES.WITH_FRIEND;
@@ -81,7 +91,8 @@ class ReplayPlayer {
       // behind gameLoop.
       this.renderer.render(this.stage);
       showTimeCurrent(this.pikaVolley.timeCurrent);
-      this.pikaVolley.gameLoop();
+      if (this.doubles) this.doubles.tick();
+      else this.pikaVolley.gameLoop();
     });
 
     this.loader.add(ASSETS_PATH.SPRITE_SHEET);
@@ -98,6 +109,41 @@ class ReplayPlayer {
         // @ts-ignore
         packWithComment = JSON.parse(event.target.result);
         pack = packWithComment.pack;
+        if (pack && pack.version === REPLAY_VERSION) {
+          pack = decodeReplay(event.target.result);
+          this.loader.load(() => {
+            try {
+              this.doubles = new DoublesPlayback(this, pack);
+              this.pikaVolley = this.doubles.game;
+              this.pikaVolley.audio.turnBGMVolume(
+                document.getElementById('turn-on-bgm-checkbox').checked
+              );
+              this.pikaVolley.audio.turnSFXVolume(
+                document.getElementById('turn-on-sfx-checkbox').checked
+              );
+              showTotalTimeDuration(this.doubles.duration);
+              setMaxForScrubberRange(pack.events.length);
+              this.ticker.start();
+              this.playBGMProperly();
+              adjustPlayPauseBtnIcon();
+              enableReplayScrubberAndBtns();
+              if (process.env.NODE_ENV === 'development')
+                window.__replay = this;
+            } catch (error) {
+              console.error(error);
+              noticeFileOpenError(error);
+            }
+          });
+          return;
+        }
+        if (
+          !pack ||
+          pack.version !== 'p2p-online' ||
+          !Array.isArray(pack.inputs) ||
+          !Array.isArray(pack.options) ||
+          !Array.isArray(pack.chats)
+        )
+          throw new Error('Unsupported replay file.');
         const hash = pack.hash;
         pack.hash = 0;
         if (hash !== getHashCode(serialize(pack))) {
@@ -105,7 +151,7 @@ class ReplayPlayer {
         }
       } catch (err) {
         console.log(err);
-        noticeFileOpenError();
+        noticeFileOpenError(err);
         return;
       }
       showTotalTimeDuration(getTotalTimeDuration(pack));
@@ -127,6 +173,8 @@ class ReplayPlayer {
         this.ticker.start();
         adjustPlayPauseBtnIcon();
         enableReplayScrubberAndBtns();
+        if (process.env.NODE_ENV === 'development')
+          window.__replayPlayer = this;
       });
     };
     try {
@@ -148,6 +196,14 @@ class ReplayPlayer {
     this.ticker.stop();
 
     // Cleanup previous pikaVolley
+    if (this.doubles) {
+      try {
+        this.doubles.seek(frameNumber);
+      } catch (error) {
+        noticeFileOpenError(error);
+      }
+      return;
+    }
     this.pikaVolley.initializeForReplay();
 
     if (frameNumber > 0) {
@@ -164,6 +220,11 @@ class ReplayPlayer {
    * @param {number} seconds plus value for seeking forward, minus value for seeking backward
    */
   seekRelativeTime(seconds) {
+    if (this.doubles) {
+      this.ticker.stop();
+      this.doubles.seekTime(Math.max(0, this.pikaVolley.timeCurrent + seconds));
+      return;
+    }
     const seekFrameCounter = Math.max(
       0,
       this.pikaVolley.replayFrameCounter + seconds * this.pikaVolley.normalFPS
@@ -198,6 +259,10 @@ class ReplayPlayer {
   }
 
   playBGMProperly() {
+    if (this.doubles) {
+      this.pikaVolley.audio.sounds.bgm.play();
+      return;
+    }
     if (this.pikaVolley.isBGMPlaying) {
       this.pikaVolley.audio.sounds.bgm.center.play({
         start: this.pikaVolley.timeBGM,

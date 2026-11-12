@@ -10,6 +10,7 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "test:browser": "node tests/browser-online.cjs",
+    "test:replay": "webpack --config webpack.dev.js && node tests/browser-replay.cjs",
     "pretest": "node scripts/sync-offline-engine.cjs",
     "sync:offline": "node scripts/sync-offline-engine.cjs",
     "check:offline": "node scripts/sync-offline-engine.cjs --check"

@@ -112,6 +112,20 @@ export const ZH_MESSAGES = {
   'Invalid lobby update.': '大廳更新無效。',
   'Invalid room status.': '房間狀態無效。',
   'Invalid lobby request.': '大廳請求無效。',
+  'Replay saved. Guest recordings may be partial.':
+    '已儲存重播。訪客的紀錄可能不完整。',
+  'Host replay saved.': '已儲存房主的重播。',
+  'Host replay unavailable; saving your local recording.':
+    '無法取得房主的重播，正在儲存本機紀錄。',
+  'No replay frames have been recorded yet.': '尚未錄製可儲存的重播畫面。',
+  'Replay file is too large.': '重播檔案過大。',
+  'Invalid or damaged replay file.': '重播檔案無效或已損毀。',
+  'This replay needs a different game engine version.':
+    '此重播需要其他版本的遊戲引擎。',
+  'Replay transfer timed out.': '重播傳輸逾時。',
+  'Invalid replay checkpoint.': '重播檢查點無效。',
+  'Replay random sequence does not match the engine.':
+    '重播的隨機數紀錄與遊戲引擎不符。',
   'The room has closed.': '房間已關閉。',
   'Only the room host can start a match.': '只有房主可以開始比賽。',
   'Wait for all players to connect, or remove the disconnected player.':
@@ -126,11 +140,35 @@ export const ZH_MESSAGES = {
   'Quick Match request failed.': '快速配對請求失敗。',
 };
 
+const REPLAY_KO = {
+  'Replay saved. Guest recordings may be partial.':
+    '리플레이를 저장했습니다. 게스트 기록은 일부만 포함할 수 있습니다.',
+  'Host replay saved.': '방장 리플레이를 저장했습니다.',
+  'Host replay unavailable; saving your local recording.':
+    '방장 기록을 받을 수 없어 로컬 기록을 저장합니다.',
+  'No replay frames have been recorded yet.':
+    '아직 저장할 리플레이 프레임이 없습니다.',
+  'Replay file is too large.': '리플레이 파일이 너무 큽니다.',
+  'Invalid or damaged replay file.':
+    '리플레이 파일이 올바르지 않거나 손상되었습니다.',
+  'This replay needs a different game engine version.':
+    '이 리플레이는 다른 게임 엔진 버전이 필요합니다.',
+  'Replay transfer timed out.': '리플레이 전송 시간이 초과되었습니다.',
+  'Invalid replay checkpoint.': '리플레이 체크포인트가 올바르지 않습니다.',
+  'Replay random sequence does not match the engine.':
+    '리플레이 난수 기록이 게임 엔진과 일치하지 않습니다.',
+};
+
 export function translateMessage(
   value,
   language = document.documentElement.lang
 ) {
   const message = String(value);
+  if (
+    language === 'ko' &&
+    Object.prototype.hasOwnProperty.call(REPLAY_KO, message)
+  )
+    return REPLAY_KO[message];
   if (language !== 'zh') return message;
   if (Object.prototype.hasOwnProperty.call(ZH_MESSAGES, message))
     return ZH_MESSAGES[message];

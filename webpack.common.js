@@ -45,6 +45,7 @@ module.exports = {
           from: 'resources/assets/**/*.+(json|png|mp3|wav)',
         },
         { from: 'src/index.html', to: 'index.html' },
+        { from: 'src/replay/index.html', to: 'replay/index.html' },
       ],
     }),
     new MiniCssExtractPlugin({
@@ -104,6 +105,13 @@ module.exports = {
         collapseWhitespace: true,
         removeComments: true,
       },
+    }),
+    new HtmlWebpackPlugin({
+      template: 'src/zh/replay/index.html',
+      filename: 'zh/replay/index.html',
+      chunks: ['runtime', 'main_replay', 'dark_color_scheme'],
+      chunksSortMode: 'manual',
+      minify: { collapseWhitespace: true, removeComments: true },
     }),
     new HtmlWebpackPlugin({
       template: 'src/en/update-history/index.html',

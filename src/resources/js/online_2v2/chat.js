@@ -68,6 +68,7 @@ export class RoomChat {
         side: slots.length ? (slots[0] < 2 ? 'left' : 'right') : 'unassigned',
       },
     };
+    if (this.room.replay) this.room.replay.chat(packet);
     this.room.broadcast(packet);
     if (this.enabled) this.display(packet);
     return true;
@@ -114,6 +115,7 @@ export class RoomChat {
       )
     ) {
       this.lastSequence = packet.seq;
+      if (this.room.replay) this.room.replay.chat(packet);
       if (this.enabled) this.display(packet);
     }
     return true;

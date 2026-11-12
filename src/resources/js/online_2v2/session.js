@@ -569,6 +569,10 @@ export class OnlineMatch {
     }
   }
   step() {
+    if (this.replay) return this.replay.frame(() => this.stepGame());
+    return this.stepGame();
+  }
+  stepGame() {
     this.game.gameLoop();
     if (this.game.state === this.game.intro) {
       this.phase = 'finished';
@@ -763,6 +767,7 @@ export class OnlineMatch {
     }
     if (this.lockstep || !validSnapshot(message, this.epoch, this.lastFrame))
       return;
+    if (this.replay) this.replay.snapshot(message);
     this.lastFrame = message.frame;
     const phaseChanged = this.phase !== message.phase;
     this.phase = message.phase;
@@ -822,6 +827,7 @@ export class OnlineMatch {
       });
   }
   stop() {
+    if (this.replay) this.replay.end();
     this.earlyInputs = [];
     this.stopInputTimer();
     this.clearKeys();

@@ -332,12 +332,16 @@ async function cdp(url) {
     throw Error(
       'Condition timed out: ' +
         expression +
+        '; replayError=' +
+        (await ev(
+          'document.getElementById("replay-error-detail")?.textContent'
+        )) +
         '; status=' +
         (await ev('document.getElementById("status")?.textContent')) +
         '; debug=' +
         JSON.stringify(
           await ev(
-            '({phase:window.__volley?.session.phase,status:window.__volley?.room.data?.status,isHost:window.__volley?.room.isHost,closed:window.__volley?.room.closed,back:window.backDebug,network:__volley?.room&&{revision:__volley.room.data?.networkRevision,hold:__volley.room.rebuildingTarget,fault:__volley.room.networkFault,flags:Object.fromEntries(Object.entries(__volley.room.data?.members||{}).map(([id,m])=>[id,m.connected])),reports:Array.from(__volley.room.readyReports),writes:Array.from(__volley.room.readyWrites),peers:Array.from(__volley.room.peers).map(([id,p])=>({id,pc:p.pc.connectionState,channel:p.channel?.readyState,closed:p.notifiedClosed}))}})'
+            '({phase:window.__volley?.session.phase,status:window.__volley?.room.data?.status,isHost:window.__volley?.room.isHost,closed:window.__volley?.room.closed,back:window.backDebug,network:window.__volley?.room&&{revision:__volley.room.data?.networkRevision,hold:__volley.room.rebuildingTarget,fault:__volley.room.networkFault,flags:Object.fromEntries(Object.entries(__volley.room.data?.members||{}).map(([id,m])=>[id,m.connected])),reports:Array.from(__volley.room.readyReports),writes:Array.from(__volley.room.readyWrites),peers:Array.from(__volley.room.peers).map(([id,p])=>({id,pc:p.pc.connectionState,channel:p.channel?.readyState,closed:p.notifiedClosed}))}})'
           )
         )
     );
@@ -620,12 +624,22 @@ async function screenshot(page, name) {
     console.error(error.message);
   });
   const active = path.join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !fs.existsSync(active); i++) await delay(100);
-  assert.ok(
-    fs.existsSync(active),
-    'Chrome must be installed or PIKA_CHROME set'
-  );
-  const port = Number(fs.readFileSync(active, 'utf8').split('\n')[0]);
+  let port;
+  for (let i = 0; i < 100; i++) {
+    try {
+      if (fs.existsSync(active)) {
+        const value = Number(fs.readFileSync(active, 'utf8').split('\n')[0]);
+        if (Number.isInteger(value) && value > 0) {
+          port = value;
+          break;
+        }
+      }
+    } catch (error) {
+      if (!['EBUSY', 'ENOENT'].includes(error.code)) throw error;
+    }
+    await delay(100);
+  }
+  assert.ok(port, 'Chrome must be installed or PIKA_CHROME set');
   const version = await (
     await fetch(`http://127.0.0.1:${port}/json/version`)
   ).json();
@@ -648,6 +662,355 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_REPLAY_ONLY) {
+    await host.send('Page.navigate', {
+      url: `http://127.0.0.1:${server.address().port}/en`,
+    });
+    await host.until(
+      '!!window.__volley && !document.getElementById("create").disabled'
+    );
+    assert.equal(await host.ev('location.pathname'), '/en/');
+    assert.equal(
+      await host.ev(
+        'new URL(document.querySelector(".replay-viewer-link a").href).pathname'
+      ),
+      '/en/replay/'
+    );
+    const rootReplay = await tab(port);
+    await rootReplay.send('Page.navigate', {
+      url: `http://127.0.0.1:${server.address().port}/replay/`,
+    });
+    await rootReplay.until('!!window.__replayPlayer');
+    assert.equal(await rootReplay.ev('location.pathname'), '/en/replay/');
+    await browser.send('Target.closeTarget', { targetId: rootReplay.targetId });
+
+    assert.equal(
+      await host.ev(
+        '!!document.querySelector("#before-connection #replay-options #auto-save-replay-checkbox")'
+      ),
+      true
+    );
+    assert.equal(
+      await host.ev(
+        '!!document.querySelector("#menu-bar .btn-container.left #save-replay-btn")'
+      ),
+      true
+    );
+    const downloadDirectory = fs.mkdtempSync(
+      path.join(artifacts, 'replay-download-')
+    );
+    await browser.send('Browser.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: downloadDirectory,
+      browserContextId: host.contextId,
+    });
+    assert.equal(
+      await host.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked'
+      ),
+      true
+    );
+    assert.equal(
+      await host.ev(
+        'document.querySelector("#about-box-head .replay-viewer-link a").getAttribute("href")'
+      ),
+      './replay/'
+    );
+    assert.equal(
+      await host.ev('!!document.querySelector(".replay-tools a")'),
+      false
+    );
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").click()'
+    );
+    const preferenceTab = await tab(port, 'en', true, host.contextId);
+    assert.equal(
+      await preferenceTab.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked'
+      ),
+      false,
+      'Saved opt-out must survive reopening'
+    );
+    await browser.send('Target.closeTarget', {
+      targetId: preferenceTab.targetId,
+    });
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").click()'
+    );
+
+    await click(host, 'create');
+    await host.until('!__volley.room.closed && !!__volley.room.data');
+    await selectSlot(host, '0');
+    const guest = await tab(port, 'ko');
+    await browser.send('Browser.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: downloadDirectory,
+      browserContextId: guest.contextId,
+    });
+    await join(guest, await host.ev('__volley.room.id'), '3');
+    await assertConnections(host, [guest], 'mesh');
+    await host.ev(
+      'window.replayStates={};const oldStep=__volley.session.stepGame.bind(__volley.session);__volley.session.stepGame=()=>{oldStep();replayStates[__volley.session.replay.count+1]=JSON.stringify({players:__volley.game.players,ball:__volley.game.physics.ball,scores:__volley.game.scores,state:__volley.game.state.name,counter:__volley.game.frameCounter,clouds:__volley.game.view.game.cloudArray,wave:__volley.game.view.game.wave,rng:__volley.session.rng?.state()||null});}'
+    );
+    await click(host, 'start');
+    await key(host, 'KeyG', 'keyDown');
+    await host.until('__volley.session.lastFrame>55');
+    await key(host, 'KeyG', 'keyUp');
+    await key(host, 'KeyR', 'keyDown');
+    await host.until('__volley.session.lastFrame>65');
+    await key(host, 'KeyR', 'keyUp');
+    await host.until('__volley.session.lastFrame>160');
+    await click(host, 'pause');
+    await guest.until('__volley.session.phase==="paused"');
+    await host.ev(
+      '__volley.room.replay.chat({text:"Replay chat <safe>",name:"Host",slots:[0],position:{top:25,offset:60,side:"left"}})'
+    );
+    const firstText = await host.ev('__volley.session.replay.text()');
+    const state =
+      'JSON.stringify({players:__volley.game.players,ball:__volley.game.physics.ball,scores:__volley.game.scores,state:__volley.game.state.name,counter:__volley.game.frameCounter,clouds:__volley.game.view.game.cloudArray,wave:__volley.game.view.game.wave,rng:__volley.session.rng?.state()||null})';
+    const firstExpected = await host.ev(state);
+    await host.ev('__volley.session.replay.save()');
+    let savedFile;
+    for (let i = 0; i < 100; i++) {
+      savedFile = fs
+        .readdirSync(downloadDirectory)
+        .find((name) => name.endsWith('.txt'));
+      if (savedFile) break;
+      await delay(50);
+    }
+    assert.ok(savedFile, 'FileSaver must directly download a replay');
+    const downloaded = JSON.parse(
+      fs
+        .readFileSync(path.join(downloadDirectory, savedFile), 'utf8')
+        .replace(/^\uFEFF/, '')
+    );
+    assert.equal(downloaded.pack.roomId, await host.ev('__volley.room.id'));
+
+    async function viewer(text, lang = 'en') {
+      const page = await tab(port, lang);
+      await page.send('Page.navigate', {
+        url: `http://127.0.0.1:${server.address().port}/${lang}/replay/`,
+      });
+      await page.until('!!window.__replayPlayer');
+      await page.ev(
+        '(()=>{const file=new File([' +
+          JSON.stringify(text) +
+          '],"session.pvreplay",{type:"application/json"});const dt=new DataTransfer();dt.items.add(file);const input=document.getElementById("file-input");input.files=dt.files;input.dispatchEvent(new Event("change"));})()'
+      );
+      await page.until('!!window.__replay?.doubles');
+      await page.ev('__replay.ticker.stop()');
+      assert.equal(
+        await page.ev(
+          '(()=>{const r=document.querySelector("canvas").getBoundingClientRect();return Math.abs(r.width/r.height-__replay.doubles.settings.courtWidth*2/304)<0.01;})()'
+        ),
+        true,
+        'Replay court must preserve the recorded aspect ratio'
+      );
+      assert.equal(
+        await page.ev(
+          'getComputedStyle(document.querySelector(".grid-for-keyboard")).display'
+        ),
+        'none'
+      );
+      return page;
+    }
+    const replayState =
+      'JSON.stringify({players:__replay.pikaVolley.players,ball:__replay.pikaVolley.physics.ball,scores:__replay.pikaVolley.scores,state:__replay.pikaVolley.state.name,counter:__replay.pikaVolley.frameCounter,clouds:__replay.pikaVolley.view.game.cloudArray,wave:__replay.pikaVolley.view.game.wave,rng:__replay.doubles.rng?.state()||null})';
+    console.log('Replay check: loading lockstep viewer');
+    const replay = await viewer(firstText);
+    assert.deepEqual(
+      await replay.ev(
+        'Array.from(document.querySelectorAll("#doubles-keys .replay-keypad")).map(pad=>Array.from(pad.children).map(key=>key.textContent))'
+      ),
+      Array(4).fill(['Enter', '↑', '←', '↓', '→'])
+    );
+    await replay.ev(
+      '__replay.doubles.showInputs([{xDirection:-1,yDirection:-1,powerHit:1},{xDirection:1,yDirection:1,powerHit:0},null,{xDirection:0,yDirection:0,powerHit:1}])'
+    );
+    assert.deepEqual(
+      await replay.ev(
+        'Array.from(document.querySelectorAll("#doubles-keys .replay-keypad")).map(pad=>Array.from(pad.querySelectorAll(".pressed")).map(key=>key.dataset.action))'
+      ),
+      [['hit', 'up', 'left'], ['down', 'right'], [], ['hit']]
+    );
+
+    const middleIndex =
+      JSON.parse(firstText)
+        .pack.events.map((event, index) => [event, index])
+        .filter(([event]) => event.type === 'step')[74][1] + 1;
+    await replay.ev('__replay.seekFrame(' + middleIndex + ')');
+    assert.equal(
+      await replay.ev(replayState),
+      await host.ev('replayStates[75]'),
+      'Re-simulating between checkpoints must preserve inputs, AI and RNG exactly'
+    );
+    await replay.ev('__replay.seekFrame(__replay.doubles.events.length)');
+    assert.equal(
+      await replay.ev(replayState),
+      firstExpected,
+      'Seeking must reproduce the exact authoritative simulation'
+    );
+    await replay.ev(
+      '__replay.seekFrame(0);while(__replay.doubles.cursor<__replay.doubles.events.length){__replay.doubles.tick();if(__replay.doubles.error)throw __replay.doubles.error;}__replay.ticker.stop()'
+    );
+    assert.equal(
+      await replay.ev(replayState),
+      firstExpected,
+      'Straight playback must match seeking'
+    );
+    assert.equal(
+      await replay.ev(
+        'document.getElementById("doubles-chat").textContent.includes("Replay chat <safe>")'
+      ),
+      true
+    );
+    await replay.ev('document.getElementById("show-chat-checkbox").click()');
+    assert.equal(
+      await replay.ev(
+        'document.getElementById("doubles-chat").children.length'
+      ),
+      0
+    );
+    await host.ev(
+      'window.downloads=[];__volley.session.replay.download=text=>downloads.push(text)'
+    );
+    console.log('Replay check: requesting host transfer');
+    await guest.ev(
+      'window.downloads=[];__volley.session.replay.download=text=>downloads.push(text);__volley.session.replay.save()'
+    );
+    assert.equal(
+      JSON.parse(await guest.ev('downloads[0]')).pack.authoritative,
+      true
+    );
+    assert.equal(
+      await guest.ev('__volley.room.connected(__volley.room.data.hostId)'),
+      true
+    );
+    await host.ev(
+      'if(!document.getElementById("auto-save-replay-checkbox").checked)document.getElementById("auto-save-replay-checkbox").click()'
+    );
+    assert.equal(
+      await host.ev('localStorage.getItem("pv-online-auto-replay")'),
+      'true'
+    );
+    await host.ev(
+      '__volley.session.start({...__volley.session.settings,synchronization:"host",courtWidth:384})'
+    );
+    await guest.until('__volley.session.settings.synchronization==="host"');
+    await host.until('__volley.session.frame>90');
+    await click(host, 'pause');
+    await guest.until('__volley.session.phase==="paused"');
+    const secondExpected = await host.ev(state),
+      sessionText = await host.ev('__volley.session.replay.text()');
+    assert.equal(
+      new Set(
+        JSON.parse(sessionText)
+          .pack.events.filter((e) => e.type === 'checkpoint')
+          .map((e) => e.epoch)
+      ).size,
+      2
+    );
+    console.log('Replay check: loading host-only viewer');
+    const second = await viewer(sessionText, 'zh');
+    await second.ev('__replay.seekFrame(__replay.doubles.events.length)');
+    assert.equal(
+      await second.ev(replayState),
+      secondExpected,
+      'Host-only random draws must replay exactly'
+    );
+    await second.ev(
+      '__replay.seekFrame(0);while(__replay.doubles.cursor<__replay.doubles.events.length){__replay.doubles.tick();if(__replay.doubles.error)throw __replay.doubles.error;}__replay.ticker.stop()'
+    );
+    assert.equal(
+      await second.ev(replayState),
+      secondExpected,
+      'Two matches with different synchronization modes must replay in order'
+    );
+    console.log('Replay check: loading partial recording');
+    const fallback = await guest.ev('__volley.session.replay.text()');
+    assert.equal(JSON.parse(fallback).pack.complete, false);
+    const partial = await viewer(fallback, 'ko');
+    await partial.ev('__replay.seekFrame(__replay.doubles.events.length)');
+    assert.equal(await partial.ev('__replay.pikaVolley.players.length'), 4);
+    await click(host, 'leave');
+    await guest.until('__volley.room.closed');
+    assert.equal(
+      await host.ev('downloads.length'),
+      1,
+      'Automatic room-exit saving must download once'
+    );
+    assert.ok(await guest.ev('__volley.session.replay.pack.events.length>0'));
+    const loadLegacy = (file, name) =>
+      Function(
+        fs
+          .readFileSync(
+            path.join(__dirname, '../src/resources/js/utils', file),
+            'utf8'
+          )
+          .replace(/export /g, '') +
+          ';return ' +
+          name +
+          ';'
+      )();
+    const serialize = loadLegacy('serialize.js', 'serialize'),
+      hash = loadLegacy('hash_code.js', 'getHashCode');
+    const legacyPack = {
+      version: 'p2p-online',
+      roomID: 'a'.repeat(20),
+      nicknames: ['Legacy A', 'Legacy B'],
+      partialPublicIPs: ['*.*.*.*', '*.*.*.*'],
+      chats: [],
+      options: [],
+      inputs: Array(120).fill(0),
+      hash: 0,
+    };
+    legacyPack.hash = hash(serialize(legacyPack));
+    const legacy = await tab(port, 'en');
+    await legacy.send('Page.navigate', {
+      url: `http://127.0.0.1:${server.address().port}/en/replay/`,
+    });
+    await legacy.until('!!window.__replayPlayer');
+    await legacy.ev(
+      '__replayPlayer.readFile(new File([' +
+        JSON.stringify(JSON.stringify({ pack: legacyPack })) +
+        '],"old.txt"))'
+    );
+    await legacy.until('!!window.__replayPlayer.pikaVolley');
+    await legacy.ev(
+      '__replayPlayer.ticker.stop();__replayPlayer.seekFrame(80)'
+    );
+    assert.equal(
+      await legacy.ev('__replayPlayer.pikaVolley.replayFrameCounter'),
+      80
+    );
+    assert.equal(await legacy.ev('!!__replayPlayer.doubles'), false);
+    await screenshot(second, 'replay-2v2-zh.png');
+    await host.ev('document.getElementById("layout").value="pairs"');
+    await click(host, 'create');
+    await host.until('!__volley.room.closed');
+    await selectSlot(host, '0,1');
+    await join(guest, await host.ev('__volley.room.id'), '2,3');
+    await assertConnections(host, [guest], 'mesh');
+    await click(host, 'start');
+    await host.until('__volley.session.lastFrame>65');
+    await click(host, 'pause');
+    const pairText = await host.ev('__volley.session.replay.text()'),
+      pairExpected = await host.ev(state);
+    const pairViewer = await viewer(pairText, 'ko');
+    await pairViewer.ev('__replay.seekFrame(__replay.doubles.events.length)');
+    assert.equal(await pairViewer.ev(replayState), pairExpected);
+    assert.deepEqual(
+      await pairViewer.ev('__replay.pikaVolley.players.map(p=>p.isComputer)'),
+      [false, false, false, false]
+    );
+    await click(host, 'leave');
+    await guest.until('__volley.room.closed');
+    assert.deepEqual(errors, []);
+    console.log(
+      'Replay: exact lockstep and host-only playback, seeking, room-session rematches, randomized chat, guest transfer, local fallback, persistence and auto-save passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_NETWORK_ONLY) {
     await click(host, 'create');
     await host.until('!__volley.room.closed && !!__volley.room.data');

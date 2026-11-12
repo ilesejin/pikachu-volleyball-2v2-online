@@ -1,3 +1,4 @@
+import { normalizeLanguageDirectory } from './page_route.js';
 import { loadPlayerNames, savePlayerName } from './preferences.js';
 import { translate, translateMessage } from './i18n.js';
 import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
@@ -30,8 +31,11 @@ import { QuickMatch } from './quick_match.js';
 import { quickMatchServerURL } from './quick_match_config.js';
 import '../../style.css';
 import '../offline_version_js/utils/dark_color_scheme.js';
+import { RoomReplay } from './replay_room.js';
 import { setUpClassicUI } from './classic_ui.js';
 import './style.css';
+
+normalizeLanguageDirectory();
 
 const matchmakingURL =
   process.env.NODE_ENV === 'development' &&
@@ -92,6 +96,7 @@ function updateSettingsForm(value) {
   $('synchronization').value = value.synchronization;
 }
 function update(error) {
+  if (session && session.replay) session.replay.update();
   if (error) status(error.message || String(error), true);
   $('quick-match').disabled =
     busy || !matchmakingURL || !!(quickMatch && quickMatch.active);
@@ -234,7 +239,9 @@ function makeRoom(store) {
         );
         update();
       },
+      extraChannel: (id, channel) => session.replay.channel(id, channel),
       message: (id, message) => {
+        if (session.replay && session.replay.message(id, message)) return;
         if (!classicUI || !classicUI.chat.receive(id, message))
           session.message(id, message);
       },
@@ -320,6 +327,8 @@ async function boot() {
     store = window.__PIKA_TEST_STORE__;
   room = makeRoom(store);
   session.attachRoom(room);
+  session.replay = new RoomReplay(session, status);
+  room.replay = session.replay;
   quickMatch = new QuickMatch({
     room,
     changed: () => update(),

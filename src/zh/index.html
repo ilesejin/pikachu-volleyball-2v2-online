@@ -77,6 +77,11 @@
             >2對2離線版</a
           >。
         </p>
+        <p class="small replay-viewer-link">
+          您可以使用<a href="./replay/" rel="noopener" target="_blank"
+            >重播播放器</a
+          >播放已儲存的重播檔案。
+        </p>
         <p class="original-version version-link">
           <a
             href="https://gorisanson.github.io/pikachu-volleyball/zh/"
@@ -160,6 +165,27 @@
         <p class="screenshot-caption">原版1對1 P2P 線上遊戲畫面。</p>
         <p>可使用4個瀏覽器各操作1位玩家，或由2個瀏覽器各操作同隊的2位玩家。</p>
       </div>
+      <p class="small replay-instructions">
+        <strong>重播：</strong>按「儲存重播」下載目前房間的紀錄，再使用<a
+          href="./replay/"
+          >重播播放器</a
+        >播放。
+      </p>
+      <div id="replay-options">
+        <p class="margin-top">
+          <span class="thick">設定：</span> 勾選您想使用的選項。
+        </p>
+        <div class="margin-top-a-little">
+          <input
+            checked=""
+            id="auto-save-replay-checkbox"
+            type="checkbox"
+          /><label for="auto-save-replay-checkbox"
+            >與玩家的連線結束時，自動儲存重播檔案。</label
+          >
+        </div>
+        <div hidden="" id="last-replay-save"></div>
+      </div>
       <div id="connect-panel">
         <div class="nickname-input-container">
           <label for="nickname">暱稱（最多24個字元）</label
@@ -217,6 +243,7 @@
     <p aria-live="polite" class="connection-status" id="status" role="status">
       正在載入遊戲資源……
     </p>
+
     <div hidden="" id="flex-container">
       <div id="menu-bar">
         <div class="btn-container left">
@@ -394,6 +421,11 @@
                 </button>
               </div>
             </div>
+          </div>
+          <div class="relative-container" id="replay-save-container">
+            <button class="btn" disabled="" id="save-replay-btn" type="button">
+              儲存重播
+            </button>
           </div>
           <div class="color-scheme-toggle-switch-container">
             <input

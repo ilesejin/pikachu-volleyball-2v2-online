@@ -1,3 +1,4 @@
+import { translateMessage } from '../online_2v2/i18n.js';
 import { replayPlayer } from './replay_player.js';
 import { enableChat, hideChat } from '../chat_display';
 import '../../style.css';
@@ -168,8 +169,8 @@ export function setUpUI() {
   fpsInput.addEventListener('change', (e) => {
     // @ts-ignore
     let value = e.target.value;
-    if (value < 0) {
-      value = 0;
+    if (!Number.isFinite(Number(value)) || value < 1) {
+      value = 1;
     } else if (value > 60) {
       value = 60;
     }
@@ -207,6 +208,10 @@ export function setUpUI() {
   const showChatCheckbox = document.getElementById('show-chat-checkbox');
   showChatCheckbox.addEventListener('change', () => {
     // @ts-ignore
+    if (replayPlayer.doubles) {
+      replayPlayer.doubles.render();
+      return;
+    }
     if (showChatCheckbox.checked) {
       enableChat(true);
     } else {
@@ -222,6 +227,10 @@ export function setUpUI() {
   const player2NicknameElem = document.getElementById('player2-nickname');
   showNicknamesCheckbox.addEventListener('change', () => {
     // @ts-ignore
+    if (replayPlayer.doubles) {
+      replayPlayer.doubles.render();
+      return;
+    }
     if (showNicknamesCheckbox.checked) {
       player1NicknameElem.classList.remove('hidden');
       player2NicknameElem.classList.remove('hidden');
@@ -330,7 +339,17 @@ export function hideNoticeEndOfReplay() {
   noticeBoxEndOfReplay.classList.add('hidden');
 }
 
-export function noticeFileOpenError() {
+export function noticeFileOpenError(error) {
+  document.getElementById('loading-box').classList.add('hidden');
+  if (error) {
+    let detail = document.getElementById('replay-error-detail');
+    if (!detail) {
+      detail = document.createElement('p');
+      detail.id = 'replay-error-detail';
+      document.getElementById('notice-file-open-error').append(detail);
+    }
+    detail.textContent = String(error.message || error);
+  }
   const noticeBoxFileOpenError = document.getElementById(
     'notice-file-open-error'
   );

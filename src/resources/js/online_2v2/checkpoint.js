@@ -21,7 +21,7 @@ export function captureCheckpoint(game, inputs, rng) {
     clouds: game.view.game.cloudArray.map(clone),
     wave: clone(game.view.game.wave),
     inputs: inputs.map(clone),
-    rng: rng.state(),
+    rng: rng ? rng.state() : null,
   };
 }
 export function restoreCheckpoint(game, inputs, checkpoint) {
@@ -43,7 +43,7 @@ export function restoreCheckpoint(game, inputs, checkpoint) {
       lastReceived: Date.now(),
     })
   );
-  return seedrandom.alea('', { state: checkpoint.rng });
+  return checkpoint.rng ? seedrandom.alea('', { state: checkpoint.rng }) : null;
 }
 export function validCheckpoint(value, game) {
   return (

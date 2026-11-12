@@ -82,6 +82,11 @@
             >2v2 offline version</a
           >.
         </p>
+        <p class="small replay-viewer-link">
+          You can use
+          <a href="./replay/" rel="noopener" target="_blank">Replay Viewer</a>
+          to view the replay files.
+        </p>
         <p class="original-version version-link">
           <a
             href="https://gorisanson.github.io/pikachu-volleyball/en/"
@@ -167,6 +172,27 @@
           Play 2v2 online with four browsers, or share a keyboard on each team.
         </p>
       </div>
+      <p class="small replay-instructions">
+        <strong>Replay:</strong> Save replay downloads the current room-session
+        recording. Open it with the <a href="./replay/">Replay Viewer</a>.
+      </p>
+      <div id="replay-options">
+        <p class="margin-top">
+          <span class="thick">Options:</span> You can check the options you
+          want.
+        </p>
+        <div class="margin-top-a-little">
+          <input
+            checked=""
+            id="auto-save-replay-checkbox"
+            type="checkbox"
+          /><label for="auto-save-replay-checkbox"
+            >Automatically save a replay file when a connection with a peer
+            ends.</label
+          >
+        </div>
+        <div hidden="" id="last-replay-save"></div>
+      </div>
       <div id="connect-panel">
         <div class="nickname-input-container">
           <label for="nickname">Nickname (maximum 24 characters)</label
@@ -236,6 +262,7 @@
     <p aria-live="polite" class="connection-status" id="status" role="status">
       Loading game assets…
     </p>
+
     <div hidden="" id="flex-container">
       <div id="menu-bar">
         <div class="btn-container left">
@@ -413,6 +440,11 @@
                 </button>
               </div>
             </div>
+          </div>
+          <div class="relative-container" id="replay-save-container">
+            <button class="btn" disabled="" id="save-replay-btn" type="button">
+              Save replay
+            </button>
           </div>
           <div class="color-scheme-toggle-switch-container">
             <input

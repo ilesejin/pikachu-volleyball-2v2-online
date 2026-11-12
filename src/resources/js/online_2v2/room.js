@@ -627,6 +627,11 @@ export class OnlineRoom {
     }
   }
   attachChannel(id, channel) {
+    if (channel.label && channel.label.startsWith('pikavolley-replay:')) {
+      if (this.closed) channel.close();
+      else this.emit('extraChannel', id, channel);
+      return;
+    }
     const peer = this.peers.get(id);
     if (!peer || this.closed) {
       channel.close();
@@ -780,6 +785,7 @@ export class OnlineRoom {
     if (this.rebuildWait)
       this.rebuildWait.reject(new Error('The room has closed.'));
     this.closed = true;
+    if (this.replay && this.replay.update) this.replay.update();
     this.readyReports.clear();
     this.readyWrites.clear();
     this.readyTasks.clear();

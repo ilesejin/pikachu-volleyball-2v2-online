@@ -79,6 +79,10 @@
             >2대2 오프라인 버전</a
           >도 있습니다.
         </p>
+        <p class="small replay-viewer-link">
+          <a href="./replay/" rel="noopener" target="_blank">리플레이 재생기</a
+          >를 사용하여 리플레이 파일을 재생할 수 있습니다.
+        </p>
         <p class="original-version version-link">
           <a
             href="https://gorisanson.github.io/pikachu-volleyball/ko/"
@@ -158,6 +162,28 @@
           경기를 즐기세요.
         </p>
       </div>
+      <p class="small replay-instructions">
+        <strong>리플레이:</strong> 리플레이 저장 버튼으로 현재 방의 기록을
+        다운로드하고 <a href="./replay/">리플레이 재생기</a>로 재생할 수
+        있습니다.
+      </p>
+      <div id="replay-options">
+        <p class="margin-top">
+          <span class="thick">설정:</span> 적용하기 원하는 설정에 체크 표시하면
+          됩니다.
+        </p>
+        <div class="margin-top-a-little">
+          <input
+            checked=""
+            id="auto-save-replay-checkbox"
+            type="checkbox"
+          /><label for="auto-save-replay-checkbox"
+            >리플레이 자동 저장 (상대방과의 연결을 마칠 때 리플레이 파일을
+            자동으로 저장합니다.)</label
+          >
+        </div>
+        <div hidden="" id="last-replay-save"></div>
+      </div>
       <div id="connect-panel">
         <div class="nickname-input-container">
           <label for="nickname">닉네임 (최대 24자)</label
@@ -222,6 +248,7 @@
     <p aria-live="polite" class="connection-status" id="status" role="status">
       게임 자료를 불러오는 중…
     </p>
+
     <div hidden="" id="flex-container">
       <div id="menu-bar">
         <div class="btn-container left">
@@ -399,6 +426,11 @@
                 </button>
               </div>
             </div>
+          </div>
+          <div class="relative-container" id="replay-save-container">
+            <button class="btn" disabled="" id="save-replay-btn" type="button">
+              리플레이 저장
+            </button>
           </div>
           <div class="color-scheme-toggle-switch-container">
             <input
