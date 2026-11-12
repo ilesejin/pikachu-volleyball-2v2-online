@@ -1,7 +1,7 @@
 /* The base layout and controls come from the original P2P stylesheet. */
 :root {
-  --aspect-ratio: calc(768 / 304);
-  --inverse-aspect-ratio: calc(304 / 768);
+  --aspect-ratio: calc(680 / 304);
+  --inverse-aspect-ratio: calc(304 / 680);
   --canvas-width: min(96vw, calc(76vh * var(--aspect-ratio)), 1500px);
   --canvas-height: calc(var(--canvas-width) * var(--inverse-aspect-ratio));
 }
@@ -183,6 +183,10 @@
   pointer-events: none;
   text-align: center;
 }
+/* Override the original nickname grid rule when labels are hidden. */
+#player-names.hidden {
+  display: none;
+}
 #player-names .nickname {
   font-size: clamp(10px, 1.25vw, 18px);
   text-shadow: 1px 1px 2px #000;
@@ -285,17 +289,121 @@ summary:focus-visible {
   padding: 10px;
   font-size: calc(1.5 * var(--font-size));
 }
-#slot-choices { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
-#slot-choices button, #cancel-slot, #save-names, #lobby-participants button { padding: 8px 14px; font-size: inherit; }
-#names-form { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; align-items: flex-end; }
-#names-form label { display: flex; flex-direction: column; gap: 6px; }
-#names-form input, #pair-name { max-width: 100%; padding: 7px; font-size: inherit; }
-#pair-name-label { display: flex; flex-direction: column; margin-top: 12px; }
-#chat-speaker-label { font-size: 0.85rem; margin-bottom: 6px; }
-#chat-speaker { font-size: inherit; }
-#lobby-participants { border-top: 1px solid var(--btn-border-color); margin-top: 15px; }
+#slot-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+#slot-choices button,
+#cancel-slot,
+#save-names,
+#lobby-participants button {
+  padding: 8px 14px;
+  font-size: inherit;
+}
+#names-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 15px 0;
+  align-items: flex-end;
+}
+#names-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#names-form input,
+#pair-name {
+  max-width: 100%;
+  padding: 7px;
+  font-size: inherit;
+}
+#pair-name-label {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+#chat-speaker-label {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+#chat-speaker {
+  font-size: inherit;
+}
+#lobby-participants {
+  border-top: 1px solid var(--btn-border-color);
+  margin-top: 15px;
+}
 
-#randomize-slots { padding: 8px 14px; font-size: inherit; margin-right: 10px; }
+#randomize-slots {
+  padding: 8px 14px;
+  font-size: inherit;
+  margin-right: 10px;
+}
+
+/* Shared presentation of the 2v2 edition and original-version credits. */
+#about-box-head > p {
+  max-width: 100%;
+}
+#about-box-head .doubles-description {
+  margin: 0.5em 0;
+  font-weight: 600;
+  line-height: 1.5;
+}
+#about-box-head .version-link {
+  margin: 0.2em 0;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+#about-box-head .version-link a {
+  overflow-wrap: anywhere;
+}
+#about-box-head .doubles-offline-version a {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.3em 0.65em;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+p.doubles-adapted-by,
+p.release-date,
+p.screenshot-caption {
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+p.release-date {
+  margin-bottom: 0;
+}
+p.screenshot-caption {
+  text-align: center;
+  margin-top: 0.4em;
+}
+.connection-fields select,
+.room-id-with-join input,
+#settings-form input,
+#settings-form select,
+#controls {
+  border: 1px solid var(--color);
+  border-radius: 4px;
+}
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 3px;
+}
+
+#nickname,
+#pair-name,
+#local-name-1,
+#local-name-2 {
+  border: 1px solid var(--color);
+  border-radius: 4px;
+  color: var(--color);
+  background: var(--background-color);
+}
 
 
-/*# sourceMappingURL=main.935262e23dca6333b212.css.map*/
+/*# sourceMappingURL=main.ad2849cd9e92fb435a10.css.map*/
