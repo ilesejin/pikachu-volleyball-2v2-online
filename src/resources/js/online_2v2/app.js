@@ -440,8 +440,8 @@ async function boot() {
               '빠른 대전 방을 찾는 중…'
             ),
             hosting: text(
-              'Quick Match room open. You may start early with computers.',
-              '빠른 대전 방을 열었습니다. 컴퓨터와 먼저 시작할 수 있습니다.'
+              'Quick Match room open. Waiting for another player; empty positions may use computers.',
+              '빠른 대전 방을 열었습니다. 다른 플레이어가 참가하면 빈 자리를 컴퓨터로 채워 시작할 수 있습니다.'
             ),
             joined: text(
               'Quick Match found. Connecting to the host…',

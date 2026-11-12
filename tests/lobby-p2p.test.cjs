@@ -140,6 +140,12 @@ test('pair admission preserves teams, limits capacity, and locks selection durin
 test('failed rendezvous changes do not publish a false room transition', async () => {
   const { room, store } = await fixture();
   await store.selectSlots('room', 'host', [0]);
+  await store.enqueue('guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'Guest',
+    slots: [1],
+  });
+  await store.networkReady('room', 'guest', 0, true);
   room.transport.unpublish = async () => {
     throw new Error('offline');
   };
@@ -318,14 +324,6 @@ test('duo start requires a second connected client even when AI fill is enabled'
 test('serialized solo departures republish the lobby only after the last opponent leaves', async () => {
   const { room, store, calls } = await fixture();
   await store.selectSlots('room', 'host', [0]);
-  await store.beginMatch('room', 'host', {});
-  await store.remove('room', 'not-admitted');
-  assert.equal(
-    room.data.status,
-    'playing',
-    'A failed unadmitted connection is not a departing player'
-  );
-  await store.update('room', { status: 'lobby' });
   for (const [id, slot] of [
     ['a', 1],
     ['b', 2],
@@ -339,10 +337,33 @@ test('serialized solo departures republish the lobby only after the last opponen
     await store.networkReady('room', id, 0, true);
   }
   await store.beginMatch('room', 'host', {});
+  await store.remove('room', 'not-admitted');
+  assert.equal(room.data.status, 'playing');
   await store.remove('room', 'a');
   assert.equal(room.data.status, 'playing');
   await Promise.all([store.remove('room', 'b'), store.remove('room', 'c')]);
   assert.equal(room.data.status, 'lobby');
   assert.deepEqual(Object.keys(room.data.members), ['host']);
   assert.equal(calls.at(-1)[0], 'publish');
+});
+
+test('a lone solo host cannot start even through the lobby API; a second connected player enables AI-filled matches', async () => {
+  const { room, store } = await fixture();
+  await store.selectSlots('room', 'host', [0]);
+  assert.equal(protocol.lobbyReady(room.data), false);
+  await assert.rejects(
+    store.beginMatch('room', 'host', {}),
+    /At least two connected players/
+  );
+  assert.equal(room.data.status, 'lobby');
+  await store.enqueue('guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'Guest',
+    slots: [2],
+  });
+  await assert.rejects(store.beginMatch('room', 'host', {}), /connect/);
+  await store.networkReady('room', 'guest', 0, true);
+  assert.equal(protocol.lobbyReady(room.data), true);
+  await store.beginMatch('room', 'host', {});
+  assert.equal(room.data.status, 'playing');
 });

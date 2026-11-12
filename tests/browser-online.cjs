@@ -1109,6 +1109,18 @@ async function screenshot(page, name) {
         );
         assert.equal(await page.ev('__volley.room.id'), id);
         assert.equal(await page.ev('__volley.game.paused'), true);
+        assert.equal(
+          await page.ev('document.getElementById("start").disabled'),
+          true
+        );
+        assert.match(
+          await page.ev(
+            '__volley.session.start(__volley.room.data.settings).then(()=>"started",e=>e.message)'
+          ),
+          /At least two connected players/
+        );
+        assert.equal(await page.ev('__volley.session.epoch'), null);
+
         assert.equal(await page.ev('__volley.session.inputPacer===null'), true);
       };
       const start = async (owner) => {
@@ -1138,10 +1150,6 @@ async function screenshot(page, name) {
         frame,
         'No AI-only continuation after returning to lobby'
       );
-      // Explicit solo-with-AI starts remain supported; only departure aborts.
-      await start(host);
-      await click(host, 'back-lobby');
-      await host.until('__volley.room.data.status==="lobby"');
       await join(guests[0], id, '2');
       await start(host);
       const names = await guests[0].ev(
@@ -1174,7 +1182,7 @@ async function screenshot(page, name) {
         'Solo exit passed:',
         sync,
         topology,
-        'concurrent departures, AI with multiple humans, solo AI start, graceful/abrupt host promotion and guest loss.'
+        'concurrent departures, AI with multiple humans, blocked solo start, graceful/abrupt host promotion and guest loss.'
       );
     }
     assert.deepEqual(errors, []);
@@ -2309,12 +2317,19 @@ async function screenshot(page, name) {
     true
   );
   await selectSlot(host, '0');
+  assert.equal(
+    await host.ev('document.getElementById("start").disabled'),
+    true
+  );
+  const visualGuest = await tab(port);
+  await join(visualGuest, await host.ev('__volley.room.id'), '1');
+  await assertConnections(host, [visualGuest], 'mesh');
   await host.ev('document.getElementById("synchronization").value="host"');
   await click(host, 'start');
   await host.until('__volley.session.epoch && __volley.game.view.game.visible');
   assert.deepEqual(
     await host.ev('__volley.game.players.map(p=>p.isComputer)'),
-    [false, true, true, true]
+    [false, false, true, true]
   );
   assert.equal(
     await host.ev(
@@ -2371,8 +2386,8 @@ async function screenshot(page, name) {
     '__volley.session.phase==="idle" && __volley.room.data.status==="lobby"'
   );
   const id = await host.ev('__volley.room.id');
-  const guests = [];
-  for (let slot = 1; slot < 4; slot++) {
+  const guests = [visualGuest];
+  for (let slot = 2; slot < 4; slot++) {
     const guest = await tab(port, slot === 2 ? 'ko' : slot === 3 ? 'zh' : 'en');
     await join(guest, id, String(slot));
     guests.push(guest);
@@ -3050,11 +3065,22 @@ async function screenshot(page, name) {
     await early.until(
       'document.getElementById("status").textContent.includes("Quick Match room open")'
     );
+    assert.equal(
+      await early.ev('document.getElementById("start").disabled'),
+      true
+    );
+    const buddy = await tab(port);
+    await click(buddy, 'quick-match');
+    await buddy.until(
+      '!__volley.room.closed && !!__volley.room.data?.members[__volley.room.selfId]'
+    );
+    await selectSlot(buddy, '1');
+    await assertConnections(early, [buddy], 'mesh');
     await click(early, 'start');
     await early.until('__volley.session.epoch !== null');
     assert.deepEqual(
       await early.ev('__volley.game.players.map(p=>p.isComputer)'),
-      [false, true, true, true]
+      [false, false, true, true]
     );
     const next = await tab(port);
     await click(next, 'quick-match');
@@ -3068,6 +3094,10 @@ async function screenshot(page, name) {
     await early.until('!document.getElementById("leave").disabled');
     await next.until('!document.getElementById("leave").disabled');
     await click(early, 'leave');
+    await buddy.until(
+      '__volley.room.isHost && __volley.room.data.status==="lobby"'
+    );
+    await click(buddy, 'leave');
     await click(next, 'leave');
     await early.until('__volley.room.closed');
     await next.until('__volley.room.closed');

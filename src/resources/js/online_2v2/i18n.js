@@ -1,5 +1,8 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'At least two connected players are required to start a solo match.':
+    '單人配對至少需要兩位已連線玩家才能開始。',
+  'Waiting for another player': '等待其他玩家加入',
   'Creating the room…': '正在建立房間…',
   'Please wait while your room is created.': '房間建立中，請稍候。',
   'Please wait while the connection is established.': '連線建立中，請稍候。',
@@ -91,8 +94,8 @@ export const ZH_MESSAGES = {
   'The room closed or you left the room.': '房間已關閉，或你已離開房間。',
   'Quick Match: ': '快速配對：',
   'Finding a Quick Match room…': '正在尋找快速配對房間……',
-  'Quick Match room open. You may start early with computers.':
-    '快速配對房間已建立，也可以先與電腦開始比賽。',
+  'Quick Match room open. Waiting for another player; empty positions may use computers.':
+    '快速配對房間已建立，正在等待其他玩家；空位可由電腦補上。',
   'Quick Match found. Connecting to the host…':
     '已找到快速配對房間，正在連線至房主……',
   'Configure quick_match_config.js first.': '請先設定 quick_match_config.js。',
@@ -207,6 +210,8 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'At least two connected players are required to start a solo match.':
+    '싱글 경기를 시작하려면 두 명 이상의 플레이어가 연결되어야 합니다.',
   'Everyone else left. Returned to the lobby.':
     '다른 플레이어가 모두 나가 대기실로 돌아왔습니다.',
   'The host left. You are now the lobby host.':

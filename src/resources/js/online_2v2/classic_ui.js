@@ -504,6 +504,11 @@ export function setUpClassicUI({
               'Waiting for a second duo client',
               '다른 듀오의 참가를 기다리는 중'
             )
+          : Object.keys(room.data.members).length < 2
+          ? t(
+              'Waiting for another player',
+              '다른 플레이어의 참가를 기다리는 중'
+            )
           : room.ready()
           ? t('Connections ready', '연결 준비 완료')
           : t('Waiting for required connections', '필요한 연결을 기다리는 중')

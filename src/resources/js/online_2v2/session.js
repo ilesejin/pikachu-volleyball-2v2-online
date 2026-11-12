@@ -280,6 +280,13 @@ export class OnlineMatch {
       throw new Error(
         'Two connected duo clients are required to start a duo match.'
       );
+    if (
+      this.room.data.layout === 'four' &&
+      Object.keys(this.room.data.members).length < 2
+    )
+      throw new Error(
+        'At least two connected players are required to start a solo match.'
+      );
     const checked = matchSettings(settings);
     if (checked.topology !== this.room.data.settings.topology)
       throw new Error('Apply the connection layout before starting.');

@@ -163,6 +163,10 @@ export class LobbyStore {
         throw new Error(
           'Two connected duo clients are required to start a duo match.'
         );
+      if (data.layout === 'four' && Object.keys(data.members).length < 2)
+        throw new Error(
+          'At least two connected players are required to start a solo match.'
+        );
       if (!lobbyReady(data))
         throw new Error(
           'Every joined player must select a slot before starting.'
