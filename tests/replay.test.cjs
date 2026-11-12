@@ -5,6 +5,7 @@ const test = require('node:test'),
 function load(file, names, bindings = {}) {
   const source = fs
     .readFileSync(path.join(__dirname, '../src/resources/js', file), 'utf8')
+    .replace(/^import\s+['"][^'"]+['"];?\r?\n/gm, '')
     .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\r?\n/gm, '')
     .replace(/export /g, '');
   return Function(
@@ -212,4 +213,61 @@ test('slashless language routes keep replay links, room queries and GitHub Pages
     }
   );
   assert.equal(writes, 0);
+});
+
+const { DoublesPlayback } = load('replay/doubles_playback.js', [
+  'DoublesPlayback',
+]);
+test('replay chat replaces only the same speaker and retains the live five-second lifetime', () => {
+  const playback = Object.create(DoublesPlayback.prototype);
+  playback.chats = [];
+  playback.addChat({ sender: 'pair', speaker: 0, name: 'A', text: 'first' }, 0);
+  playback.addChat(
+    { sender: 'pair', speaker: 1, name: 'B', text: 'partner' },
+    0.5
+  );
+  playback.addChat(
+    { sender: 'pair', speaker: 0, name: 'A', text: 'replacement' },
+    1
+  );
+  assert.deepEqual(
+    playback.chats.map((chat) => chat.packet.text),
+    ['partner', 'replacement']
+  );
+  assert.equal(playback.chats[1].at, 1);
+  assert.equal(playback.chats[1].until, 6);
+  playback.addChat({ name: 'Legacy', slots: [0], text: 'old' }, 2);
+  playback.addChat({ name: 'Legacy', slots: [0], text: 'old replacement' }, 3);
+  assert.equal(
+    playback.chats.filter((chat) => chat.packet.name === 'Legacy').length,
+    1
+  );
+});
+test('seeking rebuilds the latest chat per speaker across the full five-second window', () => {
+  const p = Object.create(DoublesPlayback.prototype);
+  p.events = [
+    { type: 'checkpoint', dt: 0 },
+    { type: 'chat', dt: 0, packet: { sender: 'a', text: 'first' } },
+    { type: 'lobby', dt: 1 },
+    { type: 'chat', dt: 0, packet: { sender: 'a', text: 'latest' } },
+    { type: 'chat', dt: 0, packet: { sender: 'b', text: 'other' } },
+    ...Array.from({ length: 7 }, () => ({ type: 'lobby', dt: 1 })),
+  ];
+  p.times = [0];
+  p.events.forEach((e) => p.times.push(p.times.at(-1) + e.dt));
+  p.checkpoints = [0];
+  p.chats = [];
+  p.game = { audio: { sounds: { bgm: { stop() {} } } } };
+  p.render = () => {};
+  p.event = function (e) {
+    if (e.type === 'chat') this.addChat(e.packet, this.times[this.cursor]);
+  };
+  p.seek(9);
+  assert.equal(p.game.timeCurrent, 5);
+  assert.deepEqual(
+    p.chats.map((chat) => chat.packet.text),
+    ['latest', 'other']
+  );
+  p.seek(12);
+  assert.deepEqual(p.chats, []);
 });
