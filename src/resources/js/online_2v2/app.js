@@ -1,3 +1,5 @@
+import { NetworkDiagnostics } from './diagnostics.js';
+import { setUpDiagnosticsUI } from './diagnostics_ui.js';
 import {
   CLIENT_VERSION,
   ClientUpdates,
@@ -63,6 +65,7 @@ let classicUI,
   room,
   session,
   game,
+  diagnostics,
   updates,
   versionMessage,
   reloadButton,
@@ -409,6 +412,10 @@ async function boot() {
     store = window.__PIKA_TEST_STORE__;
   room = makeRoom(store);
   session.attachRoom(room);
+  diagnostics = new NetworkDiagnostics(room, session);
+  room.diagnostics = diagnostics;
+  setUpDiagnosticsUI(room, session, diagnostics);
+  diagnostics.start();
   session.replay = new RoomReplay(session, status);
   room.replay = session.replay;
   quickMatch = new QuickMatch({
@@ -470,7 +477,14 @@ async function boot() {
   });
   ticker.start();
   if (process.env.NODE_ENV === 'development')
-    window.__volley = { game, session, room, updates, version: CLIENT_VERSION };
+    window.__volley = {
+      game,
+      session,
+      room,
+      updates,
+      diagnostics,
+      version: CLIENT_VERSION,
+    };
   classicUI = setUpClassicUI({
     room,
     session,
@@ -632,6 +646,7 @@ async function boot() {
     input.addEventListener('keyup', (event) => event.stopPropagation());
   });
   window.addEventListener('beforeunload', () => {
+    diagnostics.stop();
     if (quickMatch.active) quickMatch.stop();
     if (!room.closed) {
       session.stop();

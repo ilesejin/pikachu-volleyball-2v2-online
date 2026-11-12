@@ -388,6 +388,10 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
   await page.until(
     '!!window.__volley && !document.getElementById("create").disabled'
   );
+  if (process.env.PIKA_DIAGNOSTICS_ONLY)
+    await page.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
   return page;
 }
 async function assertConnections(host, guests, topology) {
@@ -739,6 +743,147 @@ async function screenshot(page, name) {
     await click(host, 'leave');
     console.log(
       'Solo chat: all four slot areas, long-message wrapping, synchronized positions, responsive bounds, recorded area metadata, and unchanged lockstep physics passed.'
+    );
+    return;
+  }
+  if (process.env.PIKA_DIAGNOSTICS_ONLY) {
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    await selectSlot(host, '0');
+    const id = await host.ev('__volley.room.id'),
+      guests = [];
+    for (let i = 1; i < 4; i++) {
+      const guest = await tab(port);
+      guests.push(guest);
+      await join(guest, id, String(i));
+    }
+    for (const page of [host, ...guests])
+      await page.until(
+        '__volley.diagnostics.snapshot().rows.filter(row=>row.count && row.age<10000).length===6'
+      );
+    assert.equal(
+      await host.ev('document.querySelectorAll("#ping-table tbody tr").length'),
+      6
+    );
+    assert.equal(
+      await host.ev('document.getElementById("network-diagnostics").open'),
+      true
+    );
+    await host.until(
+      'Array.from(__volley.diagnostics.links.values()).every(link=>link.samples.length>=5)'
+    );
+    assert.ok(
+      await host.ev(
+        'Array.from(__volley.diagnostics.links.values()).every(link=>link.route==="direct")'
+      )
+    );
+    await screenshot(host, 'diagnostics-lobby-mesh.png');
+    await click(host, 'start');
+    await host.until('__volley.session.lastFrame>40');
+    await host.until('!document.getElementById("network-diagnostics").open');
+    const stalledId = await guests[0].ev('__volley.room.selfId');
+    await guests[0].ev(
+      'window.diagHeld=[];window.diagSend=__volley.room.send.bind(__volley.room);__volley.room.send=(id,message,disposable)=>{if(message.type==="frame-input"){diagHeld.push([id,message,disposable]);return true;}return diagSend(id,message,disposable);}'
+    );
+    await host.until(
+      '__volley.diagnostics.snapshot().wait?.peers.includes(' +
+        JSON.stringify(stalledId) +
+        ')'
+    );
+    await host.until(
+      'document.getElementById("input-wait").textContent.includes("P2")'
+    );
+    assert.equal(
+      await host.ev('__volley.diagnostics.snapshot().average!==null'),
+      true
+    );
+    await host.ev('document.getElementById("network-diagnostics").open=true');
+    await screenshot(host, 'diagnostics-input-wait.png');
+    const stalledFrame = await host.ev('__volley.session.lastFrame');
+    await guests[0].ev(
+      '__volley.room.send=window.diagSend;for(const args of diagHeld)diagSend(...args);diagHeld=[]'
+    );
+    await host.until(
+      '__volley.session.lastFrame>' + JSON.stringify(stalledFrame + 8)
+    );
+    await assertSameSimulation(host, guests);
+    await host.until('__volley.diagnostics.snapshot().wait===null');
+    assert.equal(
+      await host.ev(
+        'JSON.stringify(__volley.session.replay.pack).includes("diag-")'
+      ),
+      false
+    );
+    await click(host, 'options-dropdown-btn');
+    await click(host, 'court-submenu-btn');
+    await host.ev('document.getElementById("synchronization").value="host"');
+    await click(host, 'settings-apply');
+    await click(host, 'settings-confirm-yes');
+    await host.until(
+      '__volley.session.settings.synchronization==="host" && __volley.session.phase==="playing"'
+    );
+    for (const page of [host, ...guests])
+      await page.until(
+        '__volley.diagnostics.snapshot().rows.filter(row=>row.used).length===3'
+      );
+    assert.equal(
+      await host.ev('__volley.diagnostics.snapshot().rows.length'),
+      6
+    );
+    await switchTopology(host, guests, 'star');
+    for (const page of [host, ...guests])
+      await page.until(
+        '__volley.diagnostics.snapshot().rows.filter(row=>row.count && row.age<10000).length===3'
+      );
+    await host.until(
+      'document.getElementById("ping-table").textContent.includes("Via host")'
+    );
+    await screenshot(host, 'diagnostics-star.png');
+    for (const guest of guests) await click(guest, 'leave');
+    await click(host, 'leave');
+    await host.ev(
+      'document.getElementById("layout").value="pairs";document.getElementById("synchronization").value="lockstep"'
+    );
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    await selectSlot(host, '0,1');
+    const pair = await tab(port, 'zh');
+    await join(pair, await host.ev('__volley.room.id'), '2,3');
+    for (const page of [host, pair])
+      await page.until(
+        '__volley.diagnostics.snapshot().rows.filter(row=>row.count>=5).length===1'
+      );
+    assert.equal(
+      await pair.ev('document.querySelectorAll("#ping-table tbody tr").length'),
+      1
+    );
+    assert.equal(
+      await pair.ev(
+        'document.getElementById("ping-indicator").textContent.includes("本機雙人")'
+      ),
+      true
+    );
+    await pair.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    await screenshot(pair, 'diagnostics-pairs-mobile-zh.png');
+    const mobileLayout = await pair.ev(
+      '(()=>{const width=document.documentElement.clientWidth;const normal=document.documentElement.scrollWidth;const items=Array.from(document.querySelectorAll("body *")).map(e=>({id:e.id,tag:e.tagName,right:e.getBoundingClientRect().right})).filter(e=>e.right>width+1).slice(0,12);const panel=document.getElementById("network-diagnostics");panel.hidden=true;const baseline=document.documentElement.scrollWidth;panel.hidden=false;return {width,normal,baseline,items};})()'
+    );
+    console.log('Diagnostics mobile layout:', JSON.stringify(mobileLayout));
+    assert.ok(
+      mobileLayout.normal <=
+        Math.max(mobileLayout.width, mobileLayout.baseline) + 1,
+      'Diagnostics must not widen the page'
+    );
+    await click(pair, 'leave');
+    await click(host, 'leave');
+    await host.until('document.getElementById("network-diagnostics").hidden');
+    console.log(
+      'Diagnostics: six measured mesh links, real direct ICE routes, input-wait attribution and recovery, identical physics, replay exclusion, host-only relevance, three-link star, pairs, Traditional Chinese and mobile containment passed.'
     );
     return;
   }

@@ -1,5 +1,43 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Connection diagnostics': '連線診斷',
+  'Ping is round-trip time, including browser scheduling and data-channel queues. It is not exact input delay.':
+    'Ping 是包含瀏覽器排程與資料通道佇列的往返時間，並不等於實際輸入延遲。',
+  Connection: '連線',
+  'Average ping': '平均 Ping',
+  'Recent range': '最近範圍',
+  Route: '路徑',
+  Status: '狀態',
+  'Five initial samples; then a rolling average of up to ten. High ping or large variation can cause stalls. Background tabs may respond slowly.':
+    '初始測量5次，之後顯示最近最多10次的平均值。高 Ping 或大幅波動可能導致停頓。背景分頁可能回應較慢。',
+  Disconnected: '已斷線',
+  Player: '玩家',
+  Direct: '直接連線',
+  Unknown: '未知',
+  'Local pairs': '本機雙人',
+  Mesh: '網狀',
+  Star: '星狀',
+  'Measuring…': '測量中……',
+  'Waiting for peers': '等待其他玩家',
+  'Slowest required link': '必要連線的最高值',
+  Ping: 'Ping',
+  'Host physics': '房主模擬',
+  unavailable: '未取得',
+  'Open connection details. Ping is round-trip time.':
+    '開啟連線詳細資訊。Ping 為往返時間。',
+  'Via host · not directly measured': '經由房主，未直接測量',
+  'No response': '無回應',
+  Unavailable: '無法測量',
+  Stale: '測量已過期',
+  'Gameplay link': '遊戲使用的連線',
+  'Unused by host physics': '房主模擬未使用的連線',
+  'Via host': '經由房主',
+  'Waiting for host frame': '等待房主影格',
+  'Waiting for input': '等待輸入',
+  'No sustained input wait observed.': '未觀察到持續的輸入等待。',
+  'Host snapshots: input wait cannot be measured on guests.':
+    '房主快照模式：無法在訪客端測量輸入等待時間。',
+
   'Game versions do not match. Everyone must reload before joining this room.':
     '遊戲版本不相容。所有人必須重新整理頁面才能加入此房間。',
   'An update is available. Reload before creating, joining, or starting a match.':

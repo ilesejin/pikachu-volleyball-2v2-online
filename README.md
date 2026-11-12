@@ -126,3 +126,13 @@ The client checks the deployed manifest at startup, periodically while visible, 
 WebRTC admission requires matching build, protocol and engine metadata, including all human participants before match start. Missing metadata from older v5 clients is rejected in both directions. Compatibility is a client consistency check, not anti-cheat protection. Already-open clients from before this feature cannot gain the check until reloaded. Publish the complete frontend build, including `version.json`, and ask everyone to reload and create/join fresh rooms for this upgrade. No server redeployment or Firestore rule changes are required; these checks add no Firestore operations.
 
 Run the muted version integration checks after a development build with `$env:PIKA_VERSION_ONLY='1'; node tests/browser-online.cjs`. They use local signaling and version fixtures only.
+
+## Ping and connection diagnostics
+
+The lobby opens an original-style black diagnostics panel without a mandatory countdown. During play it collapses to a clickable ping indicator near the game menu. Five initial probes are spaced one second apart; later probes run every two seconds. Each connection retains up to ten RTT samples. The table shows their average and range, Direct/TURN/Unknown route, UDP/TCP when available, and missing/stale measurement status. Names and player positions identify browsers; local pairs share one link.
+
+Four-browser mesh rooms report all six links, using small WebRTC summaries through the host for links this browser cannot measure itself. Star guest-to-guest paths are labelled Via host and are not assigned invented direct RTT values. In host-only physics, unused guest-to-guest links remain visible but do not affect the slowest-required-link indicator. Missing responses are not treated as zero ping or packet-loss percentages. Selected ICE statistics determine route labels; IP addresses are not displayed or shared.
+
+Ping is an application round trip, including channel queues and browser scheduling, not exact keyboard-to-screen delay. A separate observer reports sustained missing-input waits (sampled every 100 ms, excluding pauses and ordinary pacing); star guests can identify waiting for a host frame, not which remote input the host lacks. Background tabs may respond slowly. Diagnostics do not affect physics/RNG, are excluded from replay recordings, and add no Firestore or Quick Match operations.
+
+For muted local WebRTC checks, build development assets, set `$env:PIKA_DIAGNOSTICS_ONLY='1'`, and run `node tests/browser-online.cjs`.
