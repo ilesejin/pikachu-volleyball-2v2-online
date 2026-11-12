@@ -30,7 +30,18 @@ export class Lockstep {
     this.sampled = 0;
     this.generation = 0;
     this.pending = new Map();
+    this.latest = new Map();
     this.paused = false;
+  }
+  canSampleAhead(ahead) {
+    if (!this.mesh) return true;
+    const peers = [...this.members.keys()].filter((id) => id !== this.selfId);
+    return (
+      !peers.length ||
+      this.sampled <=
+        Math.min(...peers.map((id) => this.latest.get(id) ?? this.frame)) +
+          ahead
+    );
   }
   sample(values) {
     if (this.paused || this.sampled >= this.frame + INPUT_WINDOW) return;
@@ -125,6 +136,7 @@ export class Lockstep {
         ...normalizeInput(input),
       }))
     );
+    this.latest.set(id, Math.max(this.latest.get(id) || 0, packet.frame));
     this.drain();
     return true;
   }
@@ -174,6 +186,7 @@ export class Lockstep {
     this.paused = paused;
     this.pending.clear();
     this.sampled = this.frame;
+    this.latest.clear();
     return true;
   }
 }

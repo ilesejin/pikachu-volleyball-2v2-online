@@ -1,3 +1,4 @@
+import { InputPacer } from './input_pacer.js';
 import {
   captureCheckpoint,
   restoreCheckpoint,
@@ -399,10 +400,15 @@ export class OnlineMatch {
     this.game.normalFPS = settings.fps;
     this.ticker.maxFPS = settings.fps;
     this.game.isPracticeMode = settings.practice;
-    if (this.lockstep) {
-      this.stopInputTimer();
-      this.inputTimer = setInterval(() => this.tick(true), 1000 / settings.fps);
-    }
+    this.restartInputPacing();
+  }
+  restartInputPacing() {
+    if (this.inputPacer && this.lockstep)
+      this.inputPacer.reset(
+        this.lockstep.generation,
+        this.settings.fps,
+        this.lockstep.paused
+      );
   }
   async updateLiveSettings(value) {
     if (!this.room || this.room.closed || !this.room.isHost || !this.epoch)
@@ -454,8 +460,8 @@ export class OnlineMatch {
     }
     this.game.paused = paused;
     if (this.phase !== 'finished') this.phase = paused ? 'paused' : 'playing';
-    this.applyLiveSettings(settings);
     driver.control(driver.generation + 1, paused);
+    this.applyLiveSettings(settings);
     this.room.broadcast({
       type: 'mesh-control',
       epoch: this.epoch,
@@ -541,6 +547,7 @@ export class OnlineMatch {
         paused: this.game.paused,
         frame: this.lockstep.frame,
       });
+      this.restartInputPacing();
     } else this.sendState();
     this.notify();
   }
@@ -555,6 +562,8 @@ export class OnlineMatch {
   stopInputTimer() {
     clearInterval(this.inputTimer);
     this.inputTimer = null;
+    if (this.inputPacer) this.inputPacer.stop();
+    this.inputPacer = null;
   }
   initialize(settings, members) {
     this.stopInputTimer();
@@ -599,8 +608,22 @@ export class OnlineMatch {
       early.forEach(({ id, message }) => {
         if (message.epoch === this.epoch) this.lockstep.receive(id, message);
       });
-      // Background tabs may suspend requestAnimationFrame, so sample inputs separately.
-      this.inputTimer = setInterval(() => this.tick(true), 1000 / settings.fps);
+      // A ready barrier and host-aligned deadlines prevent independent interval
+      // phases from giving one browser a consistently deeper local input queue.
+      this.inputPacer = new InputPacer({
+        epoch: this.epoch,
+        selfId: this.room.selfId,
+        hostId: this.room.data.hostId,
+        members: () => [...this.lockstep.members.keys()],
+        send: (id, packet) => this.room.send(id, packet),
+        sample: () => this.tick(true),
+        canSample: (ahead) => this.lockstep.canSampleAhead(ahead),
+        peers: () =>
+          this.lockstep.mesh
+            ? [...this.lockstep.members.keys()]
+            : [this.room.data.hostId],
+      });
+      this.restartInputPacing();
     }
   }
   step() {
@@ -626,7 +649,8 @@ export class OnlineMatch {
     if (
       this.lockstep &&
       (this.phase !== 'playing' ||
-        this.lockstep.sampled >= this.lockstep.frame + INPUT_WINDOW)
+        this.lockstep.sampled >= this.lockstep.frame + INPUT_WINDOW ||
+        (this.inputPacer && !this.inputPacer.readyToSample()))
     )
       return;
     const typing =
@@ -682,6 +706,7 @@ export class OnlineMatch {
   }
   message(id, message) {
     if (!this.room || this.room.closed) return;
+    if (this.inputPacer?.receive(id, message)) return;
     if (
       message.type === 'frame-input' &&
       message.epoch !== this.epoch &&
@@ -725,6 +750,7 @@ export class OnlineMatch {
         )
           return;
         if (settings) this.applyLiveSettings(settings);
+        else this.restartInputPacing();
         this.game.paused = message.paused;
         if (this.phase !== 'finished')
           this.phase = message.paused ? 'paused' : 'playing';

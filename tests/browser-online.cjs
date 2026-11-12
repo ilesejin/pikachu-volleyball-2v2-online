@@ -538,6 +538,9 @@ async function click(page, id) {
       JSON.stringify(id) +
       ');if(button.disabled)return false;button.click();return true;})()'
   );
+  // Leaving a hosted lobby includes an asynchronous rendezvous cleanup.
+  if (id === 'leave')
+    await page.until('!document.getElementById("create").disabled');
 }
 async function join(page, roomId, slot) {
   assert.equal(await page.ev('document.getElementById("find") === null'), true);
@@ -666,6 +669,84 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_INPUT_PACING_ONLY) {
+    const guest = await tab(port);
+    // A delayed begin reproduces a host starting its interval before the guest.
+    // Both clock probes and gameplay inputs traverse the same delayed transport.
+    for (const page of [host, guest])
+      await page.ev(`(()=>{
+      const room=__volley.room,send=room.send.bind(room);
+      room.send=(id,packet,drop)=>{
+        const delay=packet.type==='begin'?30:10;
+        setTimeout(()=>send(id,packet,drop),delay);return true;
+      };
+      const s=__volley.session,init=s.initialize;
+      s.initialize=function(...args){
+        const result=init.apply(this,args),d=this.lockstep;
+        if(window.legacyTiming){this.inputPacer.stop();this.inputPacer=null;this.inputTimer=setInterval(()=>this.tick(true),1000/this.settings.fps);}
+        const times=new Map(),sample=d.sample,advance=d.advance;
+        window.timing={age:[],lead:[],step:[]};
+        d.sample=function(v){times.set(this.sampled+1,performance.now());timing.lead.push(this.sampled-this.frame);return sample.call(this,v);};
+        d.advance=function(v,h,f){const at=performance.now();if(times.has(f))timing.age.push(at-times.get(f));const result=advance.call(this,v,h,f);timing.step.push(performance.now()-at);return result;};
+        return result;
+      };
+      document.getElementById('auto-save-replay-checkbox').checked=false;
+      document.getElementById('auto-save-replay-checkbox').dispatchEvent(new Event('change'));
+    })()`);
+    const results = [];
+    for (const legacy of [true, false]) {
+      for (const page of [host, guest])
+        await page.ev('window.legacyTiming=' + legacy + ';window.timing=null');
+      await click(host, 'create');
+      await host.until('!__volley.room.closed');
+      await selectSlot(host, '0');
+      await join(guest, await host.ev('__volley.room.id'), '2');
+      await host.until('!document.getElementById("start").disabled');
+      await click(host, 'start');
+      for (const page of [host, guest])
+        await page.until('window.timing?.age.length>100');
+      const stats = `(()=>{const average=a=>a.slice(20).reduce((s,n)=>s+n,0)/(a.length-20);return {age:average(timing.age),lead:average(timing.lead),physics:average(timing.step)}})()`;
+      const result = {
+        legacy,
+        host: await host.ev(stats),
+        guest: await guest.ev(stats),
+      };
+      results.push(result);
+      console.log('Input pacing measurement:', JSON.stringify(result));
+      await assertSameSimulation(host, [guest]);
+      if (!legacy) {
+        const before = await host.ev('__volley.session.lastFrame');
+        await click(host, 'pause');
+        await guest.until('!__volley.game.paused');
+        await host.until('__volley.session.lastFrame>' + String(before + 20));
+        await assertSameSimulation(host, [guest]);
+      }
+      await click(guest, 'leave');
+      await click(host, 'leave');
+    }
+    // Exact latency depends on browser scheduling. Deterministic clock-skew tests
+    // enforce fairness; this real-browser check also guards against added backlog.
+    assert.equal(
+      await host.ev(
+        'JSON.stringify(__volley.session.replay.pack).includes("pacing-")'
+      ),
+      false
+    );
+    const paced = results[1];
+    assert.ok(
+      paced.host.lead < 1.5 && paced.guest.lead < 1.5,
+      'Aligned sampling should not keep two-frame local backlogs'
+    );
+    assert.ok(
+      paced.host.age < 100 && paced.guest.age < 100,
+      'Local fixture should not acquire a fixed three-frame input delay'
+    );
+    assert.deepEqual(errors, []);
+    console.log(
+      'Input pacing: old/new timing, delayed startup, identical physics, pause/resume and bounded latency passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_DUO_ABORT_ONLY) {
     const guest = await tab(port, 'ko');
     for (const mode of ['lockstep', 'host']) {
