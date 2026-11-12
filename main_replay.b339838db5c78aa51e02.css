@@ -1,0 +1,96 @@
+#doubles-names {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  z-index: 3;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+#doubles-names span {
+  background: rgba(255, 255, 255, 0.8);
+  color: #111;
+  padding: 2px 4px;
+}
+#doubles-chat {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+#doubles-chat .chat-box {
+  display: block;
+  position: absolute;
+  width: max-content;
+  max-width: 40%;
+}
+#doubles-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+}
+.replay-player-input {
+  font-family: monospace;
+  padding: 0.4rem;
+  border: 1px solid currentColor;
+}
+#replay-session-info {
+  font-size: 0.85rem;
+  margin: 0.4rem 0;
+}
+
+#keyboard-container .grid-for-keyboard[hidden],
+.nicknames-container[hidden] {
+  display: none;
+}
+#doubles-keys {
+  width: 100%;
+  align-items: center;
+}
+.replay-player-input {
+  min-width: 7rem;
+  text-align: center;
+}
+.replay-navigation {
+  text-align: center;
+}
+
+#doubles-keys .replay-player-input {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+}
+.replay-keypad-label {
+  text-align: center;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+.replay-key-hit {
+  grid-row: 1;
+  grid-column: 1;
+}
+.replay-key-up {
+  grid-row: 1;
+  grid-column: 3;
+}
+.replay-key-left {
+  grid-row: 2;
+  grid-column: 2;
+}
+.replay-key-down {
+  grid-row: 2;
+  grid-column: 3;
+}
+.replay-key-right {
+  grid-row: 2;
+  grid-column: 4;
+}
+.replay-keypad.unavailable {
+  opacity: 0.45;
+}
+
+
+/*# sourceMappingURL=main_replay.b339838db5c78aa51e02.css.map*/

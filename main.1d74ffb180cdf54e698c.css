@@ -224,6 +224,7 @@
   margin-top: 10px;
 }
 #chat-log {
+  list-style: none;
   max-height: 160px;
   overflow-y: auto;
   padding-left: 24px;
@@ -406,4 +407,4 @@ select:focus-visible {
 }
 
 
-/*# sourceMappingURL=main.ad2849cd9e92fb435a10.css.map*/
+/*# sourceMappingURL=main.1d74ffb180cdf54e698c.css.map*/
