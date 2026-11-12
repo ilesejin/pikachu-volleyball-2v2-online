@@ -103,3 +103,9 @@ Keep the offline checkout at `../pikachu-volleyball-2v2`, or set `$env:PIKA_OFFL
 Without the default sibling checkout, a fresh clone or CI build verifies the manifest and builds the committed snapshot. It cannot fetch future offline edits automatically. A configured-but-missing source or a corrupt snapshot stops the build. Redeploy the frontend after engine changes; this synchronization does not publish anything or modify Firebase configuration.
 
 Page templates: edit `src/en/index.html`, `src/ko/index.html`, or `src/zh/index.html` for the English, Korean, or Traditional Chinese online UI. `npm run build` creates the corresponding language directories in `dist/`.
+
+## Publishing client compatibility updates
+
+Run `npm run deploy` from the online repository to build and publish the whole frontend, including root `version.json`. The version file and JavaScript must come from the same build. Its protocol and engine metadata are exchanged over WebRTC, so the Quick Match server and Firestore rules do not need changes for this feature.
+
+Participants must reload after this first upgrade: pre-feature tabs cannot detect updates themselves. New clients reject older clients with missing compatibility metadata. Future stale tabs display an update notice and block new rooms/starts; active games are preserved. A failed version-file request blocks the attempted connection/start until a successful retry. Reloading retains local names and preferences. GitHub Pages propagation can briefly expose different release files; wait and reload if the update notice persists immediately after deployment.

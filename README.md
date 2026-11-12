@@ -116,3 +116,13 @@ Submitting an empty or whitespace-only chat closes the chat input without sendin
 The active page templates are `src/en/index.html`, `src/ko/index.html`, and `src/zh/index.html`. The build publishes them as `/en/`, `/ko/`, and `/zh/`; the old duplicate templates have been removed. Credits, related-version links, source links, release placeholders, and update-history pages match the offline 2v2 edition.
 
 The default game speed is **Fast (30 FPS)**. Each browser remembers its first nickname using the original P2P `myNickname` localStorage key and its second local-player name using `mySecondNickname`. Names restore after reopening, including names saved in the lobby. Room membership and per-tab identity are not restored.
+
+## Client updates and compatibility
+
+Each build emits `version.json` and embeds the same build ID, protocol, and SHA-256 engine fingerprint in the client. The ID includes the Git revision and a content hash, so uncommitted source changes also produce a different build. The small build label appears below the connection status; its tooltip includes the engine fingerprint.
+
+The client checks the deployed manifest at startup, periodically while visible, when returning to the tab, and before creating/joining rooms or starting/restarting a match. Checks bypass browser caching and use a unique query string. An outdated client shows **Reload to update** and blocks new admission/start; if the manifest cannot be checked, the attempted action fails with a retry message. Existing matches continue. Reloading from a room requires confirmation, leaves the room, and requests a fresh page without deleting saved names/settings.
+
+WebRTC admission requires matching build, protocol and engine metadata, including all human participants before match start. Missing metadata from older v5 clients is rejected in both directions. Compatibility is a client consistency check, not anti-cheat protection. Already-open clients from before this feature cannot gain the check until reloaded. Publish the complete frontend build, including `version.json`, and ask everyone to reload and create/join fresh rooms for this upgrade. No server redeployment or Firestore rule changes are required; these checks add no Firestore operations.
+
+Run the muted version integration checks after a development build with `$env:PIKA_VERSION_ONLY='1'; node tests/browser-online.cjs`. They use local signaling and version fixtures only.

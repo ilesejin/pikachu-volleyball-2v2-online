@@ -405,3 +405,23 @@ select:focus-visible {
   color: var(--color);
   background: var(--background-color);
 }
+
+#client-version {
+  max-width: 864px;
+  margin: 8px auto;
+  padding: 0 18px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+#client-version small {
+  opacity: 0.7;
+}
+#client-version p:empty {
+  display: none;
+}
+#client-version p {
+  margin: 6px 0;
+}
+#reload-client {
+  margin-bottom: 8px;
+}

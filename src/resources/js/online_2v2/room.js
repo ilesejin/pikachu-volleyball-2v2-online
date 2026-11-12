@@ -1,3 +1,4 @@
+import { CLIENT_VERSION } from './client_version.js';
 import { SignalingStore } from './signaling_store.js';
 import { LobbyStore } from './lobby_store.js';
 import { RelaySignaling } from './relay_signaling.js';
@@ -45,6 +46,7 @@ export class OnlineRoom {
   }
   async create(name, layout, slots, settings) {
     if (!this.closed) throw new Error('Leave the current room first.');
+    await this.callbacks.beforeConnect?.();
     if (this.transport.identity) this.selfId = await this.transport.identity();
     this.departed.clear();
     this.closed = false;
@@ -68,6 +70,7 @@ export class OnlineRoom {
   }
   async join(id, name, slots, expectedHost) {
     if (!this.closed) throw new Error('Leave the current room first.');
+    await this.callbacks.beforeConnect?.();
     if (!/^[a-z0-9]{20}$/.test(id))
       throw new Error('Enter a valid 20-character room ID.');
     if (this.transport.identity) this.selfId = await this.transport.identity();
@@ -91,7 +94,7 @@ export class OnlineRoom {
           [this.selfId]: { slots: [], connected: false },
         },
       };
-      this.joinDetails = { name, slots };
+      this.joinDetails = { name, slots, compatibility: CLIENT_VERSION };
       const admitted = new Promise((resolve, reject) => {
         this.joinResolve = resolve;
         this.joinReject = reject;

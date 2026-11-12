@@ -1,4 +1,5 @@
 const path = require('path');
+const { ClientVersionPlugin } = require('./scripts/client-version.cjs');
 const { OfflineEnginePlugin } = require('./scripts/sync-offline-engine.cjs');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
@@ -37,6 +38,7 @@ module.exports = {
   },
   plugins: [
     new OfflineEnginePlugin(),
+    new ClientVersionPlugin(),
     new CleanWebpackPlugin(),
     new CopyPlugin({
       patterns: [

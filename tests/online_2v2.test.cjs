@@ -1,4 +1,5 @@
-'use strict';
+const clientVersion = require('./client-version-fixture.cjs');
+('use strict');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -137,6 +138,7 @@ function fakeStore() {
   const documents = new Map(),
     rooms = new Map();
   const { LobbyStore } = load('online_2v2/lobby_store.js', ['LobbyStore'], {
+    ...clientVersion,
     ...protocol,
     setTimeout,
     clearTimeout,
@@ -165,7 +167,11 @@ function fakeStore() {
       return room.data;
     },
     claim(id, clientId, name, slots) {
-      return entry(id).lobby.enqueue(clientId, 'claim', { name, slots });
+      return entry(id).lobby.enqueue(clientId, 'claim', {
+        name,
+        slots,
+        compatibility: clientVersion.CLIENT_VERSION,
+      });
     },
     selectSlots(id, clientId, slots) {
       return entry(id).lobby.enqueue(clientId, 'selectSlots', { slots });

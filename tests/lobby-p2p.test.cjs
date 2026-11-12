@@ -1,3 +1,4 @@
+const clientVersion = require('./client-version-fixture.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -28,6 +29,7 @@ const protocol = load(
   { DOUBLES_CONFIG, crypto: require('node:crypto').webcrypto }
 );
 const { LobbyStore } = load('online_2v2/lobby_store.js', ['LobbyStore'], {
+  ...clientVersion,
   ...protocol,
   setTimeout,
   clearTimeout,
@@ -54,8 +56,16 @@ async function fixture(layout = 'four') {
 }
 test('host serializes competing selections and all ordinary lobby edits avoid signaling storage', async () => {
   const { room, store, calls } = await fixture();
-  await store.enqueue('a', 'claim', { name: 'A', slots: [] });
-  await store.enqueue('b', 'claim', { name: 'B', slots: [] });
+  await store.enqueue('a', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'A',
+    slots: [],
+  });
+  await store.enqueue('b', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'B',
+    slots: [],
+  });
   const results = await Promise.allSettled([
     store.enqueue('a', 'selectSlots', { slots: [1] }),
     store.enqueue('b', 'selectSlots', { slots: [1] }),
@@ -74,7 +84,11 @@ test('host serializes competing selections and all ordinary lobby edits avoid si
 });
 test('guest requests cannot edit another identity or run host-only actions', async () => {
   const { room, store } = await fixture();
-  await store.enqueue('guest', 'claim', { name: 'Guest', slots: [] });
+  await store.enqueue('guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'Guest',
+    slots: [],
+  });
   for (const action of [
     'beginMatch',
     'update',
@@ -92,11 +106,23 @@ test('guest requests cannot edit another identity or run host-only actions', asy
 test('pair admission preserves teams, limits capacity, and locks selection during play', async () => {
   const { room, store, calls } = await fixture('pairs');
   await assert.rejects(
-    store.enqueue('bad', 'claim', { name: 'Bad', slots: [0, 2] })
+    store.enqueue('bad', 'claim', {
+      compatibility: clientVersion.CLIENT_VERSION,
+      name: 'Bad',
+      slots: [0, 2],
+    })
   );
-  await store.enqueue('guest', 'claim', { name: ['A', 'B'], slots: [2, 3] });
+  await store.enqueue('guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: ['A', 'B'],
+    slots: [2, 3],
+  });
   await assert.rejects(
-    store.enqueue('late', 'claim', { name: 'Late', slots: [] }),
+    store.enqueue('late', 'claim', {
+      compatibility: clientVersion.CLIENT_VERSION,
+      name: 'Late',
+      slots: [],
+    }),
     /full/
   );
   await store.selectSlots('room', 'host', [0, 1]);
@@ -165,7 +191,11 @@ test('queued work from a departed room cannot change a newly created lobby', asy
   store.tail = new Promise((resolve) => {
     release = resolve;
   });
-  const old = store.enqueue('old-guest', 'claim', { name: 'Old', slots: [] });
+  const old = store.enqueue('old-guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'Old',
+    slots: [],
+  });
   store.shutdown();
   room.data = await store.create(
     'new-room',
@@ -179,4 +209,87 @@ test('queued work from a departed room cannot change a newly created lobby', asy
   await assert.rejects(old, /closed/);
   assert.deepEqual(Object.keys(room.data.members), ['host']);
   assert.equal(room.data.members.host.name, 'New Host');
+});
+
+test('legacy and mismatched guest admission cannot change the lobby, and mismatched rosters cannot start', async () => {
+  const { room, store } = await fixture();
+  const initial = JSON.stringify(room.data);
+  for (const compatibility of [
+    undefined,
+    { ...clientVersion.CLIENT_VERSION, build: 'old' },
+    { ...clientVersion.CLIENT_VERSION, engine: 'other' },
+  ]) {
+    await assert.rejects(
+      store.enqueue('guest', 'claim', {
+        name: 'Guest',
+        slots: [],
+        compatibility,
+      }),
+      /versions do not match/
+    );
+    assert.equal(JSON.stringify(room.data), initial);
+  }
+  await store.enqueue('guest', 'claim', {
+    name: 'Guest',
+    slots: [],
+    compatibility: clientVersion.CLIENT_VERSION,
+  });
+  await store.randomizeSlots();
+  room.data.members.guest.connected = true;
+  room.data.members.guest.compatibility = {
+    ...clientVersion.CLIENT_VERSION,
+    engine: 'wrong',
+  };
+  await assert.rejects(
+    store.beginMatch('room', 'host', {}),
+    /versions do not match/
+  );
+  assert.equal(room.data.status, 'lobby');
+});
+
+test('a new guest rejects an old host lobby response rather than accepting missing compatibility', async () => {
+  let accepted = false,
+    rejected = false,
+    ended = false;
+  const room = {
+    isHost: false,
+    selfId: 'guest',
+    data: { hostId: 'host' },
+    acceptData() {
+      accepted = true;
+    },
+    joinReject() {
+      rejected = true;
+    },
+    fail() {},
+    shutdown() {
+      ended = true;
+    },
+    emit() {},
+  };
+  const store = new LobbyStore(room);
+  let error;
+  store.pending.set('1', {
+    timer: null,
+    reject: (value) => {
+      error = value;
+    },
+    resolve() {
+      accepted = true;
+    },
+  });
+  store.receive('host', {
+    type: 'lobby-response',
+    request: '1',
+    data: { schema: protocol.ROOM_SCHEMA, members: { host: {}, guest: {} } },
+  });
+  assert.match(error.message, /versions do not match/);
+  assert.equal(accepted, false);
+  store.receive('host', {
+    type: 'lobby-state',
+    data: { schema: protocol.ROOM_SCHEMA, members: { host: {}, guest: {} } },
+  });
+  assert.equal(rejected, true);
+  assert.equal(ended, true);
+  assert.equal(accepted, false);
 });

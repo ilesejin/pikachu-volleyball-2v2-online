@@ -1,5 +1,16 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Game versions do not match. Everyone must reload before joining this room.':
+    '遊戲版本不相容。所有人必須重新整理頁面才能加入此房間。',
+  'An update is available. Reload before creating, joining, or starting a match.':
+    '有可用更新。建立、加入房間或開始比賽前，請重新整理頁面。',
+  'Could not check for updates. Check your connection and try again.':
+    '無法檢查更新。請確認網路連線後再試一次。',
+  'Reload to update': '重新整理以更新',
+  'Build: ': '版本：',
+  'Reloading will leave this room. Continue?':
+    '重新整理會離開此房間。是否繼續？',
+
   'Changing connections returns everyone to the lobby.':
     '變更連線方式將讓所有玩家返回大廳。',
   'The current match will continue.': '目前的比賽將繼續進行。',
@@ -141,6 +152,13 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'Game versions do not match. Everyone must reload before joining this room.':
+    '게임 버전이 일치하지 않습니다. 모두 새로고침한 후 방에 참가하세요.',
+  'An update is available. Reload before creating, joining, or starting a match.':
+    '새 업데이트가 있습니다. 방 생성·참가 또는 경기 시작 전에 새로고침하세요.',
+  'Could not check for updates. Check your connection and try again.':
+    '업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 후 다시 시도하세요.',
+
   'Replay saved. Guest recordings may be partial.':
     '리플레이를 저장했습니다. 게스트 기록은 일부만 포함할 수 있습니다.',
   'Host replay saved.': '방장 리플레이를 저장했습니다.',

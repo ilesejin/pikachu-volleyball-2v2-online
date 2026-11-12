@@ -235,7 +235,15 @@ const types = {
   '.mp3': 'audio/mpeg',
 };
 let matchmakingApp;
+let versionResponse = null;
 const server = http.createServer(async (req, res) => {
+  if (req.url.split('?')[0] === '/version.json' && versionResponse) {
+    res.writeHead(versionResponse.status, {
+      'content-type': 'application/json',
+    });
+    res.end(JSON.stringify(versionResponse.data));
+    return;
+  }
   if (req.url === '/v2/match' && matchmakingApp)
     return matchmakingApp(req, res);
   if (req.url === '/__test_signaling' && req.method === 'POST') {
@@ -654,6 +662,135 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_VERSION_ONLY) {
+    const current = JSON.parse(
+      fs.readFileSync(path.join(root, 'version.json'), 'utf8')
+    );
+    await host.ev('__volley.updates.ensureCurrent()');
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    assert.deepEqual(await host.ev('__volley.version'), current);
+    assert.ok(
+      await host.ev(
+        'document.getElementById("client-version").textContent.includes(__volley.version.build)'
+      )
+    );
+    versionResponse = {
+      status: 200,
+      data: { ...current, build: 'new-deployment' },
+    };
+    await host.ev('__volley.updates.check()');
+    assert.equal(
+      await host.ev('document.getElementById("create").disabled'),
+      true
+    );
+    assert.equal(
+      await host.ev('document.getElementById("quick-match").disabled'),
+      true
+    );
+    assert.equal(
+      await host.ev('document.getElementById("join").disabled'),
+      true
+    );
+    assert.equal(
+      await host.ev('document.getElementById("reload-client").hidden'),
+      false
+    );
+    assert.equal(
+      await host.ev(
+        '__volley.updates.ensureCurrent().then(()=>false,()=>true)'
+      ),
+      true
+    );
+    assert.equal(rooms.size, 0);
+    versionResponse = { status: 503, data: {} };
+    assert.equal(await host.ev('__volley.updates.check()'), 'outdated');
+    versionResponse = null;
+    await host.ev('__volley.updates.ensureCurrent()');
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    const id = await host.ev('__volley.room.id');
+    const guest = await tab(port);
+    await guest.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    await guest.ev(
+      'window.originalLobbyRequest=__volley.room.store.request.bind(__volley.room.store);__volley.room.store.request=(action,args)=>originalLobbyRequest(action,action==="claim"?{...args,compatibility:{...__volley.version,engine:"different"}}:args)'
+    );
+    await guest.ev(
+      'document.getElementById("room-id").value=' + JSON.stringify(id)
+    );
+    await click(guest, 'join');
+    await guest.until(
+      'document.getElementById("status").textContent.includes("versions do not match")'
+    );
+    assert.equal(await guest.ev('__volley.room.closed'), true);
+    assert.equal(
+      await host.ev('Object.keys(__volley.room.data.members).length'),
+      1
+    );
+    await guest.ev('__volley.room.store.request=window.originalLobbyRequest');
+    await join(guest, id, '1');
+    await selectSlot(host, '0');
+    await host.until(
+      '__volley.room.ready() && !document.getElementById("start").disabled'
+    );
+    await click(host, 'start');
+    await host.until('__volley.session.lastFrame>35');
+    const epoch = await host.ev('__volley.session.epoch');
+    const frame = await host.ev('__volley.session.lastFrame');
+    versionResponse = {
+      status: 200,
+      data: { ...current, build: 'another-deployment' },
+    };
+    await host.ev('__volley.updates.check()');
+    await guest.ev('__volley.updates.check()');
+    await host.until(
+      '__volley.session.lastFrame>' + JSON.stringify(frame + 10)
+    );
+    assert.equal(await host.ev('__volley.session.epoch'), epoch);
+    assert.equal(await guest.ev('__volley.session.phase'), 'playing');
+    assert.equal(
+      await host.ev('document.getElementById("reload-client").hidden'),
+      false
+    );
+    await click(host, 'options-dropdown-btn');
+    await click(host, 'court-submenu-btn');
+    await host.ev('document.getElementById("court-width").value=384');
+    await click(host, 'settings-apply');
+    await click(host, 'settings-confirm-yes');
+    await host.until(
+      'document.getElementById("status").textContent.includes("update is available")'
+    );
+    assert.equal(await host.ev('__volley.session.epoch'), epoch);
+    await screenshot(host, 'version-update-active-match.png');
+    versionResponse = null;
+    await click(guest, 'leave');
+    await click(host, 'leave');
+    await host.ev(
+      'document.getElementById("nickname").value="Update Tester";document.getElementById("nickname").dispatchEvent(new Event("input"));window.__reloadMarker=true'
+    );
+    versionResponse = {
+      status: 200,
+      data: { ...current, build: 'reload-test' },
+    };
+    await host.ev('__volley.updates.check()');
+    await click(host, 'reload-client');
+    await host.until(
+      '!window.__reloadMarker && !!window.__volley && location.search.includes("client-update=")'
+    );
+    assert.equal(
+      await host.ev('document.getElementById("nickname").value'),
+      'Update Tester'
+    );
+    versionResponse = null;
+    await host.ev('__volley.updates.ensureCurrent()');
+    console.log(
+      'Version checks: generated build/engine metadata, stale admission blocking, fetch failure, recovery, mismatched guest rejection, settings-restart blocking, nickname-preserving reload, and uninterrupted active matches passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_REPLAY_ONLY) {
     await host.send('Page.navigate', {
       url: `http://127.0.0.1:${server.address().port}/en`,

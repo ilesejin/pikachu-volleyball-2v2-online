@@ -1,3 +1,10 @@
+import {
+  CLIENT_VERSION,
+  ClientUpdates,
+  VERSION_MISMATCH,
+  UPDATE_REQUIRED,
+  UPDATE_CHECK_FAILED,
+} from './client_version.js';
 import { normalizeLanguageDirectory } from './page_route.js';
 import { loadPlayerNames, savePlayerName } from './preferences.js';
 import { translate, translateMessage } from './i18n.js';
@@ -56,7 +63,70 @@ let classicUI,
   room,
   session,
   game,
+  updates,
+  versionMessage,
+  reloadButton,
   busy = false;
+function setUpUpdates() {
+  const panel = document.createElement('aside');
+  panel.id = 'client-version';
+  const build = document.createElement('small');
+  build.textContent = text('Build: ', '빌드: ') + CLIENT_VERSION.build;
+  build.title = 'Engine: ' + CLIENT_VERSION.engine;
+  versionMessage = document.createElement('p');
+  versionMessage.setAttribute('role', 'status');
+  reloadButton = document.createElement('button');
+  reloadButton.type = 'button';
+  reloadButton.id = 'reload-client';
+  reloadButton.textContent = text('Reload to update', '새로고침하여 업데이트');
+  reloadButton.hidden = true;
+  panel.append(build, versionMessage, reloadButton);
+  $('status').insertAdjacentElement('afterend', panel);
+  updates = new ClientUpdates({
+    url: new URL('../version.json', location.href),
+    changed: (state) => {
+      versionMessage.textContent =
+        state === 'outdated'
+          ? translateMessage(UPDATE_REQUIRED)
+          : state === 'unavailable'
+          ? translateMessage(UPDATE_CHECK_FAILED)
+          : '';
+      reloadButton.hidden = state !== 'outdated';
+      if (session) update();
+    },
+  });
+  reloadButton.addEventListener('click', () => {
+    if (
+      room &&
+      !room.closed &&
+      !window.confirm(
+        text(
+          'Reloading will leave this room. Continue?',
+          '새로고침하면 현재 방에서 나갑니다. 계속하시겠습니까?'
+        )
+      )
+    )
+      return;
+    run(async () => {
+      if (quickMatch?.active) await quickMatch.stop();
+      session?.stop();
+      if (room && !room.closed) await room.leave();
+      const reloadURL = new URL(location.href);
+      reloadURL.searchParams.set('client-update', String(Date.now()));
+      location.replace(reloadURL.href);
+    });
+  });
+  let lastCheck = 0;
+  const refresh = () => {
+    if (document.hidden || Date.now() - lastCheck < 60000) return;
+    lastCheck = Date.now();
+    updates.check();
+  };
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('focus', refresh);
+  setInterval(refresh, 5 * 60 * 1000);
+  refresh();
+}
 function settingsFromForm() {
   return matchSettings({
     courtWidth: $('court-width').value,
@@ -97,7 +167,10 @@ function update(error) {
   if (session && session.replay) session.replay.update();
   if (error) status(error.message || String(error), true);
   $('quick-match').disabled =
-    busy || !matchmakingURL || !!(quickMatch && quickMatch.active);
+    busy ||
+    updates?.state === 'outdated' ||
+    !matchmakingURL ||
+    !!(quickMatch && quickMatch.active);
   $('cancel-search').hidden = !quickMatch || !quickMatch.active || !room.closed;
   if (!room || room.closed) {
     $('connect-panel').hidden = false;
@@ -105,13 +178,14 @@ function update(error) {
     $('host-panel').hidden = true;
     $('local-panel').hidden = true;
     $('game-panel').hidden = true;
-    $('create').disabled = busy;
-    $('join').disabled = busy;
+    $('create').disabled = busy || updates?.state === 'outdated';
+    $('join').disabled = busy || updates?.state === 'outdated';
     if (classicUI) classicUI.update();
     return;
   }
   $('start').disabled =
     busy ||
+    updates?.state === 'outdated' ||
     !lobbyReady(room.data) ||
     !room.ready() ||
     Object.values(room.data.members).some((member) => !member.connected) ||
@@ -211,6 +285,10 @@ async function run(action) {
     await action();
   } catch (error) {
     status(error.message || String(error), true);
+    if (error.message === VERSION_MISMATCH) {
+      versionMessage.textContent = translateMessage(VERSION_MISMATCH);
+      reloadButton.hidden = false;
+    }
   } finally {
     busy = false;
     update();
@@ -219,6 +297,7 @@ async function run(action) {
 function makeRoom(store) {
   return new OnlineRoom(
     {
+      beforeConnect: () => updates.ensureCurrent(),
       networkReset: () => session.stop(),
       change: () => {
         if (session.epoch && room.data.status === 'lobby') session.stop();
@@ -252,13 +331,20 @@ function makeRoom(store) {
         );
         update();
       },
-      error: (error) => status(error.message || String(error), true),
+      error: (error) => {
+        status(error.message || String(error), true);
+        if (error.message === VERSION_MISMATCH) {
+          versionMessage.textContent = translateMessage(VERSION_MISMATCH);
+          reloadButton.hidden = false;
+        }
+      },
     },
     store
   );
 }
 
 async function boot() {
+  setUpUpdates();
   const savedNames = loadPlayerNames();
   ['nickname', 'pair-name'].forEach((id, index) => {
     if (savedNames[index] !== null) $(id).value = savedNames[index];
@@ -384,7 +470,7 @@ async function boot() {
   });
   ticker.start();
   if (process.env.NODE_ENV === 'development')
-    window.__volley = { game, session, room };
+    window.__volley = { game, session, room, updates, version: CLIENT_VERSION };
   classicUI = setUpClassicUI({
     room,
     session,
@@ -399,7 +485,10 @@ async function boot() {
         } else if (session.epoch) {
           if (canUpdateLive(session.settings, checked))
             await session.updateLiveSettings(checked);
-          else await session.start(checked);
+          else {
+            await updates.ensureCurrent();
+            await session.start(checked);
+          }
         }
         updateSettingsForm(checked);
         status(text('Game options applied.', '경기 설정을 적용했습니다.'));
@@ -422,6 +511,7 @@ async function boot() {
   });
   $('quick-match').addEventListener('click', () =>
     run(async () => {
+      await updates.ensureCurrent();
       await quickMatch.start({
         name: namesFromForm(),
         layout: $('layout').value,
@@ -491,6 +581,7 @@ async function boot() {
   );
   $('start').addEventListener('click', () =>
     run(async () => {
+      await updates.ensureCurrent();
       if (!$('fill-ai').checked && room.data.seats.some((owner) => !owner))
         throw new Error(
           text(

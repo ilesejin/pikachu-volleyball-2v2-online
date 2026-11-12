@@ -1,4 +1,9 @@
 import {
+  CLIENT_VERSION,
+  assertCompatible,
+  assertRoomCompatible,
+} from './client_version.js';
+import {
   ROOM_SCHEMA,
   validSlots,
   playerNames,
@@ -22,13 +27,22 @@ export class LobbyStore {
     const names = playerNames(name, layout);
     const data = {
       schema: ROOM_SCHEMA,
+      compatibility: CLIENT_VERSION,
       hostId,
       layout,
       settings: matchSettings(settings),
       status: 'lobby',
       networkRevision: 0,
       stateVersion: 0,
-      members: { [hostId]: { name: names[0], names, slots, connected: true } },
+      members: {
+        [hostId]: {
+          name: names[0],
+          names,
+          slots,
+          connected: true,
+          compatibility: CLIENT_VERSION,
+        },
+      },
       seats: [0, 1, 2, 3].map((slot) => (slots.includes(slot) ? hostId : '')),
     };
     await this.room.transport.publish(id, data);
@@ -87,6 +101,8 @@ export class LobbyStore {
     )
       throw new Error('This action is only available in the lobby.');
     if (action === 'claim') {
+      assertCompatible(args.compatibility);
+      assertRoomCompatible(data);
       if (data.members[actor])
         throw new Error('This tab already joined the room.');
       if (Object.keys(data.members).length >= (data.layout === 'pairs' ? 2 : 4))
@@ -94,6 +110,7 @@ export class LobbyStore {
       const names = playerNames(args.name, data.layout);
       data.members[actor] = {
         name: names[0],
+        compatibility: args.compatibility,
         names,
         slots: [],
         connected: false,
@@ -132,6 +149,7 @@ export class LobbyStore {
       if (data.members[args.clientId].connected === args.value) return data;
       data.members[args.clientId].connected = args.value;
     } else if (action === 'beginMatch') {
+      assertRoomCompatible(data);
       if (!lobbyReady(data))
         throw new Error(
           'Every joined player must select a slot before starting.'
@@ -198,6 +216,15 @@ export class LobbyStore {
         id === room.data.hostId &&
         message.data?.schema === ROOM_SCHEMA
       ) {
+        try {
+          assertRoomCompatible(message.data);
+        } catch (error) {
+          room.joinReject?.(error);
+          room.fail(error);
+          room.shutdown();
+          room.emit('ended');
+          return true;
+        }
         if (!message.data.members[room.selfId]) {
           room.shutdown();
           room.emit('ended');
@@ -239,8 +266,13 @@ export class LobbyStore {
           this.pending.delete(message.request);
           if (message.error) pending.reject(new Error(message.error));
           else {
-            room.acceptData(message.data);
-            pending.resolve(message.data);
+            try {
+              assertRoomCompatible(message.data);
+              room.acceptData(message.data);
+              pending.resolve(message.data);
+            } catch (error) {
+              pending.reject(error);
+            }
           }
         }
       }
