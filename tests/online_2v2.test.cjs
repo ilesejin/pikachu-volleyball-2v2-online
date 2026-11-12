@@ -236,6 +236,11 @@ const codec = load('online_2v2/session.js', [
 ]);
 function snapshotGame() {
   return {
+    keyboardArray: Array.from({ length: 4 }, (_, i) => ({
+      xDirection: i % 2 ? -1 : 1,
+      yDirection: i === 2 ? -1 : 0,
+      powerHit: i === 3 ? 1 : 0,
+    })),
     scores: [2, 3],
     gameEnded: false,
     players: Array.from({ length: 4 }, (_, i) => ({
@@ -283,6 +288,7 @@ test('snapshot capture preserves the authoritative game and includes four player
   ]);
   assert.deepEqual(plain(game), before);
   assert.equal(packet.players.length, 4);
+  assert.deepEqual(plain(packet.inputs), plain(game.keyboardArray));
   assert.equal(packet.ball.punchEffectRadius, 12);
   assert.equal(packet.events[0].name, 'pika');
   assert.equal(
@@ -294,6 +300,17 @@ test('snapshot capture preserves the authoritative game and includes four player
 test('snapshot receivers reject old matches, duplicate frames, and malformed state', () => {
   const packet = codec.captureSnapshot(snapshotGame(), 'match', 10, 'playing');
   assert.equal(codec.validSnapshot(packet, 'older-match', 0), false);
+  assert.equal(
+    codec.validSnapshot({ ...packet, inputs: undefined }, 'match', 0),
+    true
+  );
+  for (const inputs of [
+    [],
+    [null, null, null, null],
+    Array(4).fill({ xDirection: 2, yDirection: 0, powerHit: 0 }),
+  ])
+    assert.equal(codec.validSnapshot({ ...packet, inputs }, 'match', 0), false);
+
   assert.equal(codec.validSnapshot(packet, 'match', 10), false);
   assert.equal(
     codec.validSnapshot({ ...packet, ball: { x: NaN, y: 0 } }, 'match', 0),

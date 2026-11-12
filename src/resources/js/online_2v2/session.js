@@ -89,6 +89,9 @@ export function captureSnapshot(game, epoch, frame, phase, events = []) {
     frame,
     phase,
     scores: game.scores.slice(),
+    inputs: game.keyboardArray.map((input) =>
+      pick(input, ['xDirection', 'yDirection', 'powerHit'])
+    ),
     gameEnded: game.gameEnded,
     players: game.players.map((player) => pick(player, PLAYER_FIELDS)),
     ball: pick(game.physics.ball, BALL_FIELDS),
@@ -109,6 +112,16 @@ export function validSnapshot(packet, epoch, lastFrame) {
   return (
     !!packet &&
     packet.type === 'state' &&
+    (packet.inputs === undefined ||
+      (Array.isArray(packet.inputs) &&
+        packet.inputs.length === 4 &&
+        packet.inputs.every(
+          (input) =>
+            input &&
+            [-1, 0, 1].includes(input.xDirection) &&
+            [-1, 0, 1].includes(input.yDirection) &&
+            [0, 1].includes(input.powerHit)
+        ))) &&
     packet.epoch === epoch &&
     Number.isSafeInteger(packet.frame) &&
     packet.frame > lastFrame &&

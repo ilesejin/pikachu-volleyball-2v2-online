@@ -64,8 +64,22 @@ export class DoublesPlayback {
     };
     this.times = [0];
     this.checkpoints = [];
+    this.chatSegments = [];
+    let segment = 0;
+    let epoch = null;
+    let inMatch = false;
     this.events.forEach((event, index) => {
       this.times.push(this.times[index] + event.dt);
+      if (event.type === 'lobby' && event.data.status === 'lobby')
+        inMatch = false;
+      if (['checkpoint', 'snapshot'].includes(event.type)) {
+        if (!inMatch || epoch !== event.epoch) segment++;
+        epoch = event.epoch;
+        inMatch = true;
+      }
+      // Lobby time is omitted from playback. Keep its chat, and chat from
+      // earlier matches, out of the current match's court overlay.
+      this.chatSegments.push(inMatch ? segment : -1);
       if (['checkpoint', 'snapshot'].includes(event.type))
         this.checkpoints.push(index);
     });
@@ -178,9 +192,13 @@ export class DoublesPlayback {
     );
   }
   event(event, silent) {
+    const segment = this.chatSegments[this.cursor];
+    if (this.chatSegment !== segment) this.chats = [];
+    this.chatSegment = segment;
     if (event.type === 'checkpoint' || event.type === 'snapshot') {
       this.prepare(event);
-      if (event.type === 'snapshot') this.showInputs(null);
+      if (event.type === 'snapshot')
+        this.showInputs(event.visual.inputs || null);
       if (event.type === 'snapshot' && !silent)
         OnlineMatch.prototype.applySnapshot.call(
           { game: this.game },
@@ -220,8 +238,9 @@ export class DoublesPlayback {
       }
       if (draw !== event.random.length)
         throw new Error('Replay random sequence does not match the engine.');
-      this.showInputs(values);
-    } else if (event.type === 'chat')
+      // AI decisions mutate the engine inputs during the step.
+      this.showInputs(this.driver.inputs);
+    } else if (event.type === 'chat' && segment >= 0)
       this.addChat(event.packet, this.times[this.cursor]);
     else if (event.type === 'lobby')
       this.members = event.data.members || this.members;
@@ -395,7 +414,11 @@ export class DoublesPlayback {
     )
       first--;
     for (let i = first; i < this.cursor; i++)
-      if (this.events[i].type === 'chat')
+      if (
+        this.events[i].type === 'chat' &&
+        this.chatSegment >= 0 &&
+        this.chatSegments[i] === this.chatSegment
+      )
         this.addChat(this.events[i].packet, this.times[i]);
     this.render();
   }

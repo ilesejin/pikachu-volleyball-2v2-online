@@ -1915,6 +1915,42 @@ async function screenshot(page, name) {
       [['hit', 'up', 'left'], ['down', 'right'], [], ['hit']]
     );
 
+    const keypadState =
+      'Array.from(document.querySelectorAll("#doubles-keys .replay-keypad")).map(pad=>Array.from(pad.querySelectorAll(".pressed")).map(key=>key.dataset.action))';
+    const expectedKeys = (inputs) =>
+      inputs.map((input) =>
+        [
+          input.powerHit ? 'hit' : null,
+          input.yDirection < 0 ? 'up' : null,
+          input.xDirection < 0 ? 'left' : null,
+          input.yDirection > 0 ? 'down' : null,
+          input.xDirection > 0 ? 'right' : null,
+        ].filter(Boolean)
+      );
+    const stepIndexes = JSON.parse(firstText)
+      .pack.events.map((event, index) =>
+        event.type === 'step' ? index + 1 : null
+      )
+      .filter((index) => index !== null);
+    let aiLit = false;
+    for (const count of [100, 120, 140, 160]) {
+      await replay.ev('__replay.seekFrame(' + stepIndexes[count - 1] + ')');
+      const expected = expectedKeys(
+        await replay.ev(
+          '__replay.doubles.driver.inputs.map(({xDirection,yDirection,powerHit})=>({xDirection,yDirection,powerHit}))'
+        )
+      );
+      assert.deepEqual(
+        await replay.ev(keypadState),
+        expected,
+        'Keypads must show the AI decisions produced by the simulation'
+      );
+      aiLit ||= expected[1].length > 0 || expected[2].length > 0;
+    }
+    assert.ok(
+      aiLit,
+      'At least one computer keypad must display an actual action'
+    );
     const middleIndex =
       JSON.parse(firstText)
         .pack.events.map((event, index) => [event, index])
@@ -2107,6 +2143,73 @@ async function screenshot(page, name) {
       linearChat,
       'Seeking must reconstruct the same chat boxes as straight playback'
     );
+    // Lobby waits have no replay duration. Their messages must never be
+    // reconstructed as fresh court bubbles at the next match/checkpoint.
+    const boundaryPack = JSON.parse(firstText).pack;
+    const initialLobby = boundaryPack.events.find((e) => e.type === 'lobby');
+    const lobbyPacket = packet('Lobby greeting', 'Lobby player', 0);
+    lobbyPacket.slots = [];
+    lobbyPacket.position = { top: 30, offset: 65, side: 'unassigned' };
+    boundaryPack.events.unshift(
+      { type: 'lobby', dt: 0, data: { ...initialLobby.data, status: 'lobby' } },
+      { type: 'chat', dt: 0, packet: lobbyPacket },
+      {
+        type: 'chat',
+        dt: 0,
+        packet: packet('Assigned lobby greeting', 'Seated player', 1),
+      }
+    );
+    const rematch = JSON.parse(
+      JSON.stringify(boundaryPack.events.find((e) => e.type === 'checkpoint'))
+    );
+    rematch.epoch = rematch.visual.epoch = 'chat-rematch';
+    boundaryPack.events.push(
+      {
+        type: 'chat',
+        dt: 0,
+        packet: packet('Previous match', 'Previous player', 2),
+      },
+      { type: 'lobby', dt: 0, data: { ...initialLobby.data, status: 'lobby' } },
+      { type: 'chat', dt: 0, packet: lobbyPacket },
+      rematch
+    );
+    const boundaryReplay = await viewer(
+      JSON.stringify({
+        pack: boundaryPack,
+        checksum: getHashCode(JSON.stringify(boundaryPack)),
+      })
+    );
+    const bubbles = 'document.getElementById("doubles-chat").textContent';
+    assert.equal(
+      await boundaryReplay.ev(bubbles),
+      '',
+      'Initial seeking must omit all lobby chat'
+    );
+    await boundaryReplay.ev('__replay.doubles.seekTime(1)');
+    assert.equal(
+      await boundaryReplay.ev(bubbles),
+      '',
+      'Lobby chat must not appear during the match'
+    );
+    await boundaryReplay.ev(
+      '__replay.doubles.seek(__replay.doubles.events.length)'
+    );
+    assert.equal(
+      await boundaryReplay.ev(bubbles),
+      '',
+      'Seeking into a rematch must omit earlier chat'
+    );
+    await boundaryReplay.ev(
+      '__replay.doubles.seek(0);while(__replay.doubles.cursor<__replay.doubles.events.length){__replay.doubles.tick();if(__replay.doubles.error)throw __replay.doubles.error;}__replay.ticker.stop()'
+    );
+    assert.equal(
+      await boundaryReplay.ev(bubbles),
+      '',
+      'Linear playback must clear chat at rematch boundaries'
+    );
+    await browser.send('Target.closeTarget', {
+      targetId: boundaryReplay.targetId,
+    });
     await browser.send('Target.closeTarget', { targetId: chatReplay.targetId });
     console.log(
       'Replay chat: visible fade, five-second lifetime, pause, replacement, seek, visibility toggle, quarter bounds and old-file positions passed.'
@@ -2170,6 +2273,25 @@ async function screenshot(page, name) {
     const fallback = await guest.ev('__volley.session.replay.text()');
     assert.equal(JSON.parse(fallback).pack.complete, false);
     const partial = await viewer(fallback, 'ko');
+    const snapshots = JSON.parse(fallback).pack.events;
+    const aiSnapshot = snapshots.findIndex(
+      (event) =>
+        event.type === 'snapshot' &&
+        event.visual.inputs?.some(
+          (input, slot) =>
+            event.visual.players[slot].isComputer &&
+            (input.xDirection || input.yDirection || input.powerHit)
+        )
+    );
+    assert.ok(
+      aiSnapshot >= 0,
+      'New snapshot-only recordings must include computer actions'
+    );
+    await partial.ev('__replay.seekFrame(' + (aiSnapshot + 1) + ')');
+    assert.deepEqual(
+      await partial.ev(keypadState),
+      expectedKeys(snapshots[aiSnapshot].visual.inputs)
+    );
     await partial.ev('__replay.seekFrame(__replay.doubles.events.length)');
     assert.equal(await partial.ev('__replay.pikaVolley.players.length'), 4);
     await click(host, 'leave');

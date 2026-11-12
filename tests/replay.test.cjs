@@ -256,6 +256,8 @@ test('seeking rebuilds the latest chat per speaker across the full five-second w
   p.times = [0];
   p.events.forEach((e) => p.times.push(p.times.at(-1) + e.dt));
   p.checkpoints = [0];
+  p.chatSegments = p.events.map(() => 1);
+  p.chatSegment = 1;
   p.chats = [];
   p.game = { audio: { sounds: { bgm: { stop() {} } } } };
   p.render = () => {};
