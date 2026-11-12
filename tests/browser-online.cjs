@@ -236,7 +236,7 @@ const types = {
 };
 let matchmakingApp;
 const server = http.createServer(async (req, res) => {
-  if (['/v1/match', '/v2/match'].includes(req.url) && matchmakingApp)
+  if (req.url === '/v2/match' && matchmakingApp)
     return matchmakingApp(req, res);
   if (req.url === '/__test_signaling' && req.method === 'POST') {
     let body = '';
@@ -579,17 +579,10 @@ async function screenshot(page, name) {
   if (process.env.PIKA_QUICK_MATCH_SERVER) {
     const { pathToFileURL } = require('node:url');
     const serverRoot = path.resolve(process.env.PIKA_QUICK_MATCH_SERVER);
-    const { Matchmaker } = await import(
-      pathToFileURL(path.join(serverRoot, 'src/matchmaker.js')).href
-    );
     const { createApp } = await import(
       pathToFileURL(path.join(serverRoot, 'src/http_app.js')).href
     );
-    const matchmaker = new Matchmaker({
-      readRoom: async (id) => structuredClone(rooms.get(id)),
-    });
     matchmakingApp = createApp({
-      matchmaker,
       verifyToken: async (token) => {
         if (!/^test[a-f0-9]+$/.test(token)) throw Error('Invalid test token');
         return { uid: token };

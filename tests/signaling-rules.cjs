@@ -18,14 +18,18 @@ function load(file, names, bindings) {
     source + ';return {' + names.join(',') + '};'
   )(...Object.values(bindings));
 }
-const { FirebaseRoomStore } = load('firebase_store.js', ['FirebaseRoomStore'], {
-  ...app,
-  ...auth,
-  ...db,
-});
+const { FirebaseIdentity } = load(
+  'firebase_identity.js',
+  ['FirebaseIdentity'],
+  {
+    ...app,
+    ...auth,
+    ...db,
+  }
+);
 const { SignalingStore } = load('signaling_store.js', ['SignalingStore'], {
   ...db,
-  FirebaseRoomStore,
+  FirebaseIdentity,
   ROOM_SCHEMA: 'pikavolley-2v2-v5',
 });
 const clients = [];
@@ -54,6 +58,18 @@ const denied = (action) =>
     guest = await client(),
     outsider = await client();
   const id = 'rules' + Date.now();
+  const oldRoom = db.doc(host.store.db, 'rooms', id);
+  await denied(
+    db.setDoc(oldRoom, { schema: 'pikavolley-2v2-v4', hostId: host.uid })
+  );
+  await denied(db.getDoc(oldRoom));
+  await denied(db.getDocs(db.collection(host.store.db, 'rooms')));
+  await denied(
+    db.setDoc(db.doc(host.store.db, 'rooms', id, 'connections', 'old'), {
+      offer: { type: 'offer', sdp: 'old' },
+    })
+  );
+
   await host.store.publish(id, { hostId: host.uid, layout: 'four' });
   assert.equal((await guest.store.peek(id)).hostId, host.uid);
   await denied(
@@ -115,7 +131,20 @@ const denied = (action) =>
   await host.store.candidate(id, guest.uid, 'hostCandidates', {
     candidate: 'host-ice',
   });
-  assert.equal((await incomingCandidate).candidate, 'host-ice');
+  assert.equal(
+    (
+      await Promise.race([
+        incomingCandidate,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Candidate listener timeout')),
+            10000
+          )
+        ),
+      ])
+    ).candidate,
+    'host-ice'
+  );
   stopCandidates();
   await guest.store.candidate(id, guest.uid, 'guestCandidates', {
     candidate: 'guest-ice',

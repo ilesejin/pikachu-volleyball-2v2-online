@@ -1,8 +1,10 @@
-import { FirebaseRoomStore } from './firebase_store.js';
+import { FirebaseIdentity } from './firebase_identity.js';
 import {
   doc,
   collection,
   setDoc,
+  updateDoc,
+  addDoc,
   deleteDoc,
   onSnapshot,
   getDocFromServer,
@@ -14,8 +16,8 @@ import {
 import { ROOM_SCHEMA } from './protocol.js';
 
 // Only rendezvous and temporary host/guest signaling use Firestore.
-// Inherit the existing per-tab authentication, not its legacy lobby operations.
-export class SignalingStore extends FirebaseRoomStore {
+// Lobby state and guest-to-guest signaling travel over WebRTC only.
+export class SignalingStore extends FirebaseIdentity {
   constructor() {
     super();
     this.cleanups = new Map();
@@ -70,6 +72,34 @@ export class SignalingStore extends FirebaseRoomStore {
         offer: { type: offer.type, sdp: offer.sdp },
       },
       { merge: true }
+    );
+  }
+  watchSignal(roomId, peerId, receive, error) {
+    return onSnapshot(
+      this.connection(roomId, peerId),
+      (snapshot) => {
+        if (snapshot.exists()) receive(snapshot.data());
+      },
+      error
+    );
+  }
+  answer(roomId, peerId, answer) {
+    return updateDoc(this.connection(roomId, peerId), {
+      answer: { type: answer.type, sdp: answer.sdp },
+    });
+  }
+  candidate(roomId, peerId, side, candidate) {
+    return addDoc(collection(this.connection(roomId, peerId), side), candidate);
+  }
+  watchCandidates(roomId, peerId, side, receive, error) {
+    return onSnapshot(
+      collection(this.connection(roomId, peerId), side),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') receive(change.doc.data());
+        });
+      },
+      error
     );
   }
   clearSignal(id, guestId) {

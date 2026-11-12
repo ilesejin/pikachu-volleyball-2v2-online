@@ -11,7 +11,7 @@ if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host || ''))
   throw Error('A local Auth emulator is required.');
 const source = fs
   .readFileSync(
-    path.join(__dirname, '../src/resources/js/online_2v2/firebase_store.js'),
+    path.join(__dirname, '../src/resources/js/online_2v2/firebase_identity.js'),
     'utf8'
   )
   .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\r?\n/gm, '')
@@ -42,11 +42,11 @@ function tab(label) {
     signInAnonymously: authSDK.signInAnonymously,
     getFirestore: dbSDK.getFirestore,
   };
-  const { FirebaseRoomStore } = Function(
+  const { FirebaseIdentity } = Function(
     ...Object.keys(bindings),
-    source + ';return{FirebaseRoomStore};'
+    source + ';return{FirebaseIdentity};'
   )(...Object.values(bindings));
-  return new FirebaseRoomStore();
+  return new FirebaseIdentity();
 }
 (async () => {
   const one = tab('first'),

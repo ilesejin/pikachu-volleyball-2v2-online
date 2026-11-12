@@ -26,9 +26,11 @@ Install dependencies with `npm ci`, then use `npm start` and open `/en/` or `/ko
 
 Deploy these changes in this order:
 
-1. Publish the complete `firestore.2v2.rules` in your Firebase project's Firestore Rules tab. It retains the existing `/rooms` rules for deployed v4 clients and adds `/rendezvous` for v5. Do not replace it with the original public P2P rules.
-2. Update/redeploy `pikachu-volleyball-2v2-online-quick-match-server-main`. New clients use `/v2/match`; `/v1/match` remains available for older clients. The v2 queue authenticates Firebase tokens but performs no Firestore reads or writes. Keep one server instance because advertisements and reservations are in memory.
+1. Publish the complete `firestore.2v2.rules` in your Firebase project's Firestore Rules tab. It denies all retired `/rooms` access and permits authenticated v5 `/rendezvous` signaling. Do not replace it with the original public P2P rules.
+2. Update/redeploy `pikachu-volleyball-2v2-online-quick-match-server-main`. Current clients use `/v2/match`; `/v1/match` now returns HTTP 410 (`CLIENT_VERSION_RETIRED`) with a reload instruction and never accesses Firestore. The v2 queue authenticates Firebase tokens but performs no Firestore reads or writes. Keep one server instance because advertisements and reservations are in memory.
 3. Run `npm run deploy` in this online frontend repository. This builds and publishes the frontend only; it does not deploy rules or the matchmaking server. All participants should reload and create/join a new room after upgrading.
+
+Older clients must reload the deployed frontend and create or join new rooms. Existing v4 rooms are not migrated. Publishing rules blocks their database access; it does not delete stored documents. Old documents can be removed separately using an administrator account after verifying they are no longer needed. These changes do not modify the original 1v1 P2P project. `npm run deploy` publishes the frontend only; it does not deploy server code or Firestore rules.
 
 Firestore now stores only a small join entry (`schema`, `hostId`, `layout`, `status`) and temporary host/guest signaling. The host validates admission, names, free-slot changes, random assignment, readiness, settings, and start requests in memory and broadcasts authoritative lobby updates over reliable WebRTC channels. Guests cannot modify another participant or change host-only settings. Each browser still has its own anonymous identity, including separate tabs.
 
@@ -44,7 +46,7 @@ To verify the new rules locally:
 firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json --only firestore,auth "node tests/signaling-rules.cjs"
 ```
 
-The existing `tests/firestore-rules.cjs` exercises the retained v4 rules. No test or build command publishes to a live Firebase project.
+The compatibility command `tests/firestore-rules.cjs` runs the same current signaling tests, including denied access to retired rooms. No test or build command publishes to a live Firebase project.
 
 ## Connectivity
 
@@ -60,7 +62,7 @@ Install a Firebase CLI compatible with your Node version and Java, then run:
 firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json --only firestore,auth "node tests/firestore-rules.cjs"
 ```
 
-This starts only local Auth/Firestore emulators, uses a demo project, and exercises real SDK transactions and allow/deny cases. It does not publish rules or contact your live Firestore database. See [Firebase emulator setup](https://firebase.google.com/docs/emulator-suite/install_and_configure).
+This starts only local Auth/Firestore emulators, uses a demo project, and exercises real SDK signaling operations and allow/deny cases. It does not publish rules or contact your live Firestore database. See [Firebase emulator setup](https://firebase.google.com/docs/emulator-suite/install_and_configure).
 
 ## GitHub Pages
 
@@ -70,7 +72,7 @@ In the intended GitHub repository, configure Pages to publish from `gh-pages` at
 
 ## Optional Quick Match backend
 
-The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server implements this client's `/v2/match` protocol. It verifies Firebase tokens from the same project and keeps the new queue in memory. The retained `/v1/match` endpoint still reads Firestore for older clients. See its README for environment variables and deployment. It does not run physics or relay gameplay.
+The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server implements this client's `/v2/match` protocol. It verifies Firebase tokens from the same project and keeps the new queue in memory. The retired `/v1/match` endpoint only returns HTTP 410; the server has no active Firestore access. See its README for environment variables and deployment. It does not run physics or relay gameplay.
 
 After deploying that server, edit `src/resources/js/online_2v2/quick_match_config.js`:
 
@@ -82,9 +84,7 @@ For local development use `http://localhost:3000`. Published HTTPS pages need an
 
 To run the combined local browser/server integration tests, build with `npx webpack --config webpack.dev.js`, set `PIKA_QUICK_MATCH_SERVER` to the absolute sibling server directory, then run `npm run test:browser`. These tests use the actual server matchmaker/HTTP handler, a local signaling fixture, and real WebRTC, without live Firebase requests.
 
-## Retained older protocol v4 (historical deployment notes)
-
-Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v4`; create new rooms after upgrading. Version-1/version-2/version-3 clients cannot join version-4 rooms. The Quick Match server and Firestore rules also need this protocol update; npm run deploy publishes only the frontend.
+## Independent browser tabs
 
 Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
 
@@ -95,8 +95,6 @@ firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json
 ```
 
 This uses a demo project and the local Authentication emulator, without reading the frontend's real Firebase configuration.
-
-The v4 rules authorize signaling using the connection’s two endpoints and its network revision. Guest-to-guest links are allowed only in mesh rooms. Offers, answers and ICE have separate endpoint permissions; stale revisions are rejected. Publish these rules before using the updated frontend. Old connection paths are incompatible.
 
 ## Offline engine source
 

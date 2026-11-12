@@ -6,7 +6,7 @@ The current offline 2v2 game, playable through WebRTC rooms. Choose four browser
 
 By default, every browser runs the preserved offline physics and AI in deterministic lockstep. Four-browser rooms default to a full mesh: six WebRTC connections, with each browser sending its own numbered inputs directly to the other three. All browsers wait for every participant’s inputs before simulating the frame with the same seeded randomness. The host can select a three-connection star instead, collecting inputs and relaying complete frames. A host-controlled setting also supports host-only physics, where guests send controls and display snapshots without simulating. Local-pair matches use one connection between their two browsers. The connection layout and physics mode are separate settings; host-only physics uses the host links even when mesh links are present. Firebase Anonymous Authentication identifies participants, and Firestore handles only room discovery and temporary guest-to-host signaling. The host manages lobby state over WebRTC and relays guest-to-guest mesh signaling over its existing connections. Gameplay inputs and snapshots do not pass through Firestore. Neither layout needs a dedicated game server.
 
-Protocol v5 reduces Firestore usage: lobby changes do not write documents, Quick Match waiting does not poll Firestore, and successful connection setup deletes its temporary signaling. Starting removes the join entry; returning to the lobby recreates the same room code. Deploy the updated rules and Quick Match backend before the frontend; see [upgrade steps](ONLINE_SETUP.md#signaling-only-update-protocol-v5). Existing v4 rules and the server's v1 endpoint remain available for older clients.
+Protocol v5 reduces Firestore usage: lobby changes do not write documents, Quick Match waiting does not poll Firestore, and successful connection setup deletes its temporary signaling. Starting removes the join entry; returning to the lobby recreates the same room code. Deploy the updated rules and Quick Match backend before the frontend; see [upgrade steps](ONLINE_SETUP.md#signaling-only-update-protocol-v5). The v4 Firestore lobby is retired: `/rooms` access is denied and `/v1/match` returns HTTP 410 with a reload message. Older clients must reload and create or join a new room.
 
 ## Playing
 
@@ -91,7 +91,7 @@ Choose an arrangement and region, then press **Quick Match**. The first browser 
 
 ## Updating an existing deployment
 
-Selectable physics synchronization uses protocol `pikavolley-2v2-v4`. Update both the frontend and Quick Match server, and publish the updated `firestore.2v2.rules` before creating new rooms. Old version-1/version-2/version-3 rooms are not compatible; finish those games and create fresh rooms after upgrading. No live Firebase rules are published by the build or tests.
+The current protocol is `pikavolley-2v2-v5`. Publish the updated `firestore.2v2.rules`, deploy the Quick Match server, then deploy the frontend. Previous clients must reload and create or join fresh rooms. No live Firebase rules or server changes are published by the build or tests.
 
 Separate tabs/windows in the same browser profile can join independently. Authentication uses a private in-memory anonymous session per page; reloading leaves the match and creates a new participant session. The duplicate-entry check only prevents joining twice from the same tab.
 

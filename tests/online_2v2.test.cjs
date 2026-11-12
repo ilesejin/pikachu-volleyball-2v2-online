@@ -134,50 +134,66 @@ test('input buffering retains a hit until a simulation step and releases stale m
 });
 
 function fakeStore() {
-  const documents = new Map();
-  let queue = Promise.resolve();
-  const bindings = {
-    initializeApp: () => ({}),
-    getApps: () => [],
-    firebaseConfig: {},
-    getFirestore: () => ({}),
-    doc: (db, ...parts) => parts.join('/'),
-    collection: () => null,
-    serverTimestamp: () => 'timestamp',
-    deleteField: () => null,
+  const documents = new Map(),
+    rooms = new Map();
+  const { LobbyStore } = load('online_2v2/lobby_store.js', ['LobbyStore'], {
     ...protocol,
-    runTransaction: (db, action) => {
-      const result = queue.then(() =>
-        action({
-          get: async (key) => ({
-            exists: () => documents.has(key),
-            data: () => plain(documents.get(key)),
-          }),
-          set: (key, value) => documents.set(key, plain(value)),
-          update: (key, value) => {
-            const data = documents.get(key);
-            for (const [field, entry] of Object.entries(value)) {
-              const parts = field.split('.');
-              let target = data;
-              for (const part of parts.slice(0, -1)) target = target[part];
-              target[parts[parts.length - 1]] = plain(entry);
-            }
-          },
-        })
+    setTimeout,
+    clearTimeout,
+  });
+  const entry = (id) => rooms.get(id);
+  const store = {
+    async create(id, hostId, name, layout, slots, settings) {
+      const room = {
+        id,
+        selfId: hostId,
+        isHost: true,
+        closed: false,
+        peers: new Map(),
+        transport: { publish: async () => {}, unpublish: async () => {} },
+        publishData(data) {
+          this.data = plain(data);
+          documents.set('lobby/' + id, this.data);
+        },
+      };
+      const lobby = new LobbyStore(room);
+      rooms.set(id, { room, lobby });
+      room.data = plain(
+        await lobby.create(id, hostId, name, layout, slots, settings)
       );
-      queue = result.catch(() => {});
-      return result;
+      documents.set('lobby/' + id, room.data);
+      return room.data;
+    },
+    claim(id, clientId, name, slots) {
+      return entry(id).lobby.enqueue(clientId, 'claim', { name, slots });
+    },
+    selectSlots(id, clientId, slots) {
+      return entry(id).lobby.enqueue(clientId, 'selectSlots', { slots });
+    },
+    rename(id, clientId, names) {
+      return entry(id).lobby.enqueue(clientId, 'rename', { names });
+    },
+    randomizeSlots(id, hostId) {
+      return entry(id).lobby.enqueue(hostId, 'randomizeSlots', {});
+    },
+    beginMatch(id, hostId, settings) {
+      return entry(id).lobby.enqueue(hostId, 'beginMatch', { settings });
+    },
+    rebuildNetwork(id, hostId, settings, expectedRevision, expectedMembers) {
+      return entry(id).lobby.enqueue(hostId, 'rebuildNetwork', {
+        settings,
+        expectedRevision,
+        expectedMembers,
+      });
+    },
+    networkReady(id, clientId, revision, value) {
+      return entry(id).lobby.networkReady(id, clientId, revision, value);
     },
   };
-  const { FirebaseRoomStore } = load(
-    'online_2v2/firebase_store.js',
-    ['FirebaseRoomStore'],
-    bindings
-  );
-  return { store: new FirebaseRoomStore(), documents };
+  return { store, documents };
 }
 
-test('transactional claims reject duplicate positions and joining after a match starts', async () => {
+test('host-serialized admission rejects duplicate positions and joining after a match starts', async () => {
   const { store, documents } = fakeStore();
   await store.create('room', 'host', 'Host', 'four', [0], {});
   const results = await Promise.allSettled([
@@ -194,8 +210,8 @@ test('transactional claims reject duplicate positions and joining after a match 
   );
   await store.claim('room', 'three', 'Three', [2]);
   await store.claim('room', 'four', 'Four', [3]);
-  assert.equal(Object.keys(documents.get('rooms/room').members).length, 4);
-  documents.get('rooms/room').status = 'playing';
+  assert.equal(Object.keys(documents.get('lobby/room').members).length, 4);
+  documents.get('lobby/room').status = 'playing';
   await assert.rejects(store.claim('room', 'late', 'Late', [1]));
 });
 
@@ -205,7 +221,7 @@ test('a pair occupies exactly one whole team and cannot claim a mixed team', asy
   await assert.rejects(store.claim('pair-room', 'mixed', 'Mixed', [0, 2]));
   await store.claim('pair-room', 'guest', 'Guest', [0, 1]);
   assert.deepEqual(
-    plain(documents.get('rooms/pair-room').members.guest.slots),
+    plain(documents.get('lobby/pair-room').members.guest.slots),
     [0, 1]
   );
 });
@@ -597,32 +613,32 @@ test('lobby entry is unassigned; competing selections, cancelling, names and ato
   const { store, documents } = fakeStore();
   await store.create('lobby', 'host', ['Host'], 'four', [], {});
   await store.claim('lobby', 'guest', ['Guest'], []);
-  assert.deepEqual(plain(documents.get('rooms/lobby').seats), ['', '', '', '']);
+  assert.deepEqual(plain(documents.get('lobby/lobby').seats), ['', '', '', '']);
   await assert.rejects(store.beginMatch('lobby', 'host', {}), /select a slot/);
   const attempts = await Promise.allSettled([
     store.selectSlots('lobby', 'host', [0]),
     store.selectSlots('lobby', 'guest', [0]),
   ]);
   assert.equal(attempts.filter((r) => r.status === 'fulfilled').length, 1);
-  const winner = documents.get('rooms/lobby').seats[0];
+  const winner = documents.get('lobby/lobby').seats[0];
   await store.selectSlots('lobby', winner, []);
-  assert.equal(documents.get('rooms/lobby').seats[0], '');
+  assert.equal(documents.get('lobby/lobby').seats[0], '');
   await store.selectSlots('lobby', 'host', [0]);
   await store.selectSlots('lobby', 'guest', [3]);
   await store.rename('lobby', 'guest', ['Renamed']);
-  assert.deepEqual(plain(documents.get('rooms/lobby').members.guest.names), [
+  assert.deepEqual(plain(documents.get('lobby/lobby').members.guest.names), [
     'Renamed',
   ]);
   await assert.rejects(
     store.beginMatch('lobby', 'host', {}),
     /connect before starting/
   );
-  documents.get('rooms/lobby').members.guest.connected = true;
+  documents.get('lobby/lobby').members.guest.connected = true;
   const started = await store.beginMatch('lobby', 'host', { practice: true });
   assert.equal(started.settings.practice, true);
   await assert.rejects(
     store.selectSlots('lobby', 'guest', []),
-    /only change in the lobby/
+    /only available in the lobby/
   );
 });
 test('pair names follow local player order across whole-team switches and mixed slots are rejected', async () => {
@@ -630,12 +646,12 @@ test('pair names follow local player order across whole-team switches and mixed 
   await store.create('pairs', 'host', ['Alice', 'Bob'], 'pairs', [], {});
   await store.selectSlots('pairs', 'host', [0, 1]);
   await store.selectSlots('pairs', 'host', [2, 3]);
-  const member = documents.get('rooms/pairs').members.host;
+  const member = documents.get('lobby/pairs').members.host;
   assert.equal(protocol.playerName(member, 2), 'Alice');
   assert.equal(protocol.playerName(member, 3), 'Bob');
   await assert.rejects(store.selectSlots('pairs', 'host', [0, 2]));
   await store.selectSlots('pairs', 'host', []);
-  assert.deepEqual(plain(documents.get('rooms/pairs').seats), ['', '', '', '']);
+  assert.deepEqual(plain(documents.get('lobby/pairs').seats), ['', '', '', '']);
 });
 test('pair chat selects the actual local player name and rejects spoofed speaker indexes', () => {
   const packets = [];
@@ -695,9 +711,9 @@ test('authentication is private to each tab, coalesces concurrent sign-ins, and 
     const apps = [];
     let calls = 0;
     const persistence = { type: 'NONE' };
-    const { FirebaseRoomStore } = load(
-      'online_2v2/firebase_store.js',
-      ['FirebaseRoomStore'],
+    const { FirebaseIdentity } = load(
+      'online_2v2/firebase_identity.js',
+      ['FirebaseIdentity'],
       {
         firebaseConfig: { projectId: 'test-project', apiKey: 'test-key' },
         getApps: () => apps,
@@ -722,7 +738,7 @@ test('authentication is private to each tab, coalesces concurrent sign-ins, and 
         },
       }
     );
-    return { store: new FirebaseRoomStore(), count: () => calls };
+    return { store: new FirebaseIdentity(), count: () => calls };
   };
   const first = makeTab(),
     second = makeTab();
@@ -1080,10 +1096,10 @@ test('host randomization atomically assigns unselected and selected members and 
       layout === 'pairs' ? ['G1', 'G2'] : ['Guest'],
       layout === 'pairs' ? [2, 3] : [3]
     );
-    const before = plain(documents.get('rooms/random'));
+    const before = plain(documents.get('lobby/random'));
     await assert.rejects(store.randomizeSlots('random', 'guest'), /host/);
     await store.randomizeSlots('random', 'host');
-    const after = documents.get('rooms/random');
+    const after = documents.get('lobby/random');
     assert.equal(protocol.lobbyReady(after), true);
     for (const id of ['host', 'guest']) {
       assert.equal(protocol.validSlots(layout, after.members[id].slots), true);
@@ -1094,9 +1110,9 @@ test('host randomization atomically assigns unselected and selected members and 
     }
     after.members.guest.connected = true;
     await store.beginMatch('random', 'host', {});
-    const playing = plain(after);
+    const playing = plain(documents.get('lobby/random'));
     await assert.rejects(store.randomizeSlots('random', 'host'), /lobby/);
-    assert.deepEqual(documents.get('rooms/random'), playing);
+    assert.deepEqual(documents.get('lobby/random'), playing);
   }
 });
 
@@ -1172,7 +1188,7 @@ test('rebuilding topology resets readiness atomically and preserves names and sl
   await store.create('network', 'host', 'H', 'four', [0], {});
   await store.claim('network', 'a', 'A', [2]);
   await assert.rejects(store.rebuildNetwork('network', 'a', {}), /host/);
-  const before = plain(documents.get('rooms/network'));
+  const before = plain(documents.get('lobby/network'));
   const updated = await store.rebuildNetwork('network', 'host', {
     topology: 'star',
   });
@@ -1186,9 +1202,9 @@ test('rebuilding topology resets readiness atomically and preserves names and sl
     assert.equal(updated.members[id].connected, false);
   }
   await store.networkReady('network', 'a', 0, true);
-  assert.equal(documents.get('rooms/network').members.a.connected, false);
+  assert.equal(documents.get('lobby/network').members.a.connected, false);
   await store.networkReady('network', 'a', 1, true);
-  assert.equal(documents.get('rooms/network').members.a.connected, true);
+  assert.equal(documents.get('lobby/network').members.a.connected, true);
 });
 
 test('mesh checkpoints restore full AI, collision, serve and RNG state without changing physics objects', () => {
