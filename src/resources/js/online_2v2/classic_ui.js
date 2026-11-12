@@ -1,3 +1,4 @@
+import { applyChatPosition } from './chat_position.js';
 import { savePlayerName } from './preferences.js';
 import { translate, translateMessage } from './i18n.js';
 import { localStorageWrapper } from '../offline_version_js/utils/local_storage_wrapper.js';
@@ -349,15 +350,7 @@ export function setUpClassicUI({
     bubble.classList.toggle('in-speech-bubble', speech);
     bubble.textContent = packet.text;
     bubble.title = prefix;
-    bubble.style.top = packet.position.top + '%';
-    if (packet.position.side === 'left')
-      bubble.style.right = packet.position.offset + '%';
-    else if (packet.position.side === 'right')
-      bubble.style.left = packet.position.offset + '%';
-    else {
-      bubble.style.left = '50%';
-      bubble.style.transform = 'translateX(-50%)';
-    }
+    applyChatPosition(bubble, packet.position);
     bubble.dataset.sender = packet.sender + ':' + (packet.speaker || 0);
     bubble.dataset.chat = String(++bubbleSequence);
     for (const previous of Array.from($('chat-bubbles').children))

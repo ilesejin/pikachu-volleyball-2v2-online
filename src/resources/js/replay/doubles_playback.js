@@ -1,3 +1,4 @@
+import { applyChatPosition } from '../online_2v2/chat_position.js';
 import { PikachuVolleyball } from '../offline_2v2/pikavolley.js';
 import { ASSETS_PATH as DOUBLES_ASSETS } from '../offline_2v2/assets_path.js';
 import { ASSETS_PATH } from '../offline_version_js/assets_path.js';
@@ -15,6 +16,16 @@ import {
   showTimeCurrent,
 } from './ui_replay.js';
 import './doubles_replay.css';
+
+const CHAT_SECONDS = 5;
+function chatSpeaker(packet) {
+  return typeof packet.sender === 'string'
+    ? packet.sender + ':' + (packet.speaker || 0)
+    : 'legacy:' +
+        packet.name +
+        ':' +
+        (Array.isArray(packet.slots) ? packet.slots.join(',') : '');
+}
 
 export class DoublesPlayback {
   constructor(owner, pack) {
@@ -211,14 +222,19 @@ export class DoublesPlayback {
         throw new Error('Replay random sequence does not match the engine.');
       this.showInputs(values);
     } else if (event.type === 'chat')
-      this.chats.push({
-        packet: event.packet,
-        until: this.times[this.cursor] + 3,
-      });
+      this.addChat(event.packet, this.times[this.cursor]);
     else if (event.type === 'lobby')
       this.members = event.data.members || this.members;
     this.game.timeCurrent = this.times[this.cursor + 1];
     this.game.replayFrameCounter = this.cursor + 1;
+  }
+  addChat(packet, at) {
+    if (!packet || typeof packet.text !== 'string') return;
+    const speaker = chatSpeaker(packet);
+    this.chats = this.chats.filter(
+      (chat) => chatSpeaker(chat.packet) !== speaker
+    );
+    this.chats.push({ packet, at, until: at + CHAT_SECONDS });
   }
   silentAudio() {
     const sound = {
@@ -313,15 +329,13 @@ export class DoublesPlayback {
         bubble.className = 'chat-box pre-wrap';
         bubble.textContent = packet.text;
         bubble.title = packet.name;
-        bubble.style.top = packet.position.top + '%';
-        if (packet.position.side === 'left')
-          bubble.style.right = packet.position.offset + '%';
-        else if (packet.position.side === 'right')
-          bubble.style.left = packet.position.offset + '%';
-        else {
-          bubble.style.left = '50%';
-          bubble.style.transform = 'translateX(-50%)';
-        }
+        applyChatPosition(bubble, packet.position);
+        // Freeze the shared live-game fade at replay time. Re-rendering must not
+        // restart the fade, and pausing/seeking must not use wall-clock timers.
+        const elapsed = Math.max(0, time - chat.at);
+        bubble.style.animationDuration = CHAT_SECONDS + 's';
+        bubble.style.animationDelay = -elapsed + 's';
+        bubble.style.animationPlayState = 'paused';
         this.chatLayer.append(bubble);
       }
     this.owner.renderer.render(this.owner.stage);
@@ -374,16 +388,15 @@ export class DoublesPlayback {
     this.game.timeCurrent = this.times[this.cursor];
     this.game.replayFrameCounter = this.cursor;
     this.chats = [];
-    for (
-      let i = this.cursor - 1;
-      i >= 0 && this.times[i] >= this.game.timeCurrent - 3;
-      i--
+    let first = this.cursor;
+    while (
+      first > 0 &&
+      this.times[first - 1] >= this.game.timeCurrent - CHAT_SECONDS
     )
+      first--;
+    for (let i = first; i < this.cursor; i++)
       if (this.events[i].type === 'chat')
-        this.chats.unshift({
-          packet: this.events[i].packet,
-          until: this.times[i] + 3,
-        });
+        this.addChat(this.events[i].packet, this.times[i]);
     this.render();
   }
   seekTime(time) {

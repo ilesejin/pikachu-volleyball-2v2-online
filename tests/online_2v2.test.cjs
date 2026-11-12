@@ -1484,3 +1484,93 @@ test('an already-open WebRTC channel reports readiness exactly once when attache
   assert.equal(reports, 1);
   assert.equal(opened, 1);
 });
+
+test('solo chat uses each assigned quarter, follows slot changes, and leaves pairs and unassigned chat unchanged', () => {
+  const sent = [];
+  let time = 1000;
+  const room = {
+    id: 'zones',
+    isHost: true,
+    selfId: 'host',
+    closed: false,
+    data: {
+      layout: 'four',
+      members: { host: { names: ['Host'], slots: [0] } },
+    },
+    broadcast: (packet) => sent.push(plain(packet)),
+  };
+  const chat = new RoomChat(
+    room,
+    () => {},
+    () => time,
+    () => 0.5
+  );
+  for (let slot = 0; slot < 4; slot++) {
+    room.data.members.host.slots = [slot];
+    chat.send('Slot ' + slot);
+    time += 500;
+    assert.equal(sent.at(-1).position.area, slot);
+  }
+  room.data.members.host.slots = [];
+  chat.send('Lobby');
+  time += 500;
+  assert.equal(sent.at(-1).position.area, undefined);
+  assert.equal(sent.at(-1).position.side, 'unassigned');
+  room.data.layout = 'pairs';
+  room.data.members.host = { names: ['A', 'B'], slots: [2, 3] };
+  chat.send('Pair', 1);
+  assert.equal(sent.at(-1).position.area, undefined);
+  assert.equal(sent.at(-1).position.side, 'right');
+  const shown = [];
+  const guest = {
+    id: 'zones',
+    closed: false,
+    isHost: false,
+    selfId: 'guest',
+    data: { layout: 'four', hostId: 'host' },
+  };
+  const receiver = new RoomChat(guest, (p) => shown.push(p));
+  const packet = sent[2];
+  receiver.receive('host', packet);
+  assert.equal(shown.length, 1);
+  for (const area of [-1, 4, 1.5, '2', 0])
+    receiver.receive('host', {
+      ...packet,
+      seq: 10,
+      position: { ...packet.position, area },
+    });
+  assert.equal(shown.length, 1);
+});
+
+test('slot chat layout keeps the complete box in each quarter at all random extremes, and supports old replay positions', () => {
+  const { applyChatPosition } = load('online_2v2/chat_position.js', [
+    'applyChatPosition',
+  ]);
+  for (let area = 0; area < 4; area++)
+    for (const offset of [55, 67.5, 80]) {
+      const bubble = { style: {} };
+      applyChatPosition(bubble, {
+        top: 35,
+        side: area < 2 ? 'left' : 'right',
+        offset,
+        area,
+      });
+      const anchor = parseFloat(bubble.style.left),
+        fraction =
+          -parseFloat(bubble.style.transform.match(/translate\(([^%]+)/)[1]) /
+          100;
+      for (const width of [2, 10, 22.5]) {
+        const left = anchor - fraction * width;
+        assert.ok(left >= area * 25);
+        assert.ok(left + width <= (area + 1) * 25);
+      }
+      assert.equal(bubble.style.maxWidth, '22.5%');
+    }
+  const bubble = { style: {} };
+  applyChatPosition(bubble, { top: 35, offset: 70, side: 'left' });
+  assert.equal(bubble.style.right, '70%');
+  assert.equal(bubble.style.maxWidth, '');
+  applyChatPosition(bubble, { top: 35, offset: 70, side: 'unassigned' });
+  assert.equal(bubble.style.left, '50%');
+  assert.equal(bubble.style.transform, 'translateX(-50%)');
+});

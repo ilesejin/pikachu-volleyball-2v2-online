@@ -662,6 +662,86 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_CHAT_AREAS_ONLY) {
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    await selectSlot(host, '0');
+    const id = await host.ev('__volley.room.id'),
+      guests = [];
+    for (let i = 1; i < 4; i++) {
+      const guest = await tab(port);
+      guests.push(guest);
+      await guest.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+      await join(guest, id, String(i));
+    }
+    await host.until(
+      '__volley.room.ready() && !document.getElementById("start").disabled'
+    );
+    await click(host, 'start');
+    await host.until('__volley.session.lastFrame>40');
+    const pages = [host, ...guests];
+    for (let i = 0; i < 4; i++) {
+      await click(pages[i], 'chat-open-btn');
+      await pages[i].ev(
+        'document.getElementById("chat-input").value=' +
+          JSON.stringify('P' + (i + 1) + ' ' + 'A'.repeat(46))
+      );
+      await click(pages[i], 'send-btn');
+    }
+    const bounds =
+      '(()=>{const court=document.getElementById("game-canvas-container").getBoundingClientRect();return Array.from(document.querySelectorAll("#chat-bubbles .chat-box")).map(b=>{const r=b.getBoundingClientRect();const slot=Number(b.title.match(/P([1-4])/)[1])-1;return {slot,left:(r.left-court.left)/court.width*100,right:(r.right-court.left)/court.width*100,top:(r.top-court.top)/court.height*100,bottom:(r.bottom-court.top)/court.height*100,style:[b.style.left,b.style.right,b.style.top,b.style.transform]};});})()';
+    for (const page of pages) {
+      await page.until(
+        'document.querySelectorAll("#chat-bubbles .chat-box").length===4'
+      );
+      const boxes = await page.ev(bounds);
+      for (const box of boxes) {
+        assert.ok(box.left >= box.slot * 25 - 0.1);
+        assert.ok(box.right <= (box.slot + 1) * 25 + 0.1);
+        assert.ok(box.top >= -0.1);
+        assert.ok(box.bottom <= 100.1);
+      }
+    }
+    const styles = await host.ev(bounds);
+    for (const guest of guests)
+      assert.deepEqual(
+        (await guest.ev(bounds)).map((b) => b.style),
+        styles.map((b) => b.style)
+      );
+    const packets = await host.ev(
+      '__volley.session.replay.pack.events.filter(e=>e.type==="chat").map(e=>e.packet)'
+    );
+    assert.deepEqual(
+      packets.map((p) => p.position.area),
+      [0, 1, 2, 3]
+    );
+    await screenshot(host, 'chat-assigned-quarters.png');
+    await host.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    for (const box of await host.ev(bounds)) {
+      assert.ok(box.left >= box.slot * 25 - 0.1);
+      assert.ok(box.right <= (box.slot + 1) * 25 + 0.1);
+      assert.ok(box.top >= -0.1);
+      assert.ok(box.bottom <= 100.1);
+    }
+    await screenshot(host, 'chat-assigned-quarters-mobile.png');
+    await assertSameSimulation(host, guests);
+    for (const guest of guests) await click(guest, 'leave');
+    await click(host, 'leave');
+    console.log(
+      'Solo chat: all four slot areas, long-message wrapping, synchronized positions, responsive bounds, recorded area metadata, and unchanged lockstep physics passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_VERSION_ONLY) {
     const current = JSON.parse(
       fs.readFileSync(path.join(root, 'version.json'), 'utf8')
@@ -999,6 +1079,165 @@ async function screenshot(page, name) {
         'document.getElementById("doubles-chat").children.length'
       ),
       0
+    );
+    // Test actual painted chat, not just DOM text presence or physics state.
+    const chatPack = JSON.parse(firstText).pack;
+    chatPack.events = chatPack.events.filter((event) => event.type !== 'chat');
+    const members = chatPack.events.find((event) => event.type === 'lobby').data
+      .members;
+    const chatStart = chatPack.events.reduce((sum, event) => sum + event.dt, 0);
+    const packet = (text, sender, area) => ({
+      text,
+      name: sender,
+      sender,
+      speaker: 0,
+      slots: [area],
+      position: {
+        top: 35,
+        offset: 67.5,
+        side: area < 2 ? 'left' : 'right',
+        area,
+      },
+    });
+    chatPack.events.push({
+      type: 'chat',
+      dt: 0,
+      packet: packet('First message', 'Same player', 0),
+    });
+    for (let i = 0; i < 10; i++)
+      chatPack.events.push({ type: 'lobby', dt: 0.1, data: { members } });
+    chatPack.events.push({
+      type: 'chat',
+      dt: 0,
+      packet: packet('Replacement message', 'Same player', 0),
+    });
+    chatPack.events.push({
+      type: 'chat',
+      dt: 0,
+      packet: packet('Right slot message', 'Other player', 3),
+    });
+    const legacyPacket = packet('Old recording position', 'Legacy player', 2);
+    delete legacyPacket.position.area;
+    chatPack.events.push({ type: 'chat', dt: 0, packet: legacyPacket });
+    for (let i = 0; i < 70; i++)
+      chatPack.events.push({ type: 'lobby', dt: 0.1, data: { members } });
+    const getHashCode = Function(
+      fs
+        .readFileSync(
+          path.join(__dirname, '../src/resources/js/utils/hash_code.js'),
+          'utf8'
+        )
+        .replace(/export /g, '') + ';return getHashCode;'
+    )();
+    const chatReplay = await viewer(
+      JSON.stringify({
+        pack: chatPack,
+        checksum: getHashCode(JSON.stringify(chatPack)),
+      })
+    );
+    await chatReplay.ev(
+      '__replay.doubles.seekTime(' + JSON.stringify(chatStart + 2.5) + ')'
+    );
+    await chatReplay.ev(
+      '(async()=>{for(let i=0;i<30;i++){__replay.doubles.render();await new Promise(requestAnimationFrame);}})()'
+    );
+    const painted = await chatReplay.ev(
+      'Array.from(document.querySelectorAll("#doubles-chat .chat-box")).map(b=>({text:b.textContent,opacity:Number(getComputedStyle(b).opacity),visibility:getComputedStyle(b).visibility}))'
+    );
+    console.log('Replay painted chat:', JSON.stringify(painted));
+    assert.ok(
+      painted.length > 0 &&
+        painted.every((b) => b.opacity > 0.9 && b.visibility === 'visible'),
+      'Mid-life replay bubbles must remain visibly painted during repeated renders'
+    );
+    assert.deepEqual(
+      painted.map((b) => b.text),
+      ['Replacement message', 'Right slot message', 'Old recording position']
+    );
+    await screenshot(chatReplay, 'replay-chat-visible.png');
+    const geometry =
+      '(()=>{const c=document.getElementById("game-canvas-container").getBoundingClientRect();return Array.from(document.querySelectorAll("#doubles-chat .chat-box")).map(b=>{const r=b.getBoundingClientRect();return {text:b.textContent,left:(r.left-c.left)/c.width*100,right:(r.right-c.left)/c.width*100,opacity:Number(getComputedStyle(b).opacity),styleLeft:b.style.left,styleRight:b.style.right};});})()';
+    for (const device of [
+      null,
+      { width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
+    ]) {
+      if (device)
+        await chatReplay.send('Emulation.setDeviceMetricsOverride', device);
+      const boxes = await chatReplay.ev(geometry);
+      const left = boxes.find((b) => b.text === 'Replacement message'),
+        right = boxes.find((b) => b.text === 'Right slot message'),
+        old = boxes.find((b) => b.text === 'Old recording position');
+      assert.ok(left.left >= 0 && left.right <= 25.1);
+      assert.ok(right.left >= 74.9 && right.right <= 100.1);
+      assert.equal(old.styleLeft, '67.5%');
+    }
+    await chatReplay.ev(
+      '__replay.doubles.seekTime(' + JSON.stringify(chatStart + 5.5) + ')'
+    );
+    const pausedOpacity = await chatReplay.ev(
+      'Number(getComputedStyle(document.querySelector("#doubles-chat .chat-box")).opacity)'
+    );
+    assert.ok(
+      pausedOpacity > 0 && pausedOpacity < 1,
+      'Chat should still exist and fade during its fifth replay second'
+    );
+    await delay(1400);
+    assert.equal(
+      await chatReplay.ev(
+        'Number(getComputedStyle(document.querySelector("#doubles-chat .chat-box")).opacity)'
+      ),
+      pausedOpacity,
+      'Pausing the replay must freeze the chat fade'
+    );
+    await chatReplay.ev(
+      '__replay.doubles.seekTime(' + JSON.stringify(chatStart + 6.2) + ')'
+    );
+    assert.equal(
+      await chatReplay.ev(
+        'document.getElementById("doubles-chat").children.length'
+      ),
+      0
+    );
+    await chatReplay.ev(
+      '__replay.doubles.seekTime(' + JSON.stringify(chatStart + 2.5) + ')'
+    );
+    const beforeToggle = await chatReplay.ev(
+      'document.getElementById("doubles-chat").textContent'
+    );
+    await chatReplay.ev(
+      'document.getElementById("show-chat-checkbox").click()'
+    );
+    assert.equal(
+      await chatReplay.ev(
+        'document.getElementById("doubles-chat").children.length'
+      ),
+      0
+    );
+    await chatReplay.ev(
+      'document.getElementById("show-chat-checkbox").click()'
+    );
+    assert.equal(
+      await chatReplay.ev(
+        'document.getElementById("doubles-chat").textContent'
+      ),
+      beforeToggle
+    );
+    await chatReplay.ev(
+      '__replay.doubles.seek(0);while(__replay.doubles.times[__replay.doubles.cursor]<' +
+        JSON.stringify(chatStart + 2.5) +
+        '){__replay.doubles.tick();}__replay.ticker.stop()'
+    );
+    const linearChat = await chatReplay.ev(geometry),
+      linearCursor = await chatReplay.ev('__replay.doubles.cursor');
+    await chatReplay.ev('__replay.doubles.seek(' + linearCursor + ')');
+    assert.deepEqual(
+      await chatReplay.ev(geometry),
+      linearChat,
+      'Seeking must reconstruct the same chat boxes as straight playback'
+    );
+    await browser.send('Target.closeTarget', { targetId: chatReplay.targetId });
+    console.log(
+      'Replay chat: visible fade, five-second lifetime, pause, replacement, seek, visibility toggle, quarter bounds and old-file positions passed.'
     );
     await host.ev(
       'window.downloads=[];__volley.session.replay.download=text=>downloads.push(text)'
