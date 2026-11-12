@@ -21,7 +21,17 @@ export class LobbyStore {
     this.sequence = 0;
     this.generation = 0;
   }
-  async create(id, hostId, name, layout, slots, settings) {
+  async create(
+    id,
+    hostId,
+    name,
+    layout,
+    slots,
+    settings,
+    visibility = 'private'
+  ) {
+    if (!['public', 'private'].includes(visibility))
+      throw new Error('Invalid room visibility.');
     if (!validSlots(layout, slots, true))
       throw new Error('Invalid player positions.');
     const names = playerNames(name, layout);
@@ -30,6 +40,7 @@ export class LobbyStore {
       compatibility: CLIENT_VERSION,
       hostId,
       layout,
+      visibility,
       settings: matchSettings(settings),
       status: 'lobby',
       networkRevision: 0,
@@ -101,6 +112,8 @@ export class LobbyStore {
     )
       throw new Error('This action is only available in the lobby.');
     if (action === 'claim') {
+      if (args.quickMatch && data.visibility !== 'public')
+        throw new Error('This room is private. Find another Quick Match room.');
       assertCompatible(args.compatibility);
       assertRoomCompatible(data);
       if (data.members[actor])
@@ -149,6 +162,10 @@ export class LobbyStore {
         Object.keys(data.members).length === 1
       )
         data.status = 'lobby';
+    } else if (action === 'visibility') {
+      if (!['public', 'private'].includes(args.value))
+        throw new Error('Invalid room visibility.');
+      data.visibility = args.value;
     } else if (action === 'networkReady') {
       if (
         data.networkRevision !== args.revision ||

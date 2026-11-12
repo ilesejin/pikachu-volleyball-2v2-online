@@ -45,7 +45,7 @@ export class OnlineRoom {
   fail(error) {
     if (!this.closed) this.emit('error', error);
   }
-  async create(name, layout, slots, settings) {
+  async create(name, layout, slots, settings, visibility = 'private') {
     if (!this.closed) throw new Error('Leave the current room first.');
     this.emit('creating', true);
     try {
@@ -63,7 +63,8 @@ export class OnlineRoom {
           name,
           layout,
           slots,
-          settings
+          settings,
+          visibility
         );
         this.subscribe();
         return this.id;
@@ -75,7 +76,7 @@ export class OnlineRoom {
       this.emit('creating', false);
     }
   }
-  async join(id, name, slots, expectedHost) {
+  async join(id, name, slots, expectedHost, quickMatch = false) {
     if (!this.closed) throw new Error('Leave the current room first.');
     this.emit('connecting', true);
     try {
@@ -104,7 +105,12 @@ export class OnlineRoom {
             [this.selfId]: { slots: [], connected: false },
           },
         };
-        this.joinDetails = { name, slots, compatibility: CLIENT_VERSION };
+        this.joinDetails = {
+          name,
+          slots,
+          quickMatch,
+          compatibility: CLIENT_VERSION,
+        };
         const admitted = new Promise((resolve, reject) => {
           this.joinResolve = resolve;
           this.joinReject = reject;
@@ -757,6 +763,9 @@ export class OnlineRoom {
     clearTimeout(peer.timer);
     clearTimeout(peer.setupTimer);
     peer.unsubs.forEach((unsubscribe) => unsubscribe());
+    // A rejoining browser uses the same mesh key within this lobby revision.
+    // Do not feed its new connection the previous offer/answer/ICE candidates.
+    if (!peer.hostLink) this.relay.entries.delete(peer.signalId);
     if (peer.channel) peer.channel.close();
     peer.pc.close();
   }
@@ -806,6 +815,7 @@ export class OnlineRoom {
     const member = this.data.members[this.selfId];
     const settings = this.data.settings;
     const layout = this.data.layout;
+    const visibility = this.data.visibility || 'private';
     this.shutdown();
     this.closed = false;
     this.isHost = true;
@@ -817,7 +827,8 @@ export class OnlineRoom {
         member.names || [member.name],
         layout,
         member.slots,
-        settings
+        settings,
+        visibility
       );
       this.subscribe();
     } catch (error) {

@@ -72,7 +72,8 @@ let classicUI,
   updates,
   versionMessage,
   reloadButton,
-  busy = false;
+  busy = false,
+  autoReturnedEpoch = null;
 function setUpUpdates() {
   const panel = document.createElement('aside');
   panel.id = 'client-version';
@@ -170,6 +171,8 @@ function updateSettingsForm(value) {
   $('synchronization').value = value.synchronization;
 }
 function update(error) {
+  if (quickMatch && matchmakingURL)
+    quickMatch.sync().catch((error) => status(error.message, true));
   if (session && session.replay) session.replay.update();
   if (error) status(error.message || String(error), true);
   $('quick-match').disabled =
@@ -210,6 +213,8 @@ function update(error) {
   invite.searchParams.set('room', room.id);
   $('invite-link').value = invite.toString();
   const data = room.data;
+  $('room-visibility').value = data.visibility || 'private';
+  $('room-visibility').disabled = busy || !room.isHost;
   $('arrangement').textContent =
     data.layout === 'four'
       ? text(
@@ -280,6 +285,18 @@ function update(error) {
   if (!room.isHost && data.settings)
     updateSettingsForm(session.epoch ? session.settings : data.settings);
   if (classicUI) classicUI.update();
+}
+async function returnToLobby() {
+  if (!room.isHost || room.closed) return;
+  await room.store.update(room.id, { status: 'lobby' });
+  update();
+}
+function setVisibility(value) {
+  return run(async () => {
+    if (!room.isHost) return;
+    await room.store.request('visibility', { value });
+    await quickMatch.sync();
+  });
 }
 async function run(action, connecting = false) {
   if (busy) return;
@@ -480,6 +497,17 @@ async function boot() {
   ticker.maxFPS = matchSettings().fps;
   ticker.add(() => {
     session.tick();
+    if (
+      !busy &&
+      room.isHost &&
+      !room.closed &&
+      room.data.visibility === 'public' &&
+      session.phase === 'finished' &&
+      session.epoch !== autoReturnedEpoch
+    ) {
+      autoReturnedEpoch = session.epoch;
+      run(returnToLobby);
+    }
     if (classicUI) classicUI.render();
     renderer.render(stage);
   });
@@ -491,6 +519,7 @@ async function boot() {
       room,
       updates,
       diagnostics,
+      quickMatch,
       version: CLIENT_VERSION,
     };
   classicUI = setUpClassicUI({
@@ -498,6 +527,7 @@ async function boot() {
     session,
     game,
     renderer,
+    setVisibility,
     applySettings: (value) =>
       run(async () => {
         if (!room.isHost) return;
@@ -537,10 +567,8 @@ async function boot() {
       await quickMatch.start({
         name: namesFromForm(),
         layout: $('layout').value,
-        region: $('match-region').value,
         settings: settingsFromForm(),
       });
-      $('fill-ai').checked = true;
     })
   );
   $('cancel-search').addEventListener('click', () => {
@@ -604,13 +632,6 @@ async function boot() {
   $('start').addEventListener('click', () =>
     run(async () => {
       await updates.ensureCurrent();
-      if (!$('fill-ai').checked && room.data.seats.some((owner) => !owner))
-        throw new Error(
-          text(
-            'Fill all four positions, or enable AI for empty positions.',
-            '네 자리를 모두 채우거나 빈 자리 AI를 켜세요.'
-          )
-        );
       if (!$('settings-form').reportValidity()) return;
       await session.start(settingsFromForm());
       if (quickMatch.active) await quickMatch.stop();
@@ -622,14 +643,9 @@ async function boot() {
     session.pause();
     update();
   });
-  $('back-lobby').addEventListener('click', () =>
-    run(async () => {
-      if (!room.isHost) return;
-      session.stop();
-      room.broadcast({ type: 'lobby' });
-      await room.store.update(room.id, { status: 'lobby' });
-      update();
-    })
+  $('back-lobby').addEventListener('click', () => run(returnToLobby));
+  $('room-visibility').addEventListener('change', () =>
+    setVisibility($('room-visibility').value)
   );
   $('copy-link').addEventListener('click', async () => {
     const button = $('copy-link');

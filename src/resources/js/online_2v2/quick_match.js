@@ -14,14 +14,16 @@ export class QuickMatch {
     this.generation = 0;
     this.active = false;
     this.timer = null;
+    this.advertised = null;
+    this.publishTail = Promise.resolve();
   }
-  async start({ name, layout, region = 'GLOBAL', settings }) {
+  async start({ name, layout, settings }) {
     if (!this.room.closed || this.active)
       throw new Error('Leave the current room or search first.');
     const generation = ++this.generation;
     this.active = true;
     this.changed();
-    this.options = { layout, region };
+    this.options = { layout };
     try {
       while (this.active && generation === this.generation) {
         const result = await this.request({ action: 'find', ...this.options });
@@ -36,12 +38,21 @@ export class QuickMatch {
         const slots = [];
         try {
           if (result.action === 'create')
-            await this.room.create(name, layout, slots, settings);
-          else await this.room.join(result.roomId, name, slots, result.hostId);
+            await this.room.create(name, layout, slots, settings, 'public');
+          else
+            await this.room.join(
+              result.roomId,
+              name,
+              slots,
+              result.hostId,
+              true
+            );
         } catch (error) {
           if (
             result.action === 'create' ||
-            !/started|closed|occupied|not found|full/i.test(error.message)
+            !/started|closed|occupied|not found|full|private|advertised host/i.test(
+              error.message
+            )
           )
             throw error;
           // A host may start early, or an invited player may claim this advisory reservation.
@@ -54,14 +65,8 @@ export class QuickMatch {
           return;
         }
         if (this.room.isHost) {
-          await this.request({
-            action: 'publish',
-            roomId: this.room.id,
-            ...this.options,
-            ...this.advertisement(),
-          });
+          await this.sync();
           this.notify('hosting');
-          this.heartbeat(generation);
         } else {
           this.active = false;
           // The host admitted this browser over WebRTC before acknowledging.
@@ -80,43 +85,62 @@ export class QuickMatch {
       }
     }
   }
-  advertisement() {
-    return {
-      status: this.room.data.status,
-      members: Object.keys(this.room.data.members),
-    };
-  }
-  heartbeat(generation) {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(async () => {
-      if (!this.active || generation !== this.generation) return;
-      if (this.room.closed || this.room.data.status !== 'lobby') {
-        await this.stop();
-        return;
-      }
+  // Advertising follows the room, independently of how it was created.
+  // Serialize publish/cancel so a late request cannot reopen a private room.
+  sync(force = false) {
+    const task = this.publishTail.then(async () => {
+      clearTimeout(this.timer);
+      const room = this.room;
+      const open =
+        !room.closed &&
+        room.isHost &&
+        room.data?.visibility === 'public' &&
+        room.data.status === 'lobby';
       try {
-        const result = await this.request({
-          action: 'publish',
-          roomId: this.room.id,
-          ...this.options,
-          ...this.advertisement(),
-        });
-        if (result.action === 'closed') {
-          await this.stop();
-          return;
+        if (open) {
+          const packet = {
+            action: 'publish',
+            roomId: room.id,
+            layout: room.data.layout,
+            visibility: 'public',
+            status: 'lobby',
+            members: Object.keys(room.data.members),
+          };
+          const signature = JSON.stringify(packet);
+          if (force || signature !== this.advertised) {
+            // Retain the marker on failure: retrying privacy/leave must cancel
+            // an advertisement that the server may have received already.
+            this.advertised = signature;
+            const result = await this.request(packet);
+            if (result.action === 'closed') this.advertised = null;
+          }
+        } else if (this.advertised) {
+          await this.request({ action: 'cancel' });
+          this.advertised = null;
         }
-      } catch (error) {
-        this.notify('error', error);
+      } finally {
+        if (open || this.advertised) {
+          this.timer = setTimeout(() => {
+            this.sync(true).catch((error) => this.notify('error', error));
+          }, 2000);
+          this.timer.unref?.();
+        }
       }
-      if (this.active && generation === this.generation)
-        this.heartbeat(generation);
-    }, 2000);
+    });
+    this.publishTail = task.catch(() => {});
+    return task;
   }
   async stop() {
     this.generation++;
     this.active = false;
     clearTimeout(this.timer);
     this.changed();
-    await this.request({ action: 'cancel' }).catch(() => {});
+    const cancel = this.publishTail.then(async () => {
+      clearTimeout(this.timer);
+      await this.request({ action: 'cancel' });
+      this.advertised = null;
+    });
+    this.publishTail = cancel.catch(() => {});
+    await cancel.catch(() => {});
   }
 }

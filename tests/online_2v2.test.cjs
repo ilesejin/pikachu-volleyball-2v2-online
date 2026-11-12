@@ -340,8 +340,10 @@ test('Quick Match creates and advertises an immediately playable host room', asy
     isHost: true,
     id: 'a'.repeat(20),
     data: { status: 'lobby', members: { host: {} } },
-    async create(name, layout, slots, settings) {
+    async create(name, layout, slots, settings, visibility) {
       this.closed = false;
+      this.data.layout = layout;
+      this.data.visibility = visibility;
       assert.equal(layout, 'four');
       assert.deepEqual(plain(slots), []);
       assert.equal(settings.courtWidth, 384);
@@ -1692,4 +1694,113 @@ test('failure of an unadmitted peer does not abort a solo-with-AI match', () => 
   });
   match.peerClosed('not-admitted');
   assert.equal(match.epoch, 'active');
+});
+
+test('public advertisements follow room visibility, play/lobby transitions and host promotion', async () => {
+  const calls = [];
+  const room = {
+    closed: false,
+    isHost: true,
+    id: 'a'.repeat(20),
+    data: {
+      visibility: 'private',
+      layout: 'four',
+      status: 'lobby',
+      members: { host: {} },
+    },
+  };
+  const q = new QuickMatch({
+    room,
+    request: async (p) => {
+      calls.push(p);
+      return { action: p.action === 'publish' ? 'advertised' : 'cancelled' };
+    },
+  });
+  await q.sync();
+  assert.equal(calls.length, 0);
+  room.data.visibility = 'public';
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'publish');
+  assert.equal(calls.at(-1).region, undefined);
+  await q.sync();
+  assert.equal(calls.length, 1);
+  room.data.status = 'playing';
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'cancel');
+  room.data.status = 'lobby';
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'publish');
+  room.data.visibility = 'private';
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'cancel');
+  room.isHost = false;
+  room.data.visibility = 'public';
+  await q.sync();
+  assert.equal(calls.length, 4);
+  room.isHost = true;
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'publish');
+  room.closed = true;
+  await q.sync();
+  assert.equal(calls.at(-1).action, 'cancel');
+  await q.stop();
+});
+test('an in-flight public publication is withdrawn when visibility changes to private', async () => {
+  let release;
+  const calls = [];
+  const room = {
+    closed: false,
+    isHost: true,
+    id: 'a'.repeat(20),
+    data: {
+      visibility: 'public',
+      layout: 'pairs',
+      status: 'lobby',
+      members: { host: {} },
+    },
+  };
+  const q = new QuickMatch({
+    room,
+    request: async (p) => {
+      calls.push(p.action);
+      if (p.action === 'publish') await new Promise((r) => (release = r));
+      return { action: 'advertised' };
+    },
+  });
+  const first = q.sync();
+  await new Promise((r) => setImmediate(r));
+  room.data.visibility = 'private';
+  const second = q.sync();
+  release();
+  await first;
+  await second;
+  assert.deepEqual(calls, ['publish', 'cancel']);
+  await q.stop();
+});
+
+test('dropping a mesh peer clears its cached signaling before it can rejoin', () => {
+  const { OnlineRoom } = load('online_2v2/room.js', ['OnlineRoom'], {
+    clearTimeout,
+  });
+  const key = '0~guest-a~guest-b';
+  const peer = {
+    hostLink: false,
+    signalId: key,
+    unsubs: [],
+    pc: { close() {} },
+    channel: { close() {} },
+  };
+  const room = Object.assign(Object.create(OnlineRoom.prototype), {
+    peers: new Map([['guest-b', peer]]),
+    relay: {
+      entries: new Map([
+        [key, { data: { offer: 'old', answer: 'old' }, candidates: {} }],
+        ['other', { data: {} }],
+      ]),
+    },
+  });
+  room.dropPeer('guest-b');
+  assert.equal(room.peers.has('guest-b'), false);
+  assert.equal(room.relay.entries.has(key), false);
+  assert.equal(room.relay.entries.has('other'), true);
 });

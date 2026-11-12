@@ -804,6 +804,174 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+
+  if (process.env.PIKA_PUBLIC_ROOMS_ONLY) {
+    assert.ok(
+      matchmakingApp,
+      'Use PIKA_QUICK_MATCH_SERVER for the real local backend'
+    );
+    const guest = await tab(port, 'ko');
+    const next = await tab(port, 'zh');
+    for (const page of [host, guest, next]) {
+      await page.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+      assert.equal(
+        await page.ev('!!document.getElementById("match-region")'),
+        false
+      );
+    }
+    await click(host, 'create');
+    await host.until('!__volley.room.closed');
+    assert.equal(await host.ev('__volley.room.data.visibility'), 'private');
+    await selectSlot(host, '0');
+    await host.ev(
+      'document.getElementById("room-visibility").value="public";document.getElementById("room-visibility").dispatchEvent(new Event("change"))'
+    );
+    await host.until(
+      '__volley.room.data.visibility==="public" && !document.getElementById("room-visibility").disabled'
+    );
+    await host.ev('__volley.quickMatch.sync()');
+    const id = await host.ev('__volley.room.id');
+    await click(guest, 'quick-match');
+    await guest.until(
+      '!__volley.room.closed && !!__volley.room.data?.members[__volley.room.selfId] && !__volley.quickMatch.active && __volley.room.joinDetails===null'
+    );
+    assert.equal(
+      await guest.ev('__volley.room.id'),
+      id,
+      'A public friend room must be discoverable'
+    );
+    await selectSlot(guest, '3');
+    await assertConnections(host, [guest], 'mesh');
+    assert.equal(
+      await guest.ev('document.getElementById("room-visibility").disabled'),
+      true
+    );
+    await assert.rejects(
+      guest.ev('__volley.room.store.request("visibility",{value:"private"})'),
+      /Only the host/
+    );
+    for (const sync of ['host', 'lockstep']) {
+      await host.ev(
+        '__volley.session.start({...__volley.room.data.settings,synchronization:' +
+          JSON.stringify(sync) +
+          '})'
+      );
+      await guest.until('__volley.session.epoch!==null');
+      await host.until(
+        '__volley.session.frame>3 || __volley.session.lastFrame>3'
+      );
+      await host.ev('__volley.quickMatch.sync()');
+      const epoch = await host.ev('__volley.session.epoch');
+      await click(host, 'visibility-private-btn');
+      await guest.until('__volley.room.data.visibility==="private"');
+      assert.equal(
+        await host.ev('__volley.session.epoch'),
+        epoch,
+        'Visibility must not restart a game'
+      );
+      await click(host, 'visibility-public-btn');
+      await guest.until('__volley.room.data.visibility==="public"');
+      assert.equal(await host.ev('__volley.session.epoch'), epoch);
+      await host.ev(
+        '(()=>{const s=__volley.session;if(!s.game.paused)s.pause();})()'
+      );
+      await guest.until('__volley.session.phase==="paused"');
+      await host.ev(
+        '(()=>{const s=__volley.session,g=s.game;g.gameEnded=true;g.state=g.round;g.frameCounter=g.frameTotal.gameEnd-2;g.players.forEach(p=>p.gameEnded=true);if(s.lockstep)s.meshControl({paused:false});else s.pause();})()'
+      );
+      for (const page of [host, guest])
+        await page.until(
+          '__volley.session.epoch===null && __volley.room.data.status==="lobby"'
+        );
+      assert.equal(await host.ev('__volley.room.id'), id);
+      await host.ev('__volley.quickMatch.sync()');
+      await click(next, 'quick-match');
+      await next.until(
+        '!__volley.room.closed && !!__volley.room.data?.members[__volley.room.selfId] && !__volley.quickMatch.active && __volley.room.joinDetails===null'
+      );
+      assert.equal(
+        await next.ev('__volley.room.id'),
+        id,
+        'Finished public games must reopen in Quick Match'
+      );
+      await assertConnections(host, [guest, next], 'mesh');
+      console.log('Public reopen connected:', sync);
+      await click(next, 'leave');
+      await host.until('Object.keys(__volley.room.data.members).length===2');
+      await assertConnections(host, [guest], 'mesh');
+    }
+    await click(host, 'visibility-private-btn');
+    await host.until('__volley.room.data.visibility==="private"');
+    await host.ev('__volley.quickMatch.sync()');
+    await click(next, 'quick-match');
+    await next.until(
+      '__volley.room.isHost && __volley.room.data.visibility==="public" && !!__volley.quickMatch.advertised'
+    );
+    await next.ev('__volley.quickMatch.sync()');
+
+    assert.notEqual(
+      await next.ev('__volley.room.id'),
+      id,
+      'Private rooms must be absent from Quick Match'
+    );
+    assert.equal(
+      await next.ev('__volley.room.data.visibility'),
+      'public',
+      'Quick Match rooms default public'
+    );
+    await click(next, 'leave');
+    await host.ev(
+      '__volley.session.start({...__volley.room.data.settings,synchronization:"host"})'
+    );
+    await guest.until('__volley.session.epoch!==null');
+    await host.ev(
+      '(()=>{const s=__volley.session,g=s.game;if(!g.paused)s.pause();g.gameEnded=true;g.state=g.round;g.frameCounter=g.frameTotal.gameEnd-2;g.players.forEach(p=>p.gameEnded=true);s.pause();})()'
+    );
+    await host.until('__volley.session.phase==="finished"');
+    await delay(250);
+    assert.equal(
+      await host.ev('__volley.room.data.status'),
+      'playing',
+      'Private matches retain the finished screen until the host returns'
+    );
+    await click(host, 'visibility-public-btn');
+    await host.until(
+      '__volley.session.epoch===null && __volley.room.data.status==="lobby"'
+    );
+
+    await host.until('__volley.room.data.visibility==="public"');
+    await host.ev('__volley.session.start(__volley.room.data.settings)');
+    await guest.until('__volley.session.epoch!==null');
+    await click(host, 'leave');
+    await guest.until(
+      '__volley.room.isHost && __volley.room.data.status==="lobby"'
+    );
+    assert.equal(
+      await guest.ev('__volley.room.data.visibility'),
+      'public',
+      'Promotion must preserve visibility'
+    );
+    await guest.ev('__volley.quickMatch.sync()');
+    await click(next, 'quick-match');
+    await next.until(
+      '!__volley.room.closed && !!__volley.room.data?.members[__volley.room.selfId] && !__volley.quickMatch.active && __volley.room.joinDetails===null'
+    );
+    assert.equal(
+      await next.ev('__volley.room.id'),
+      id,
+      'Promoted public hosts must advertise the same room'
+    );
+    await screenshot(guest, 'public-room-ko.png');
+    await click(next, 'leave');
+    await click(guest, 'leave');
+    assert.deepEqual(errors, []);
+    console.log(
+      'Public rooms: shared queue, private defaults, public friend-room discovery, host-only live visibility, same-code automatic reopening after the game-over animation in host/lockstep, and public host promotion passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_LEGACY_REPLAY_ONLY) {
     await assertLegacyReplay(port);
     assert.deepEqual(errors, []);

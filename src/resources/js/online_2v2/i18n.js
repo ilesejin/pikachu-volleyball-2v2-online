@@ -1,5 +1,8 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Invalid room visibility.': '房間可見性無效。',
+  'This room is private. Find another Quick Match room.':
+    '此房間為私人房間，請尋找其他快速配對房間。',
   'At least two connected players are required to start a solo match.':
     '單人配對至少需要兩位已連線玩家才能開始。',
   'Waiting for another player': '等待其他玩家加入',
@@ -111,8 +114,6 @@ export const ZH_MESSAGES = {
   'Find the room first.': '請先尋找房間。',
   'Connecting to the host…': '正在連線至房主……',
   'Left the room.': '已離開房間。',
-  'Fill all four positions, or enable AI for empty positions.':
-    '請填滿4個位置，或允許電腦補上空位。',
   'Match started.': '比賽開始。',
   'Room code copied.': '已複製房間代碼。',
   'Copy the selected room code.': '請複製選取的房間代碼。',
@@ -210,6 +211,9 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'Invalid room visibility.': '올바르지 않은 방 공개 설정입니다.',
+  'This room is private. Find another Quick Match room.':
+    '비공개 방입니다. 다른 빠른 대전 방을 찾아 주세요.',
   'At least two connected players are required to start a solo match.':
     '싱글 경기를 시작하려면 두 명 이상의 플레이어가 연결되어야 합니다.',
   'Everyone else left. Returned to the lobby.':

@@ -16,6 +16,7 @@ export function setUpClassicUI({
   game,
   renderer,
   applySettings,
+  setVisibility,
 }) {
   const $ = (id) => document.getElementById(id);
   const t = translate;
@@ -160,6 +161,11 @@ export function setUpClassicUI({
     courtBefore = formSettings();
     openDialog('match-settings-dialog');
   });
+  for (const value of ['public', 'private'])
+    $('visibility-' + value + '-btn').addEventListener('click', () => {
+      closeMenus();
+      setVisibility(value);
+    });
   $('controls-open-btn').addEventListener('click', () =>
     openDialog('controls-dialog')
   );
@@ -490,7 +496,6 @@ export function setUpClassicUI({
       $('before-connection').hidden = connected;
       $('flex-container').hidden = !connected;
       $('match-dropdown-btn').disabled = !connected || !room.isHost;
-      $('fill-ai-label').hidden = !room.isHost;
       $('synchronization').disabled = !room.isHost;
       $('topology').disabled = !room.isHost;
       $('topology-label').hidden = connected && room.data.layout === 'pairs';
@@ -530,6 +535,14 @@ export function setUpClassicUI({
         ...['5', '10', '15'].map((n) => 'winning-score-' + n + '-btn'),
       ])
         $(id).disabled = !room.isHost;
+      for (const value of ['public', 'private'])
+        $('visibility-' + value + '-btn').disabled = !connected || !room.isHost;
+      selected(
+        ['visibility-public-btn', 'visibility-private-btn'],
+        'visibility-' +
+          (connected ? room.data.visibility || 'private' : 'private') +
+          '-btn'
+      );
       $('lobby-banner').hidden = !!session.epoch;
       if (lastEpoch !== session.epoch) {
         $('room-panel').open = !session.epoch;

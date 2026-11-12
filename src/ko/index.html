@@ -188,12 +188,6 @@
               <option value="four">브라우저당 1명 · 4개 브라우저</option>
               <option value="pairs">브라우저당 2명 · 2개 브라우저</option>
             </select></label
-          ><label
-            >빠른 대전 그룹<select id="match-region">
-              <option value="GLOBAL">Global</option>
-              <option value="KR">Korea</option>
-              <option value="TW">Taiwan</option>
-            </select></label
           >
         </div>
         <div class="margin-top grid-1-1">
@@ -241,6 +235,27 @@
               설정
             </button>
             <div class="dropdown" id="options-dropdown">
+              <div class="relative-container">
+                <button
+                  class="btn submenu-btn"
+                  id="visibility-submenu-btn"
+                  type="button"
+                >
+                  방 공개 설정 ▶
+                </button>
+                <div class="submenu" id="visibility-submenu">
+                  <button class="btn" id="visibility-public-btn" type="button">
+                    <span class="check">✓ </span>공개
+                  </button>
+                  <button
+                    class="btn selected"
+                    id="visibility-private-btn"
+                    type="button"
+                  >
+                    <span class="check">✓ </span>비공개
+                  </button>
+                </div>
+              </div>
               <div class="relative-container">
                 <button
                   class="btn submenu-btn"
@@ -409,7 +424,8 @@
           </div>
           <div class="relative-container" id="replay-save-container">
             <button class="btn" disabled="" id="save-replay-btn" type="button">
-              <span class="no-wrap">리플레이</span> <span class="no-wrap">저장</span>
+              <span class="no-wrap">리플레이</span>
+              <span class="no-wrap">저장</span>
             </button>
           </div>
           <div class="color-scheme-toggle-switch-container">
@@ -470,11 +486,13 @@
           ><button id="copy-link" type="button">링크 복사</button>
           <button id="copy-code" type="button">코드 복사</button>
         </div>
-        <label id="fill-ai-label"
-          ><input checked="" id="fill-ai" type="checkbox" />빈 자리를 컴퓨터로
-          채우기</label
-        >
         <div id="lobby-editor">
+          <label class="room-visibility-control"
+            >방 공개 설정<select id="room-visibility">
+              <option value="public">공개</option>
+              <option value="private">비공개</option>
+            </select></label
+          >
           <p id="network-status"></p>
           <button hidden="" id="reconnect-network" type="button">
             연결 다시 시도

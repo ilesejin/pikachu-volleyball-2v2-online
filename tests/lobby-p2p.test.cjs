@@ -367,3 +367,38 @@ test('a lone solo host cannot start even through the lobby API; a second connect
   await store.beginMatch('room', 'host', {});
   assert.equal(room.data.status, 'playing');
 });
+
+test('visibility is host-only, live, and blocks stale Quick Match claims without blocking invitations', async () => {
+  const { room, store, calls } = await fixture();
+  assert.equal(room.data.visibility, 'private');
+  const claim = {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: 'Guest',
+    slots: [],
+  };
+  await assert.rejects(
+    store.enqueue('a', 'claim', { ...claim, quickMatch: true }),
+    /private/
+  );
+  await store.enqueue('a', 'claim', claim);
+  await assert.rejects(
+    store.enqueue('a', 'visibility', { value: 'public' }),
+    /Only the host/
+  );
+  await assert.rejects(
+    store.enqueue('host', 'visibility', { value: 'invalid' }),
+    /visibility/
+  );
+  const previousCalls = calls.length;
+  await store.enqueue('host', 'visibility', { value: 'public' });
+  await store.enqueue('b', 'claim', { ...claim, quickMatch: true });
+  room.data.status = 'playing';
+  await store.enqueue('host', 'visibility', { value: 'private' });
+  assert.equal(room.data.status, 'playing');
+  assert.equal(room.data.visibility, 'private');
+  assert.equal(
+    calls.length,
+    previousCalls,
+    'Visibility changes must not write Firestore or restart the match'
+  );
+});

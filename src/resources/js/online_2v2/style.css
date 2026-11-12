@@ -37,7 +37,8 @@
 #room-id,
 #controls,
 #settings-form input,
-#settings-form select {
+#settings-form select,
+#room-visibility {
   min-width: 0;
   font-size: inherit;
   padding: 7px;
@@ -183,10 +184,6 @@
   width: 100%;
   padding: 6px;
   font-size: 0.85rem;
-}
-#fill-ai-label {
-  display: block;
-  margin: 12px 0;
 }
 .controls-hint {
   line-height: 1.5;
@@ -572,4 +569,12 @@ select:focus-visible {
   .copy-confirmed .copy-result {
     animation: none;
   }
+}
+
+.room-visibility-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75em;
+  margin: 1em 0;
 }
