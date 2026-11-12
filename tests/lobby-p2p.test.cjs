@@ -293,3 +293,24 @@ test('a new guest rejects an old host lobby response rather than accepting missi
   assert.equal(ended, true);
   assert.equal(accepted, false);
 });
+
+test('duo start requires a second connected client even when AI fill is enabled', async () => {
+  const { room, store } = await fixture('pairs');
+  await store.selectSlots('room', 'host', [0, 1]);
+  assert.equal(protocol.lobbyReady(room.data), false);
+  await assert.rejects(
+    store.beginMatch('room', 'host', {}),
+    /Two connected duo clients/
+  );
+  assert.equal(room.data.status, 'lobby');
+  await store.enqueue('guest', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: ['A', 'B'],
+    slots: [2, 3],
+  });
+  assert.equal(protocol.lobbyReady(room.data), true);
+  await assert.rejects(store.beginMatch('room', 'host', {}), /connect/);
+  await store.networkReady('room', 'guest', 0, true);
+  await store.beginMatch('room', 'host', {});
+  assert.equal(room.data.status, 'playing');
+});

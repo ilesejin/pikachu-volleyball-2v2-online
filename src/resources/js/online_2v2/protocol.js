@@ -215,6 +215,7 @@ export function playerName(member, slot) {
 export function lobbyReady(data) {
   return (
     !!data &&
+    (data.layout !== 'pairs' || Object.keys(data.members).length === 2) &&
     Object.values(data.members).every((member) =>
       validSlots(data.layout, member.slots)
     )

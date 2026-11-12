@@ -666,6 +666,208 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_DUO_ABORT_ONLY) {
+    const guest = await tab(port, 'ko');
+    for (const mode of ['lockstep', 'host']) {
+      console.log('Testing duo abort:', mode);
+      for (const page of [host, guest])
+        await page.ev(
+          'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+        );
+      await host.ev(
+        'document.getElementById("layout").value="pairs";document.getElementById("synchronization").value=' +
+          JSON.stringify(mode) +
+          ';document.getElementById("layout").dispatchEvent(new Event("change"))'
+      );
+      await click(host, 'create');
+      await host.until('!__volley.room.closed');
+      await selectSlot(host, '0,1');
+      const id = await host.ev('__volley.room.id');
+      const start = async (owner) => {
+        await owner.until('!document.getElementById("start").disabled');
+        await click(owner, 'start');
+        for (const page of [host, guest])
+          await page.until(
+            '(__volley.room.isHost && !__volley.session.lockstep ? __volley.session.frame : __volley.session.lastFrame)>10'
+          );
+      };
+      const lobby = async (page) => {
+        await page.until(
+          '!__volley.room.closed && __volley.room.isHost && __volley.room.data.status==="lobby" && !__volley.session.epoch && Object.keys(__volley.room.data.members).length===1'
+        );
+        assert.equal(await page.ev('__volley.room.id'), id);
+        assert.equal(
+          await page.ev('document.getElementById("start").disabled'),
+          true
+        );
+        assert.equal(await page.ev('__volley.game.paused'), true);
+        assert.equal(
+          await page.ev('__volley.room.data.settings.synchronization'),
+          mode
+        );
+      };
+      await join(guest, id, '2,3');
+      const guestNames = await guest.ev(
+        '__volley.room.data.members[__volley.room.selfId].names'
+      );
+      await start(host);
+      await click(guest, 'leave');
+      await lobby(host);
+      await join(guest, id, '2,3');
+      await start(host);
+      await click(host, 'leave');
+      await lobby(guest);
+      assert.deepEqual(
+        await guest.ev(
+          '__volley.room.data.members[__volley.room.selfId].names'
+        ),
+        guestNames
+      );
+      assert.deepEqual(
+        await guest.ev(
+          '__volley.room.data.members[__volley.room.selfId].slots'
+        ),
+        [2, 3]
+      );
+      await join(host, id, '0,1');
+      await start(guest);
+      await host.ev('__volley.room.shutdown();__volley.session.stop()');
+      await lobby(guest);
+      await join(host, id, '0,1');
+      await start(guest);
+      await guest.ev('__volley.room.shutdown();__volley.session.stop()');
+      await lobby(host);
+      await click(host, 'leave');
+    }
+    assert.deepEqual(errors, []);
+    assert.equal(rooms.size, 0);
+    console.log(
+      'Duo abort: guest/host graceful leave and abrupt channel loss, same-code host takeover, names/slots/settings, rejoin/rematch and blocked solo restart passed in lockstep and host physics.'
+    );
+    return;
+  }
+  if (process.env.PIKA_LOBBY_LAYOUT_ONLY) {
+    const pages = [host, await tab(port, 'ko'), await tab(port, 'zh')];
+    for (const page of pages) {
+      await page.ev(
+        'document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"));document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+      await click(page, 'create');
+      await page.until('!!__volley.room.data');
+      await selectSlot(page, '0,1');
+      assert.equal(
+        await page.ev('document.getElementById("start").disabled'),
+        true
+      );
+      assert.match(
+        await page.ev(
+          '__volley.session.start(__volley.room.data.settings).then(()=>"started",e=>e.message)'
+        ),
+        /Two connected duo clients/
+      );
+      for (const width of [390, 760, 1200]) {
+        await page.send('Emulation.setDeviceMetricsOverride', {
+          width,
+          height: 844,
+          deviceScaleFactor: 1,
+          mobile: width === 390,
+        });
+        const boxes = await page.ev(
+          '(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width}};return {parent:rect(document.querySelector(".invite-controls")),items:["invite-link","copy-link","copy-code"].map(id=>rect(document.getElementById(id)))}})()'
+        );
+        for (const item of boxes.items) {
+          assert.ok(item.width > 0);
+          assert.ok(
+            item.left >= boxes.parent.left - 1 &&
+              item.right <= boxes.parent.right + 1,
+            'Invitation controls must fit their container'
+          );
+        }
+        for (let a = 0; a < 3; a++)
+          for (let b = a + 1; b < 3; b++) {
+            const x = boxes.items[a],
+              y = boxes.items[b];
+            assert.ok(
+              x.right <= y.left + 1 ||
+                y.right <= x.left + 1 ||
+                x.bottom <= y.top + 1 ||
+                y.bottom <= x.top + 1,
+              'Invitation controls must not overlap'
+            );
+          }
+      }
+    }
+    await screenshot(pages[2], 'invitation-controls-zh.png');
+    const id = await host.ev('__volley.room.id');
+    await click(pages[1], 'leave');
+    await click(pages[2], 'leave');
+    await join(pages[1], id, '2,3');
+    await host.until('!document.getElementById("start").disabled');
+    await click(host, 'start');
+    for (const page of [host, pages[1]])
+      await page.until('__volley.session.lastFrame>10');
+    await click(host, 'back-lobby');
+    await host.until('__volley.room.data.status==="lobby"');
+    await click(pages[1], 'leave');
+    await host.until(
+      'Object.keys(__volley.room.data.members).length===1 && document.getElementById("start").disabled'
+    );
+    await click(host, 'leave');
+    console.log(
+      'Lobby: invitation controls fit without overlap at 390/760/1200px in all languages; lone duo blocked through UI and start API, two connected duos can play, and returning to one duo blocks starting again.'
+    );
+    return;
+  }
+  if (process.env.PIKA_ROOM_CODE_ONLY) {
+    await click(host, 'create');
+    await host.until('!!__volley.room.data');
+    const id = await host.ev('__volley.room.id');
+    const code = id.match(/.{5}/g).join('-');
+    assert.match(id, /^[2-9a-km-np-z]{20}$/);
+    assert.equal(
+      await host.ev('document.getElementById("room-code").textContent'),
+      code
+    );
+    await host.ev(
+      'window.copied=[];Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async text=>{copied.push(text)}}})'
+    );
+    await click(host, 'copy-code');
+    assert.equal(await host.ev('copied.at(-1)'), code);
+    await click(host, 'copy-link');
+    assert.equal(
+      new URL(await host.ev('copied.at(-1)')).searchParams.get('room'),
+      id
+    );
+    await host.ev(
+      'navigator.clipboard.writeText=async()=>{throw Error("denied")}'
+    );
+    await click(host, 'copy-code');
+    assert.equal(await host.ev('getSelection().toString()'), code);
+    const guest = await tab(port, 'ko');
+    await join(guest, code.toUpperCase(), '1');
+    assert.equal(await guest.ev('__volley.room.id'), id);
+    assert.equal(
+      await guest.ev('document.getElementById("room-code").textContent'),
+      code
+    );
+    assert.equal(
+      await guest.ev('document.getElementById("copy-code").textContent'),
+      '코드 복사'
+    );
+    const chinese = await tab(port, 'zh');
+    await join(chinese, id, '2');
+    assert.equal(
+      await chinese.ev('document.getElementById("copy-code").textContent'),
+      '複製代碼'
+    );
+    await click(chinese, 'leave');
+    await click(guest, 'leave');
+    await click(host, 'leave');
+    console.log(
+      'Room codes: original generator/grouping, clipboard code/link, fallback selection, formatted/raw joins and translated buttons passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_CHAT_AREAS_ONLY) {
     await host.ev(
       'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
@@ -1519,7 +1721,10 @@ async function screenshot(page, name) {
       [false, false, false, false]
     );
     await click(host, 'leave');
-    await guest.until('__volley.room.closed');
+    await guest.until(
+      '__volley.room.isHost && __volley.room.data.status==="lobby"'
+    );
+    await click(guest, 'leave');
     assert.deepEqual(errors, []);
     console.log(
       'Replay: exact lockstep and host-only playback, seeking, room-session rematches, randomized chat, guest transfer, local fallback, persistence and auto-save passed.'
@@ -2249,7 +2454,10 @@ async function screenshot(page, name) {
     'Lobby: unassigned entry, release/reselect, occupied-seat protection, per-player pair names, speaker selection, practice mode and reset preserving roster passed.'
   );
   await click(pairHost, 'leave');
-  await pairGuest.until('__volley.room.closed');
+  await pairGuest.until(
+    '__volley.room.isHost && __volley.room.data.status==="lobby"'
+  );
+  await click(pairGuest, 'leave');
   assert.deepEqual(errors, []);
   assert.equal(rooms.size, 0);
   console.log(

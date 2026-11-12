@@ -1574,3 +1574,40 @@ test('slot chat layout keeps the complete box in each quarter at all random extr
   assert.equal(bubble.style.left, '50%');
   assert.equal(bubble.style.transform, 'translateX(-50%)');
 });
+
+test('duo departure stops physics before removal and returns to lobby without replacing players with AI', async () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch']);
+  for (const host of [true, false]) {
+    const calls = [];
+    const match = Object.assign(Object.create(OnlineMatch.prototype), {
+      epoch: 'running',
+      stop() {
+        calls.push('stop');
+        this.epoch = null;
+      },
+      notify() {},
+      room: {
+        isHost: host,
+        id: 'same-code',
+        data: { layout: 'pairs', hostId: 'opponent' },
+        async removeMember(id) {
+          calls.push('remove:' + id);
+        },
+        store: {
+          async update(id, value) {
+            calls.push(value.status);
+          },
+        },
+        async becomeDuoHost() {
+          calls.push('host');
+        },
+      },
+    });
+    await match.peerClosed('opponent');
+    assert.deepEqual(
+      calls,
+      host ? ['stop', 'remove:opponent', 'lobby'] : ['stop', 'host']
+    );
+    assert.equal(match.epoch, null);
+  }
+});

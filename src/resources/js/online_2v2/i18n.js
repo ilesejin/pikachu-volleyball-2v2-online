@@ -1,5 +1,13 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'The opposing duo left. Returned to the lobby.':
+    '對方雙人組已離開，已返回大廳。',
+  'The opposing duo left. You are now the lobby host.':
+    '對方雙人組已離開，你現在是大廳房主。',
+
+  'Two connected duo clients are required to start a duo match.':
+    '雙人組隊對戰需要兩個已連線的雙人客戶端才能開始。',
+  'Waiting for a second duo client': '等待另一組雙人玩家加入',
   'Connection diagnostics': '連線診斷',
   'Ping is round-trip time, including browser scheduling and data-channel queues. It is not exact input delay.':
     'Ping 是包含瀏覽器排程與資料通道佇列的往返時間，並不等於實際輸入延遲。',
@@ -96,6 +104,8 @@ export const ZH_MESSAGES = {
   'Fill all four positions, or enable AI for empty positions.':
     '請填滿4個位置，或允許電腦補上空位。',
   'Match started.': '比賽開始。',
+  'Room code copied.': '已複製房間代碼。',
+  'Copy the selected room code.': '請複製選取的房間代碼。',
   'Invitation link copied.': '已複製邀請連結。',
   'Copy the selected invitation link.': '請複製選取的邀請連結。',
   'Could not load the game: ': '無法載入遊戲：',
@@ -190,6 +200,13 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'The opposing duo left. Returned to the lobby.':
+    '상대 듀오가 나가 대기실로 돌아왔습니다.',
+  'The opposing duo left. You are now the lobby host.':
+    '상대 듀오가 나갔습니다. 이제 대기실의 방장입니다.',
+
+  'Two connected duo clients are required to start a duo match.':
+    '듀오 경기를 시작하려면 듀오 클라이언트 두 대가 연결되어야 합니다.',
   'Game versions do not match. Everyone must reload before joining this room.':
     '게임 버전이 일치하지 않습니다. 모두 새로고침한 후 방에 참가하세요.',
   'An update is available. Reload before creating, joining, or starting a match.':

@@ -251,7 +251,7 @@
             ><input
               autocomplete="off"
               id="room-id"
-              maxlength="20"
+              maxlength="23"
               spellcheck="false"
             /><button disabled="" id="join" type="button">join room</button>
           </div>
@@ -493,13 +493,15 @@
       </div>
       <details id="room-panel" open="">
         <summary>
-          Room&nbsp;-&nbsp;<output id="room-code"></output> <span id="phase"></span>
+          Room&nbsp;-&nbsp;<output id="room-code"></output>
+          <span id="phase"></span>
         </summary>
         <p id="arrangement"></p>
         <ul id="roster"></ul>
         <div class="invite-controls">
           <label>Invitation link<input id="invite-link" readonly="" /></label
-          ><button id="copy-link" type="button">Copy</button>
+          ><button id="copy-link" type="button">Copy link</button>
+          <button id="copy-code" type="button">Copy code</button>
         </div>
         <label id="fill-ai-label"
           ><input checked="" id="fill-ai" type="checkbox" />Fill empty positions

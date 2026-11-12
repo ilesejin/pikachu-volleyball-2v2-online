@@ -272,6 +272,13 @@ export class OnlineMatch {
     }
     if (!this.room.ready())
       throw new Error('Wait for all required peer connections to be ready.');
+    if (
+      this.room.data.layout === 'pairs' &&
+      Object.keys(this.room.data.members).length !== 2
+    )
+      throw new Error(
+        'Two connected duo clients are required to start a duo match.'
+      );
     const checked = matchSettings(settings);
     if (checked.topology !== this.room.data.settings.topology)
       throw new Error('Apply the connection layout before starting.');
@@ -341,6 +348,34 @@ export class OnlineMatch {
   }
   peerClosed(id) {
     if (!this.room) return;
+    if (this.room.data.layout === 'pairs' && this.epoch) {
+      this.stop();
+      if (this.room.isHost) {
+        const room = this.room;
+        return room
+          .removeMember(id)
+          .then(() => room.store.update(room.id, { status: 'lobby' }))
+          .then(() =>
+            this.notify(
+              new Error('The opposing duo left. Returned to the lobby.')
+            )
+          )
+          .catch((error) => this.notify(error));
+      }
+      if (id === this.room.data.hostId) {
+        return this.room
+          .becomeDuoHost()
+          .then(() =>
+            this.notify(
+              new Error('The opposing duo left. You are now the lobby host.')
+            )
+          )
+          .catch((error) => {
+            this.room.shutdown();
+            this.notify(error);
+          });
+      }
+    }
     if (this.room.isHost) {
       const member = this.room.data.members[id];
       if (this.lockstep && this.lockstep.mesh && this.lockstep.members.has(id))

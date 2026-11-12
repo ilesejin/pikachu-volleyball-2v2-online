@@ -1,3 +1,4 @@
+import { formatRoomCode, normalizeRoomCode } from './room_code.js';
 import { NetworkDiagnostics } from './diagnostics.js';
 import { setUpDiagnosticsUI } from './diagnostics_ui.js';
 import {
@@ -201,7 +202,7 @@ function update(error) {
   $('host-panel').hidden = !room.isHost;
   $('local-panel').hidden = false;
   $('game-panel').hidden = !session.epoch;
-  $('room-code').textContent = room.id;
+  $('room-code').textContent = formatRoomCode(room.id);
   const invite = new URL(location.href);
   invite.search = '';
   invite.searchParams.set('room', room.id);
@@ -557,7 +558,7 @@ async function boot() {
   );
   const join = () =>
     run(async () => {
-      const id = $('room-id').value.trim().toLowerCase();
+      const id = normalizeRoomCode($('room-id').value);
       if (!/^[a-z0-9]{20}$/.test(id))
         throw new Error(
           text('Enter the 20-character room ID.', '20자리 방 ID를 입력하세요.')
@@ -634,6 +635,22 @@ async function boot() {
           'Copy the selected invitation link.',
           '선택된 초대 링크를 복사하세요.'
         )
+      );
+    }
+  });
+  $('copy-code').addEventListener('click', async () => {
+    if (!room.id) return;
+    try {
+      await navigator.clipboard.writeText(formatRoomCode(room.id));
+      status(text('Room code copied.', '방 코드를 복사했습니다.'));
+    } catch (error) {
+      const range = document.createRange();
+      range.selectNodeContents($('room-code'));
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      status(
+        text('Copy the selected room code.', '선택된 방 코드를 복사하세요.')
       );
     }
   });

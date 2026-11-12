@@ -150,6 +150,10 @@ export class LobbyStore {
       data.members[args.clientId].connected = args.value;
     } else if (action === 'beginMatch') {
       assertRoomCompatible(data);
+      if (data.layout === 'pairs' && Object.keys(data.members).length !== 2)
+        throw new Error(
+          'Two connected duo clients are required to start a duo match.'
+        );
       if (!lobbyReady(data))
         throw new Error(
           'Every joined player must select a slot before starting.'

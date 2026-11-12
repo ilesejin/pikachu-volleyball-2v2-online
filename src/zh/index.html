@@ -232,7 +232,7 @@
             ><input
               autocomplete="off"
               id="room-id"
-              maxlength="20"
+              maxlength="23"
               spellcheck="false"
             /><button disabled="" id="join" type="button">加入房間</button>
           </div>
@@ -474,13 +474,15 @@
       </div>
       <details id="room-panel" open="">
         <summary>
-          房間&nbsp;-&nbsp;<output id="room-code"></output> <span id="phase"></span>
+          房間&nbsp;-&nbsp;<output id="room-code"></output>
+          <span id="phase"></span>
         </summary>
         <p id="arrangement"></p>
         <ul id="roster"></ul>
         <div class="invite-controls">
           <label>邀請連結<input id="invite-link" readonly="" /></label
-          ><button id="copy-link" type="button">複製</button>
+          ><button id="copy-link" type="button">複製連結</button>
+          <button id="copy-code" type="button">複製代碼</button>
         </div>
         <label id="fill-ai-label"
           ><input

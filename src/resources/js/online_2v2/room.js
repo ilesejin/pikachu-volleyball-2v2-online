@@ -1,3 +1,4 @@
+import { generatePushID } from '../utils/generate_pushid.js';
 import { CLIENT_VERSION } from './client_version.js';
 import { SignalingStore } from './signaling_store.js';
 import { LobbyStore } from './lobby_store.js';
@@ -51,7 +52,7 @@ export class OnlineRoom {
     this.departed.clear();
     this.closed = false;
     this.isHost = true;
-    this.id = randomId();
+    this.id = generatePushID();
     try {
       this.data = await this.store.create(
         this.id,
@@ -240,7 +241,13 @@ export class OnlineRoom {
             ? peers.length === requiredPeers(this.data, id).length
             : this.reportComplete(id);
         const key = this.data.networkRevision + ':' + id;
-        if (this.readyWrites.get(key) === value) continue;
+        // A returning client can have the same identity but a fresh lobby entry.
+        // Do not let the previous connection's cached write leave it unready.
+        if (
+          this.readyWrites.get(key) === value &&
+          this.data.members[id].connected === value
+        )
+          continue;
         this.readyWrites.set(key, value);
         this.readyTasks.set(
           id,
@@ -293,6 +300,10 @@ export class OnlineRoom {
       !this.isHost &&
       id === this.data.hostId
     ) {
+      if (this.data.layout === 'pairs' && this.data.status === 'playing') {
+        this.emit('peerClosed', id);
+        return true;
+      }
       this.shutdown();
       this.emit('ended');
       return true;
@@ -767,10 +778,49 @@ export class OnlineRoom {
     this.dropPeer(id);
     await this.store.remove(this.id, id);
   }
+  async becomeDuoHost() {
+    if (this.closed || this.isHost || this.data.layout !== 'pairs') return;
+    const id = this.id;
+    const member = this.data.members[this.selfId];
+    const settings = this.data.settings;
+    this.shutdown();
+    this.closed = false;
+    this.isHost = true;
+    this.departed.clear();
+    try {
+      this.data = await this.store.create(
+        id,
+        this.selfId,
+        member.names || [member.name],
+        'pairs',
+        member.slots,
+        settings
+      );
+      this.subscribe();
+    } catch (error) {
+      this.shutdown();
+      throw error;
+    }
+  }
   async leave() {
     if (this.closed) return;
     const id = this.id,
       host = this.isHost;
+    // Finish old-host cleanup before the remaining duo republishes this code.
+    // Otherwise late cleanup could target the replacement lobby.
+    if (
+      host &&
+      this.data.layout === 'pairs' &&
+      this.data.status === 'playing'
+    ) {
+      try {
+        await this.transport.close(id);
+      } finally {
+        this.broadcast({ type: 'room-closed' });
+        this.shutdown();
+      }
+      return;
+    }
     if (host) this.broadcast({ type: 'room-closed' });
     else this.send(this.data.hostId, { type: 'room-leave' });
     this.shutdown();
