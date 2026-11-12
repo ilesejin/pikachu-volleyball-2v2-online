@@ -89,7 +89,7 @@ export function setUpDiagnosticsUI(room, session, diagnostics) {
       return;
     }
     const lobby = room.data.status === 'lobby';
-    if (previousRoom !== room.id || previousLobby !== lobby) panel.open = lobby;
+    if (previousRoom !== room.id || previousLobby !== lobby) panel.open = false;
     previousRoom = room.id;
     previousLobby = lobby;
     const mode = snapshot.pairs

@@ -767,8 +767,10 @@ async function screenshot(page, name) {
     );
     assert.equal(
       await host.ev('document.getElementById("network-diagnostics").open'),
-      true
+      false
     );
+    await click(host, 'ping-indicator');
+    await host.until('document.getElementById("network-diagnostics").open');
     await host.until(
       'Array.from(__volley.diagnostics.links.values()).every(link=>link.samples.length>=5)'
     );
