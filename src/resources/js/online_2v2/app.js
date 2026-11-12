@@ -1,3 +1,4 @@
+import { setUpConnectionFeedback } from './connection_feedback.js';
 import { formatRoomCode, normalizeRoomCode } from './room_code.js';
 import { NetworkDiagnostics } from './diagnostics.js';
 import { setUpDiagnosticsUI } from './diagnostics_ui.js';
@@ -60,6 +61,7 @@ const status = (message, error = false) => {
   $('status').textContent = translateMessage(message);
   $('status').classList.toggle('error', error);
 };
+const feedback = setUpConnectionFeedback();
 const params = new URLSearchParams(location.search);
 let classicUI,
   quickMatch,
@@ -279,9 +281,11 @@ function update(error) {
     updateSettingsForm(session.epoch ? session.settings : data.settings);
   if (classicUI) classicUI.update();
 }
-async function run(action) {
+async function run(action, connecting = false) {
   if (busy) return;
   busy = true;
+  const progress = connecting === 'create' ? 'create-request' : 'lookup';
+  if (connecting) feedback.connecting(progress, true);
   $('create').disabled = true;
   $('join').disabled = true;
   update();
@@ -296,12 +300,15 @@ async function run(action) {
   } finally {
     busy = false;
     update();
+    if (connecting) feedback.connecting(progress, false);
   }
 }
 function makeRoom(store) {
   return new OnlineRoom(
     {
       beforeConnect: () => updates.ensureCurrent(),
+      connecting: (active) => feedback.connecting('room', active),
+      creating: (active) => feedback.connecting('create', active),
       networkReset: () => session.stop(),
       change: () => {
         if (session.epoch && room.data.status === 'lobby') session.stop();
@@ -554,7 +561,7 @@ async function boot() {
         )
       );
       update();
-    })
+    }, 'create')
   );
   const join = () =>
     run(async () => {
@@ -577,7 +584,7 @@ async function boot() {
       status(text('Connecting to the host…', '방장에게 연결 중…'));
       await room.join(id, namesFromForm(), slotsFromForm());
       update();
-    });
+    }, true);
   $('join').addEventListener('click', join);
   $('room-id').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.isComposing) {
@@ -625,8 +632,13 @@ async function boot() {
     })
   );
   $('copy-link').addEventListener('click', async () => {
+    const button = $('copy-link');
+    if (button.getAttribute('aria-busy') === 'true') return;
+    feedback.clearCopy(button);
+    button.setAttribute('aria-busy', 'true');
     try {
       await navigator.clipboard.writeText($('invite-link').value);
+      feedback.copied(button);
       status(text('Invitation link copied.', '초대 링크를 복사했습니다.'));
     } catch (error) {
       $('invite-link').select();
@@ -636,12 +648,19 @@ async function boot() {
           '선택된 초대 링크를 복사하세요.'
         )
       );
+    } finally {
+      button.removeAttribute('aria-busy');
     }
   });
   $('copy-code').addEventListener('click', async () => {
     if (!room.id) return;
+    const button = $('copy-code');
+    if (button.getAttribute('aria-busy') === 'true') return;
+    feedback.clearCopy(button);
+    button.setAttribute('aria-busy', 'true');
     try {
       await navigator.clipboard.writeText(formatRoomCode(room.id));
+      feedback.copied(button);
       status(text('Room code copied.', '방 코드를 복사했습니다.'));
     } catch (error) {
       const range = document.createRange();
@@ -652,6 +671,8 @@ async function boot() {
       status(
         text('Copy the selected room code.', '선택된 방 코드를 복사하세요.')
       );
+    } finally {
+      button.removeAttribute('aria-busy');
     }
   });
   $('controls').addEventListener('change', () => {

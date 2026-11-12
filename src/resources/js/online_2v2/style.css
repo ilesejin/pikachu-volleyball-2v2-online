@@ -150,6 +150,7 @@
   border-color: #e85544 !important;
 }
 .invite-controls {
+  --invite-control-height: 2rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
@@ -161,6 +162,12 @@
 .invite-controls button {
   margin: 0;
 }
+.invite-controls button,
+#invite-link {
+  box-sizing: border-box;
+  height: var(--invite-control-height);
+}
+
 @media (max-width: 600px) {
   .invite-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -491,4 +498,78 @@ select:focus-visible {
 }
 #input-wait {
   font-variant-numeric: tabular-nums;
+}
+
+#connecting-screen {
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 32px));
+  padding: 28px 24px;
+  border: 3px solid #ddd;
+  border-radius: 8px;
+  background: #111;
+  color: #fff;
+  text-align: center;
+}
+#connecting-screen::backdrop {
+  background: rgb(0 0 0 / 75%);
+}
+#connecting-screen h2 {
+  font-size: 1.2rem;
+  margin: 16px 0 12px;
+}
+#connecting-screen p {
+  margin: 0;
+  line-height: 1.5;
+}
+.connecting-spinner {
+  width: 32px;
+  height: 32px;
+  margin: auto;
+  border: 4px solid #555;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: connection-spin 0.9s linear infinite;
+}
+@keyframes connection-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+#copy-link,
+#copy-code {
+  position: relative;
+}
+.copy-result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.25em;
+}
+.copy-confirmed {
+  background: #176b36 !important;
+  color: #fff !important;
+  border-color: #176b36 !important;
+}
+.copy-confirmed .copy-label {
+  visibility: hidden;
+}
+.copy-confirmed .copy-result {
+  animation: copy-pop 0.25s ease-out;
+}
+@keyframes copy-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .connecting-spinner,
+  .copy-confirmed .copy-result {
+    animation: none;
+  }
 }

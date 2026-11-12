@@ -887,6 +887,197 @@ async function screenshot(page, name) {
     );
     return;
   }
+  if (process.env.PIKA_CONNECTION_UI_ONLY) {
+    await host.ev(
+      'const store=__volley.room.transport,publish=store.publish.bind(store);store.publish=async(...args)=>{await new Promise(resolve=>window.releaseCreate=resolve);store.publish=publish;return publish(...args)}'
+    );
+    await click(host, 'create');
+    await host.until(
+      '!!window.releaseCreate && document.getElementById("connecting-screen").open'
+    );
+    assert.equal(
+      await host.ev('document.getElementById("connecting-title").textContent'),
+      'Creating the room…'
+    );
+    await host.ev('releaseCreate()');
+    await host.until(
+      '!!__volley.room.data && !document.getElementById("connecting-screen").open'
+    );
+    await host.until('!__volley.room.closed');
+    await selectSlot(host, '0');
+    const id = await host.ev('__volley.room.id');
+    const guest = await tab(port, 'ko');
+    await guest.ev(
+      `(()=>{const store=__volley.room.transport,peek=store.peek.bind(store),join=store.requestJoin.bind(store);store.peek=async(...args)=>{await new Promise(resolve=>window.releaseLookup=resolve);store.peek=peek;return peek(...args);};store.requestJoin=async(...args)=>{await new Promise(resolve=>window.releaseHandshake=resolve);return join(...args);};})()`
+    );
+    await guest.ev(
+      'document.getElementById("room-id").value=' + JSON.stringify(id)
+    );
+    await click(guest, 'join');
+    await guest.until(
+      'document.getElementById("connecting-screen").open && !!window.releaseLookup'
+    );
+    assert.equal(
+      await guest.ev('document.getElementById("connecting-title").textContent'),
+      '방장에게 연결 중…'
+    );
+    await guest.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    assert.equal(
+      await guest.ev(
+        '(()=>{const r=document.getElementById("connecting-screen").getBoundingClientRect();return r.left>=0 && r.right<=innerWidth;})()'
+      ),
+      true
+    );
+    await screenshot(guest, 'connecting-screen-ko-mobile.png');
+    await guest.ev('releaseLookup()');
+    await guest.until('!!window.releaseHandshake');
+    assert.equal(
+      await guest.ev('document.getElementById("connecting-screen").open'),
+      true,
+      'Must stay open through the WebRTC handshake'
+    );
+    await guest.ev('releaseHandshake()');
+    await guest.until(
+      '__volley.room.connected(__volley.room.data.hostId) && !document.getElementById("connecting-screen").open'
+    );
+    await selectSlot(guest, '2');
+    for (const page of [host, guest]) {
+      const heights = await page.ev(
+        '["invite-link","copy-link","copy-code"].map(id=>document.getElementById(id).getBoundingClientRect().height)'
+      );
+      assert.ok(heights[0] > 0);
+      assert.equal(heights[1], heights[0]);
+      assert.equal(heights[2], heights[0]);
+    }
+
+    await host.ev(
+      'window.copied=[];Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async value=>{copied.push(value)}}})'
+    );
+    for (const button of ['copy-link', 'copy-code']) {
+      const before = await host.ev(
+        '(()=>{const b=document.getElementById(' +
+          JSON.stringify(button) +
+          ');b.focus();const r=b.getBoundingClientRect();return {width:r.width,height:r.height,label:b.textContent}})()'
+      );
+      await click(host, button);
+      await host.until(
+        'document.getElementById(' +
+          JSON.stringify(button) +
+          ').classList.contains("copy-confirmed")'
+      );
+      const after = await host.ev(
+        '(()=>{const b=document.getElementById(' +
+          JSON.stringify(button) +
+          ');const r=b.getBoundingClientRect();return {width:r.width,height:r.height,check:b.querySelector(".copy-result").textContent,focused:document.activeElement===b}})()'
+      );
+      assert.equal(after.width, before.width);
+      assert.equal(after.height, before.height);
+      assert.equal(after.check, '✓');
+      assert.equal(after.focused, true);
+      await click(host, button);
+      await delay(800);
+      assert.equal(
+        await host.ev(
+          'document.getElementById(' +
+            JSON.stringify(button) +
+            ').classList.contains("copy-confirmed")'
+        ),
+        true
+      );
+      await host.until(
+        '!document.getElementById(' +
+          JSON.stringify(button) +
+          ').classList.contains("copy-confirmed")'
+      );
+      assert.equal(
+        await host.ev(
+          'document.getElementById(' + JSON.stringify(button) + ').textContent'
+        ),
+        before.label
+      );
+    }
+    await click(host, 'copy-code');
+    await host.until(
+      'document.getElementById("copy-code").classList.contains("copy-confirmed")'
+    );
+    await host.until(
+      'Number(getComputedStyle(document.querySelector("#copy-code .copy-result")).opacity)>0.9'
+    );
+    await screenshot(host, 'copy-code-confirmation.png');
+    await host.ev(
+      'navigator.clipboard.writeText=async()=>{throw Error("denied")}'
+    );
+    await click(host, 'copy-code');
+    await host.until(
+      'getSelection().toString()===document.getElementById("room-code").textContent'
+    );
+    assert.equal(
+      await host.ev(
+        'document.getElementById("copy-code").classList.contains("copy-confirmed")'
+      ),
+      false,
+      'Clipboard failure must not claim success'
+    );
+    const failed = await tab(port, 'zh');
+    await failed.ev(
+      'document.getElementById("room-id").value="a".repeat(20);const store=__volley.room.transport,peek=store.peek.bind(store);store.peek=async(...args)=>{await new Promise(resolve=>window.releaseFailure=resolve);return peek(...args)}'
+    );
+    await click(failed, 'join');
+    await failed.until(
+      '!!window.releaseFailure && document.getElementById("connecting-screen").open'
+    );
+    assert.equal(
+      await failed.ev(
+        'document.querySelector("#connecting-screen p").textContent'
+      ),
+      '連線建立中，請稍候。'
+    );
+    await failed.ev('releaseFailure()');
+    await failed.until(
+      '!document.getElementById("connecting-screen").open && document.getElementById("status").classList.contains("error")'
+    );
+    // Direct joins are also used by Quick Match, without the manual lookup wrapper.
+    await failed.ev(
+      'window.releaseFailure=null;window.joinAttempt=__volley.room.join("b".repeat(20),["Test"],[]).catch(()=>{});true'
+    );
+    await failed.until(
+      '!!window.releaseFailure && document.getElementById("connecting-screen").open'
+    );
+    await failed.ev('releaseFailure();joinAttempt');
+    assert.equal(
+      await failed.ev('document.getElementById("connecting-screen").open'),
+      false
+    );
+    await failed.ev(
+      '(()=>{const store=__volley.room.transport;store.publish=async()=>{await new Promise(resolve=>window.releaseCreateFailure=resolve);throw Error("Creation failed fixture")};})()'
+    );
+    await click(failed, 'create');
+    await failed.until(
+      '!!window.releaseCreateFailure && document.getElementById("connecting-screen").open'
+    );
+    assert.equal(
+      await failed.ev(
+        'document.getElementById("connecting-title").textContent'
+      ),
+      '正在建立房間…'
+    );
+    await failed.ev('releaseCreateFailure()');
+    await failed.until(
+      '!document.getElementById("connecting-screen").open && __volley.room.closed && document.getElementById("status").classList.contains("error")'
+    );
+    await click(guest, 'leave');
+    await click(host, 'leave');
+    assert.deepEqual(errors, []);
+    console.log(
+      'Connection/copy feedback: lookup and handshake progress, failure cleanup, direct Quick Match join path, translated mobile dialog, repeatable copy checks, stable dimensions, focus and clipboard failure passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_SOLO_EXIT_ONLY) {
     const guests = [
       await tab(port),

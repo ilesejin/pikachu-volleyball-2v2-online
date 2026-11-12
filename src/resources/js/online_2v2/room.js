@@ -47,75 +47,87 @@ export class OnlineRoom {
   }
   async create(name, layout, slots, settings) {
     if (!this.closed) throw new Error('Leave the current room first.');
-    await this.callbacks.beforeConnect?.();
-    if (this.transport.identity) this.selfId = await this.transport.identity();
-    this.departed.clear();
-    this.closed = false;
-    this.isHost = true;
-    this.id = generatePushID();
+    this.emit('creating', true);
     try {
-      this.data = await this.store.create(
-        this.id,
-        this.selfId,
-        name,
-        layout,
-        slots,
-        settings
-      );
-      this.subscribe();
-      return this.id;
-    } catch (error) {
-      this.closed = true;
-      throw error;
+      await this.callbacks.beforeConnect?.();
+      if (this.transport.identity)
+        this.selfId = await this.transport.identity();
+      this.departed.clear();
+      this.closed = false;
+      this.isHost = true;
+      this.id = generatePushID();
+      try {
+        this.data = await this.store.create(
+          this.id,
+          this.selfId,
+          name,
+          layout,
+          slots,
+          settings
+        );
+        this.subscribe();
+        return this.id;
+      } catch (error) {
+        this.closed = true;
+        throw error;
+      }
+    } finally {
+      this.emit('creating', false);
     }
   }
   async join(id, name, slots, expectedHost) {
     if (!this.closed) throw new Error('Leave the current room first.');
-    await this.callbacks.beforeConnect?.();
-    if (!/^[a-z0-9]{20}$/.test(id))
-      throw new Error('Enter a valid 20-character room ID.');
-    if (this.transport.identity) this.selfId = await this.transport.identity();
-    this.departed.clear();
-    this.closed = false;
-    this.isHost = false;
-    this.id = id;
+    this.emit('connecting', true);
     try {
-      const entry = await this.transport.peek(id);
-      if (!entry || entry.schema !== ROOM_SCHEMA || entry.status !== 'lobby')
-        throw new Error('Room not found, or the match has already started.');
-      if (expectedHost && entry.hostId !== expectedHost)
-        throw new Error('The advertised host does not own this room.');
-      this.data = {
-        ...entry,
-        networkRevision: 0,
-        settings: { topology: 'star' },
-        seats: ['', '', '', ''],
-        members: {
-          [entry.hostId]: { slots: [], connected: true },
-          [this.selfId]: { slots: [], connected: false },
-        },
-      };
-      this.joinDetails = { name, slots, compatibility: CLIENT_VERSION };
-      const admitted = new Promise((resolve, reject) => {
-        this.joinResolve = resolve;
-        this.joinReject = reject;
-        this.joinTimer = setTimeout(
-          () => reject(new Error('The host did not respond.')),
-          30000
-        );
-      });
-      admitted.catch(() => {});
-      this.startReports();
-      await this.transport.requestJoin(id, this.selfId, entry.hostId);
-      await this.makePeer(entry.hostId, false);
-      await admitted;
-      clearTimeout(this.joinTimer);
-      this.joinResolve = null;
-      this.joinReject = null;
-    } catch (error) {
-      this.shutdown();
-      await this.transport.clearSignal(id, this.selfId).catch(() => {});
-      throw error;
+      await this.callbacks.beforeConnect?.();
+      if (!/^[a-z0-9]{20}$/.test(id))
+        throw new Error('Enter a valid 20-character room ID.');
+      if (this.transport.identity)
+        this.selfId = await this.transport.identity();
+      this.departed.clear();
+      this.closed = false;
+      this.isHost = false;
+      this.id = id;
+      try {
+        const entry = await this.transport.peek(id);
+        if (!entry || entry.schema !== ROOM_SCHEMA || entry.status !== 'lobby')
+          throw new Error('Room not found, or the match has already started.');
+        if (expectedHost && entry.hostId !== expectedHost)
+          throw new Error('The advertised host does not own this room.');
+        this.data = {
+          ...entry,
+          networkRevision: 0,
+          settings: { topology: 'star' },
+          seats: ['', '', '', ''],
+          members: {
+            [entry.hostId]: { slots: [], connected: true },
+            [this.selfId]: { slots: [], connected: false },
+          },
+        };
+        this.joinDetails = { name, slots, compatibility: CLIENT_VERSION };
+        const admitted = new Promise((resolve, reject) => {
+          this.joinResolve = resolve;
+          this.joinReject = reject;
+          this.joinTimer = setTimeout(
+            () => reject(new Error('The host did not respond.')),
+            30000
+          );
+        });
+        admitted.catch(() => {});
+        this.startReports();
+        await this.transport.requestJoin(id, this.selfId, entry.hostId);
+        await this.makePeer(entry.hostId, false);
+        await admitted;
+        clearTimeout(this.joinTimer);
+        this.joinResolve = null;
+        this.joinReject = null;
+      } catch (error) {
+        this.shutdown();
+        await this.transport.clearSignal(id, this.selfId).catch(() => {});
+        throw error;
+      }
+    } finally {
+      this.emit('connecting', false);
     }
   }
   startReports() {

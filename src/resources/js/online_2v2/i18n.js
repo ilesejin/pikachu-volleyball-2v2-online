@@ -1,5 +1,8 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Creating the room…': '正在建立房間…',
+  'Please wait while your room is created.': '房間建立中，請稍候。',
+  'Please wait while the connection is established.': '連線建立中，請稍候。',
   'Everyone else left. Returned to the lobby.':
     '其他玩家皆已離開，已返回大廳。',
   'The host left. You are now the lobby host.':
