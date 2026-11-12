@@ -425,3 +425,55 @@ select:focus-visible {
 #reload-client {
   margin-bottom: 8px;
 }
+
+#network-diagnostics {
+  width: 100%;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-align: left;
+}
+#ping-indicator {
+  cursor: pointer;
+  padding: 7px 12px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.network-diagnostics-body {
+  background: #111;
+  color: #fff;
+  padding: 12px;
+  border-radius: 0 0 4px 4px;
+}
+.network-diagnostics-body p {
+  margin: 8px 0;
+}
+.network-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+#ping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+#ping-table th,
+#ping-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #555;
+}
+#ping-table th {
+  white-space: nowrap;
+}
+#ping-table td:first-child {
+  overflow-wrap: anywhere;
+  min-width: 130px;
+}
+.network-diagnostics-note {
+  color: #ccc;
+  font-size: 0.8rem;
+}
+#input-wait {
+  font-variant-numeric: tabular-nums;
+}

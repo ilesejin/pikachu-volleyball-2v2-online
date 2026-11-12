@@ -273,6 +273,7 @@ export class OnlineRoom {
       });
   }
   internalMessage(id, message) {
+    if (this.diagnostics?.receive(id, message)) return true;
     if (this.store?.receive && this.store.receive(id, message)) return true;
     if (this.relay?.receive(id, message)) return true;
     if (message.type === 'signal-open') {
@@ -776,6 +777,7 @@ export class OnlineRoom {
     if (host) await this.transport.close(id);
   }
   shutdown() {
+    this.diagnostics?.clear();
     clearTimeout(this.joinTimer);
     if (this.joinReject) this.joinReject(new Error('The room has closed.'));
     this.joinResolve = null;
