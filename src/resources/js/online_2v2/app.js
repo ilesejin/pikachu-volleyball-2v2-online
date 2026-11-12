@@ -56,7 +56,6 @@ let classicUI,
   room,
   session,
   game,
-  inspected = null,
   busy = false;
 function settingsFromForm() {
   return matchSettings({
@@ -84,7 +83,6 @@ function slotsFromForm() {
 }
 function renderPositions() {
   $('pair-name-label').hidden = $('layout').value !== 'pairs';
-  $('join').disabled = !inspected;
 }
 function updateSettingsForm(value) {
   $('court-width').value = value.courtWidth;
@@ -108,7 +106,7 @@ function update(error) {
     $('local-panel').hidden = true;
     $('game-panel').hidden = true;
     $('create').disabled = busy;
-    $('find').disabled = busy;
+    $('join').disabled = busy;
     if (classicUI) classicUI.update();
     return;
   }
@@ -208,7 +206,6 @@ async function run(action) {
   busy = true;
   $('create').disabled = true;
   $('join').disabled = true;
-  $('find').disabled = true;
   update();
   try {
     await action();
@@ -217,7 +214,6 @@ async function run(action) {
   } finally {
     busy = false;
     update();
-    if (room.closed) $('join').disabled = !inspected;
   }
 }
 function makeRoom(store) {
@@ -422,16 +418,10 @@ async function boot() {
     event.preventDefault()
   );
   $('layout').addEventListener('change', () => {
-    inspected = null;
     renderPositions();
-  });
-  $('room-id').addEventListener('input', () => {
-    inspected = null;
-    $('join').disabled = true;
   });
   $('quick-match').addEventListener('click', () =>
     run(async () => {
-      inspected = null;
       await quickMatch.start({
         name: namesFromForm(),
         layout: $('layout').value,
@@ -461,7 +451,7 @@ async function boot() {
       update();
     })
   );
-  const find = () =>
+  const join = () =>
     run(async () => {
       const id = $('room-id').value.trim().toLowerCase();
       if (!/^[a-z0-9]{20}$/.test(id))
@@ -477,32 +467,24 @@ async function boot() {
             '방이 없거나 이미 경기가 시작되었습니다.'
           )
         );
-      inspected = { id, data };
       $('layout').value = data.layout;
-      renderPositions(data);
-      status(
-        text(
-          'Join the lobby, then choose an empty slot.',
-          '대기실에 참가한 뒤 빈 자리를 선택하세요.'
-        )
-      );
-    });
-  $('find').addEventListener('click', find);
-  $('join').addEventListener('click', () =>
-    run(async () => {
-      if (!inspected)
-        throw new Error(text('Find the room first.', '먼저 방을 찾으세요.'));
-      await room.join(inspected.id, namesFromForm(), slotsFromForm());
+      renderPositions();
       status(text('Connecting to the host…', '방장에게 연결 중…'));
+      await room.join(id, namesFromForm(), slotsFromForm());
       update();
-    })
-  );
+    });
+  $('join').addEventListener('click', join);
+  $('room-id').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault();
+      if (!$('join').disabled) $('join').click();
+    }
+  });
   $('leave').addEventListener('click', () =>
     run(async () => {
       if (quickMatch.active) await quickMatch.stop();
       session.stop();
       await room.leave();
-      inspected = null;
       renderPositions();
       status(text('Left the room.', '방에서 나왔습니다.'));
     })
@@ -567,7 +549,6 @@ async function boot() {
   });
   if (params.get('room')) {
     $('room-id').value = params.get('room');
-    await find();
   }
 }
 boot().catch((error) =>

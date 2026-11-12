@@ -72,7 +72,7 @@ In the intended GitHub repository, configure Pages to publish from `gh-pages` at
 
 ## Optional Quick Match backend
 
-The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server implements this client's `/v2/match` protocol. It verifies Firebase tokens from the same project and keeps the new queue in memory. The retired `/v1/match` endpoint only returns HTTP 410; the server has no active Firestore access. See its README for environment variables and deployment. It does not run physics or relay gameplay.
+The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server implements this client's `/v2/match` protocol. It verifies Firebase tokens from the same project using Google's public signing keys and keeps the queue in memory. No service-account JSON, Google Application Default Credentials, or Firebase Admin SDK is required. The retired `/v1/match` endpoint only returns HTTP 410; the server has no active Firestore access. See its README for environment variables and deployment. It does not run physics or relay gameplay.
 
 After deploying that server, edit `src/resources/js/online_2v2/quick_match_config.js`:
 

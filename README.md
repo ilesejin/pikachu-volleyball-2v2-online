@@ -85,7 +85,7 @@ Original Windows game (1997): SACHI SOFT / SAWAYAKAN Programmers and Satoshi Tak
 
 ## Quick Match server
 
-The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` project now supports the new 2v2 lobby. Configure it with the same new Firebase project, then set `quickMatchServerURL` in `src/resources/js/online_2v2/quick_match_config.js` to its HTTPS origin. Quick Match is disabled while that URL is empty. See the server README for credentials, CORS, local running, and deployment.
+The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` project now supports the new 2v2 lobby. Configure it with the same new Firebase project, then set `quickMatchServerURL` in `src/resources/js/online_2v2/quick_match_config.js` to its HTTPS origin. Quick Match is disabled while that URL is empty. No service-account JSON or Admin credentials are required; token verification uses Google's public keys. See the server README for project configuration, CORS, local running, and deployment.
 
 Choose an arrangement and region, then press **Quick Match**. The first browser creates and advertises a room; later searches reserve browser capacity in that lobby. Everyone arrives unassigned and chooses a free slot or whole team there. The host may start early with AI. Running matches accept no new Quick Match players. To search again after a match, leave the room first. Invitation rooms continue to work without this server.
 

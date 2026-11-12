@@ -517,7 +517,7 @@ async function click(page, id) {
     await page.ev(
       'window.backDebug=[];document.getElementById("back-lobby").addEventListener("click",()=>backDebug.push({stage:"capture",disabled:document.getElementById("back-lobby").disabled,phase:__volley.session.phase,isHost:__volley.room.isHost}),{capture:true,once:true});document.addEventListener("click",()=>backDebug.push({stage:"bubbled",phase:__volley.session.phase,status:__volley.room.data.status}),{once:true});'
     );
-  if (['create', 'find', 'join'].includes(id))
+  if (['create', 'join'].includes(id))
     await page.ev(
       "document.getElementById('about-with-your-friend').hidden=false"
     );
@@ -528,9 +528,8 @@ async function click(page, id) {
   );
 }
 async function join(page, roomId, slot) {
+  assert.equal(await page.ev('document.getElementById("find") === null'), true);
   await page.ev(`document.getElementById('room-id').value='${roomId}'`);
-  await click(page, 'find');
-  await page.until('!document.getElementById("join").disabled');
   await click(page, 'join');
   await page.until(
     '!__volley.room.closed && Array.from(__volley.room.peers.keys()).some(id=>__volley.room.connected(id))'
@@ -1056,7 +1055,7 @@ async function screenshot(page, name) {
     ['重新開啟的玩家', '第二位隊友']
   );
   await nicknamePage.ev('document.getElementById("room-id").value="bad"');
-  await click(nicknamePage, 'find');
+  await click(nicknamePage, 'join');
   await nicknamePage.until(
     'document.getElementById("status").textContent.includes("請輸入20")'
   );
