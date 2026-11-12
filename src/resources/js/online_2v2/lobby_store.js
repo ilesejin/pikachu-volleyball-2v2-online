@@ -138,8 +138,17 @@ export class LobbyStore {
     else if (action === 'remove') {
       const uid = host ? args.clientId : actor;
       if (uid === data.hostId) throw new Error('The host must close the room.');
+      const wasMember = !!data.members[uid];
       delete data.members[uid];
       data.seats = data.seats.map((owner) => (owner === uid ? '' : owner));
+      // Serialized removals make simultaneous departures observe the final roster.
+      if (
+        wasMember &&
+        data.layout === 'four' &&
+        data.status === 'playing' &&
+        Object.keys(data.members).length === 1
+      )
+        data.status = 'lobby';
     } else if (action === 'networkReady') {
       if (
         data.networkRevision !== args.revision ||

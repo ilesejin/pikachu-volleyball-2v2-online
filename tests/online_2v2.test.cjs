@@ -1588,7 +1588,11 @@ test('duo departure stops physics before removal and returns to lobby without re
       room: {
         isHost: host,
         id: 'same-code',
-        data: { layout: 'pairs', hostId: 'opponent' },
+        data: {
+          layout: 'pairs',
+          hostId: 'opponent',
+          members: { opponent: { slots: [0, 1] } },
+        },
         async removeMember(id) {
           calls.push('remove:' + id);
         },
@@ -1597,7 +1601,7 @@ test('duo departure stops physics before removal and returns to lobby without re
             calls.push(value.status);
           },
         },
-        async becomeDuoHost() {
+        async becomeLobbyHost() {
           calls.push('host');
         },
       },
@@ -1609,4 +1613,66 @@ test('duo departure stops physics before removal and returns to lobby without re
     );
     assert.equal(match.epoch, null);
   }
+});
+
+test('the last solo participant stops before AI takeover and retains its lobby', async () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch']);
+  for (const host of [true, false]) {
+    const calls = [];
+    const match = Object.assign(Object.create(OnlineMatch.prototype), {
+      epoch: 'active',
+      stop() {
+        calls.push('stop');
+        this.epoch = null;
+      },
+      notify() {},
+      room: {
+        isHost: host,
+        selfId: 'me',
+        id: 'code',
+        data: {
+          layout: 'four',
+          hostId: host ? 'me' : 'opponent',
+          members: { me: { slots: [2] }, opponent: { slots: [0] } },
+        },
+        connected: () => false,
+        async removeMember(id) {
+          calls.push('remove');
+        },
+        store: {
+          async update() {
+            calls.push('lobby');
+          },
+        },
+        async becomeLobbyHost() {
+          calls.push('host');
+        },
+      },
+    });
+    await match.peerClosed('opponent');
+    assert.deepEqual(
+      calls,
+      host ? ['stop', 'remove', 'lobby'] : ['stop', 'host']
+    );
+  }
+});
+
+test('failure of an unadmitted peer does not abort a solo-with-AI match', () => {
+  const { OnlineMatch } = load('online_2v2/session.js', ['OnlineMatch']);
+  const match = Object.assign(Object.create(OnlineMatch.prototype), {
+    epoch: 'active',
+    stop() {
+      throw Error('Must not stop');
+    },
+    notify() {},
+    room: {
+      isHost: true,
+      selfId: 'me',
+      data: { layout: 'four', members: { me: { slots: [0] } } },
+      connected: () => false,
+      removeMember: async () => {},
+    },
+  });
+  match.peerClosed('not-admitted');
+  assert.equal(match.epoch, 'active');
 });

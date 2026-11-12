@@ -1,5 +1,9 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Everyone else left. Returned to the lobby.':
+    '其他玩家皆已離開，已返回大廳。',
+  'The host left. You are now the lobby host.':
+    '房主已離開，你現在是大廳房主。',
   'The opposing duo left. Returned to the lobby.':
     '對方雙人組已離開，已返回大廳。',
   'The opposing duo left. You are now the lobby host.':
@@ -200,6 +204,10 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'Everyone else left. Returned to the lobby.':
+    '다른 플레이어가 모두 나가 대기실로 돌아왔습니다.',
+  'The host left. You are now the lobby host.':
+    '방장이 나갔습니다. 이제 대기실의 방장입니다.',
   'The opposing duo left. Returned to the lobby.':
     '상대 듀오가 나가 대기실로 돌아왔습니다.',
   'The opposing duo left. You are now the lobby host.':

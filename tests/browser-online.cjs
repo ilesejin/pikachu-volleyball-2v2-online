@@ -887,6 +887,109 @@ async function screenshot(page, name) {
     );
     return;
   }
+  if (process.env.PIKA_SOLO_EXIT_ONLY) {
+    const guests = [
+      await tab(port),
+      await tab(port, 'ko'),
+      await tab(port, 'zh'),
+    ];
+    for (const page of [host, ...guests])
+      await page.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+    for (const [sync, topology] of [
+      ['lockstep', 'mesh'],
+      ['lockstep', 'star'],
+      ['host', 'mesh'],
+    ]) {
+      await host.ev(
+        'document.getElementById("layout").value="four";document.getElementById("synchronization").value=' +
+          JSON.stringify(sync) +
+          ';document.getElementById("topology").value=' +
+          JSON.stringify(topology)
+      );
+      await click(host, 'create');
+      await host.until('!__volley.room.closed');
+      await selectSlot(host, '0');
+      const id = await host.ev('__volley.room.id');
+      const lobby = async (page) => {
+        await page.until(
+          '!__volley.room.closed && __volley.room.isHost && __volley.room.data.status==="lobby" && __volley.session.epoch===null && Object.keys(__volley.room.data.members).length===1'
+        );
+        assert.equal(await page.ev('__volley.room.id'), id);
+        assert.equal(await page.ev('__volley.game.paused'), true);
+        assert.equal(await page.ev('__volley.session.inputPacer===null'), true);
+      };
+      const start = async (owner) => {
+        await owner.until('!document.getElementById("start").disabled');
+        await click(owner, 'start');
+        await owner.until(
+          '__volley.session.epoch!==null && __volley.session.phase==="playing" && __volley.room.data.status==="playing" && (__volley.room.isHost && !__volley.session.lockstep ? __volley.session.frame:__volley.session.lastFrame)>10'
+        );
+      };
+      for (let n = 0; n < 3; n++) await join(guests[n], id, String(n + 1));
+      await start(host);
+      await click(guests[0], 'leave');
+      await host.until(
+        'Object.keys(__volley.room.data.members).length===3 && __volley.game.players[1].isComputer'
+      );
+      assert.ok(await host.ev('__volley.session.epoch!==null'));
+      await Promise.all([click(guests[1], 'leave'), click(guests[2], 'leave')]);
+      await lobby(host);
+      assert.deepEqual(
+        await host.ev('__volley.room.data.members[__volley.room.selfId].slots'),
+        [0]
+      );
+      const frame = await host.ev('__volley.game.frameCounter');
+      await delay(100);
+      assert.equal(
+        await host.ev('__volley.game.frameCounter'),
+        frame,
+        'No AI-only continuation after returning to lobby'
+      );
+      // Explicit solo-with-AI starts remain supported; only departure aborts.
+      await start(host);
+      await click(host, 'back-lobby');
+      await host.until('__volley.room.data.status==="lobby"');
+      await join(guests[0], id, '2');
+      await start(host);
+      const names = await guests[0].ev(
+        '__volley.room.data.members[__volley.room.selfId].names'
+      );
+      await click(host, 'leave');
+      await lobby(guests[0]);
+      assert.deepEqual(
+        await guests[0].ev(
+          '__volley.room.data.members[__volley.room.selfId].slots'
+        ),
+        [2]
+      );
+      assert.deepEqual(
+        await guests[0].ev(
+          '__volley.room.data.members[__volley.room.selfId].names'
+        ),
+        names
+      );
+      await join(host, id, '0');
+      await start(guests[0]);
+      await guests[0].ev('__volley.room.shutdown();__volley.session.stop()');
+      await lobby(host);
+      await join(guests[0], id, '2');
+      await start(host);
+      await guests[0].ev('__volley.room.shutdown();__volley.session.stop()');
+      await lobby(host);
+      await click(host, 'leave');
+      console.log(
+        'Solo exit passed:',
+        sync,
+        topology,
+        'concurrent departures, AI with multiple humans, solo AI start, graceful/abrupt host promotion and guest loss.'
+      );
+    }
+    assert.deepEqual(errors, []);
+    assert.equal(rooms.size, 0);
+    return;
+  }
   if (process.env.PIKA_DUO_ABORT_ONLY) {
     const guest = await tab(port, 'ko');
     for (const mode of ['lockstep', 'host']) {
@@ -1871,7 +1974,10 @@ async function screenshot(page, name) {
     await partial.ev('__replay.seekFrame(__replay.doubles.events.length)');
     assert.equal(await partial.ev('__replay.pikaVolley.players.length'), 4);
     await click(host, 'leave');
-    await guest.until('__volley.room.closed');
+    await guest.until(
+      '__volley.room.isHost && __volley.room.data.status==="lobby"'
+    );
+    await click(guest, 'leave');
     assert.equal(
       await host.ev('downloads.length'),
       1,
@@ -2479,12 +2585,24 @@ async function screenshot(page, name) {
   await host.until(
     '__volley.game.players[3].isComputer && !__volley.room.data.seats[3]'
   );
+  // A guest's mesh links can close before its host link. The approved
+  // conservative fallback returns to the lobby until that departure settles.
+  if (await host.ev('__volley.room.networkFault')) {
+    assert.equal(
+      await host.ev('Object.keys(__volley.room.data.members).length'),
+      2
+    );
+    await click(host, 'reconnect-network');
+    await assertConnections(host, [player3], 'mesh');
+    await click(host, 'start');
+  }
   await host.until('__volley.session.lastFrame>' + (stalled + 15));
   await assertSameSimulation(host, [player3]);
   await click(host, 'leave');
   await player3.until(
-    '__volley.room.closed && __volley.session.phase==="idle"'
+    '__volley.room.isHost && __volley.room.data.status==="lobby" && __volley.session.phase==="idle"'
   );
+  await click(player3, 'leave');
   console.log(
     'Four browsers: real WebRTC input, host snapshots, switching to four-browser lockstep, identical full states, missing-input stalls, pause/resume, AI takeover, and host departure passed.'
   );
@@ -2661,7 +2779,10 @@ async function screenshot(page, name) {
   await click(sharedHost, 'start');
   await sharedGuest.until('__volley.session.lastFrame>2');
   await click(sharedHost, 'leave');
-  await sharedGuest.until('__volley.room.closed');
+  await sharedGuest.until(
+    '__volley.room.isHost && __volley.room.data.status==="lobby"'
+  );
+  await click(sharedGuest, 'leave');
   await click(sharedHost, 'create');
   await sharedHost.until('!__volley.room.closed && !!__volley.room.data');
   await selectSlot(sharedHost, '0');
@@ -2670,7 +2791,10 @@ async function screenshot(page, name) {
   await click(sharedHost, 'start');
   await sharedGuest.until('__volley.session.lastFrame>3');
   await click(sharedHost, 'leave');
-  await sharedGuest.until('__volley.room.closed');
+  await sharedGuest.until(
+    '__volley.room.isHost && __volley.room.data.status==="lobby"'
+  );
+  await click(sharedGuest, 'leave');
   console.log(
     'Same browser profile: separate tabs join independently, select different slots, run lockstep physics, and close cleanly.'
   );

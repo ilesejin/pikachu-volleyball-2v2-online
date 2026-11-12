@@ -300,7 +300,11 @@ export class OnlineRoom {
       !this.isHost &&
       id === this.data.hostId
     ) {
-      if (this.data.layout === 'pairs' && this.data.status === 'playing') {
+      if (
+        this.data.status === 'playing' &&
+        (this.data.layout === 'pairs' ||
+          Object.keys(this.data.members).length === 2)
+      ) {
         this.emit('peerClosed', id);
         return true;
       }
@@ -778,11 +782,18 @@ export class OnlineRoom {
     this.dropPeer(id);
     await this.store.remove(this.id, id);
   }
-  async becomeDuoHost() {
-    if (this.closed || this.isHost || this.data.layout !== 'pairs') return;
+  async becomeLobbyHost() {
+    if (
+      this.closed ||
+      this.isHost ||
+      (this.data.layout !== 'pairs' &&
+        Object.keys(this.data.members).length !== 2)
+    )
+      return;
     const id = this.id;
     const member = this.data.members[this.selfId];
     const settings = this.data.settings;
+    const layout = this.data.layout;
     this.shutdown();
     this.closed = false;
     this.isHost = true;
@@ -792,7 +803,7 @@ export class OnlineRoom {
         id,
         this.selfId,
         member.names || [member.name],
-        'pairs',
+        layout,
         member.slots,
         settings
       );
@@ -806,12 +817,13 @@ export class OnlineRoom {
     if (this.closed) return;
     const id = this.id,
       host = this.isHost;
-    // Finish old-host cleanup before the remaining duo republishes this code.
+    // Finish old-host cleanup before the remaining player/team republishes this code.
     // Otherwise late cleanup could target the replacement lobby.
     if (
       host &&
-      this.data.layout === 'pairs' &&
-      this.data.status === 'playing'
+      this.data.status === 'playing' &&
+      (this.data.layout === 'pairs' ||
+        Object.keys(this.data.members).length === 2)
     ) {
       try {
         await this.transport.close(id);

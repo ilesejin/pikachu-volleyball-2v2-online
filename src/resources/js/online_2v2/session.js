@@ -349,7 +349,24 @@ export class OnlineMatch {
   }
   peerClosed(id) {
     if (!this.room) return;
-    if (this.room.data.layout === 'pairs' && this.epoch) {
+    const duo = this.room.data.layout === 'pairs';
+    const soloHostAlone =
+      this.room.isHost &&
+      !duo &&
+      !Object.keys(this.room.data.members).some(
+        (peer) =>
+          peer !== this.room.selfId && peer !== id && this.room.connected(peer)
+      );
+    const soloGuestAlone =
+      !this.room.isHost &&
+      !duo &&
+      id === this.room.data.hostId &&
+      Object.keys(this.room.data.members).length === 2;
+    if (
+      this.epoch &&
+      this.room.data.members?.[id] &&
+      (duo || soloHostAlone || soloGuestAlone)
+    ) {
       this.stop();
       if (this.room.isHost) {
         const room = this.room;
@@ -358,17 +375,25 @@ export class OnlineMatch {
           .then(() => room.store.update(room.id, { status: 'lobby' }))
           .then(() =>
             this.notify(
-              new Error('The opposing duo left. Returned to the lobby.')
+              new Error(
+                duo
+                  ? 'The opposing duo left. Returned to the lobby.'
+                  : 'Everyone else left. Returned to the lobby.'
+              )
             )
           )
           .catch((error) => this.notify(error));
       }
       if (id === this.room.data.hostId) {
         return this.room
-          .becomeDuoHost()
+          .becomeLobbyHost()
           .then(() =>
             this.notify(
-              new Error('The opposing duo left. You are now the lobby host.')
+              new Error(
+                duo
+                  ? 'The opposing duo left. You are now the lobby host.'
+                  : 'The host left. You are now the lobby host.'
+              )
             )
           )
           .catch((error) => {

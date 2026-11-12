@@ -314,3 +314,35 @@ test('duo start requires a second connected client even when AI fill is enabled'
   await store.beginMatch('room', 'host', {});
   assert.equal(room.data.status, 'playing');
 });
+
+test('serialized solo departures republish the lobby only after the last opponent leaves', async () => {
+  const { room, store, calls } = await fixture();
+  await store.selectSlots('room', 'host', [0]);
+  await store.beginMatch('room', 'host', {});
+  await store.remove('room', 'not-admitted');
+  assert.equal(
+    room.data.status,
+    'playing',
+    'A failed unadmitted connection is not a departing player'
+  );
+  await store.update('room', { status: 'lobby' });
+  for (const [id, slot] of [
+    ['a', 1],
+    ['b', 2],
+    ['c', 3],
+  ]) {
+    await store.enqueue(id, 'claim', {
+      compatibility: clientVersion.CLIENT_VERSION,
+      name: id,
+      slots: [slot],
+    });
+    await store.networkReady('room', id, 0, true);
+  }
+  await store.beginMatch('room', 'host', {});
+  await store.remove('room', 'a');
+  assert.equal(room.data.status, 'playing');
+  await Promise.all([store.remove('room', 'b'), store.remove('room', 'c')]);
+  assert.equal(room.data.status, 'lobby');
+  assert.deepEqual(Object.keys(room.data.members), ['host']);
+  assert.equal(calls.at(-1)[0], 'publish');
+});
