@@ -45,7 +45,7 @@ const protocol = load(
 const { FirebaseRoomStore } = load(
   'online_2v2/firebase_store.js',
   ['FirebaseRoomStore'],
-  { ...appSDK, ...authSDK, ...dbSDK, ...protocol, firebaseConfig: {} }
+  { ...appSDK, ...authSDK, ...dbSDK, ...protocol, ROOM_SCHEMA: 'pikavolley-2v2-v4', firebaseConfig: {} }
 );
 const clients = [];
 async function client(name, login = true) {

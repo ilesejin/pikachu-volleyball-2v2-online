@@ -19,6 +19,35 @@ class BrowserTestStore {
     if (!result.ok) throw new Error(data.error);
     return data;
   }
+  publish(id, data) {
+    return this.request('publish', { id, data });
+  }
+  unpublish(id) {
+    return this.request('unpublish', { id });
+  }
+  requestJoin(id, guestId, hostId) {
+    return this.request('requestJoin', { id, guestId, hostId });
+  }
+  watchRequests(id, receive, error) {
+    const seen = new Set();
+    return this.poll(
+      'requests',
+      { id },
+      (values) => {
+        for (const [guestId, data] of values)
+          if (!seen.has(guestId)) {
+            seen.add(guestId);
+            receive(guestId, data);
+          }
+        for (const guestId of seen)
+          if (!values.some(([uid]) => uid === guestId)) seen.delete(guestId);
+      },
+      error
+    );
+  }
+  clearSignal(id, peerId) {
+    return this.request('clearSignal', { id, peerId });
+  }
   create(id, hostId, name, layout, slots, settings) {
     return this.request('create', {
       id,

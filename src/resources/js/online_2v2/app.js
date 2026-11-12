@@ -16,7 +16,7 @@ import '@pixi/canvas-display';
 import { PikachuVolleyball } from '../offline_2v2/pikavolley.js';
 import { ASSETS_PATH } from '../offline_2v2/assets_path.js';
 import { OnlineRoom } from './room.js';
-import { FirebaseRoomStore } from './firebase_store.js';
+import { SignalingStore } from './signaling_store.js';
 import { OnlineMatch } from './session.js';
 import {
   matchSettings,
@@ -310,7 +310,7 @@ async function boot() {
     );
   });
   session = new OnlineMatch(game, ticker, update);
-  let store = new FirebaseRoomStore();
+  let store = new SignalingStore();
   // Browser tests may inject a local signaling store; production builds ignore this hook.
   if (
     process.env.NODE_ENV === 'development' &&
@@ -354,7 +354,7 @@ async function boot() {
         );
       const token = await store.token();
       const response = await fetch(
-        matchmakingURL.replace(/\/$/, '') + '/v1/match',
+        matchmakingURL.replace(/\/$/, '') + '/v2/match',
         {
           method: 'POST',
           headers: {

@@ -108,5 +108,45 @@ service cloud.firestore {
         }
       }
     }
+    // v5: only rendezvous and temporary host/guest signaling. Keep /rooms
+    // above intact for older deployed clients; no v5 lobby/gameplay is stored.
+    match /rendezvous/{roomId} {
+      function owner() { return signedIn() && resource.data.hostId == request.auth.uid; }
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['schema','hostId','layout','status'])
+        && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.schema == 'pikavolley-2v2-v5'
+        && request.resource.data.layout in ['four','pairs'] && request.resource.data.status == 'lobby';
+      allow update: if owner() && request.resource.data == resource.data;
+      allow delete: if signedIn() && (resource == null || owner());
+      match /requests/{guestId} {
+        function endpoint(data) { return signedIn() && request.auth.uid in [data.hostId, data.guestId]; }
+        function signal() { return get(/databases/$(database)/documents/rendezvous/$(roomId)/requests/$(guestId)).data; }
+        allow get: if signedIn() && (resource == null || request.auth.uid == guestId || resource.data.hostId == request.auth.uid);
+        // Host listeners include a matching hostId query, so cleanup also works after unpublishing.
+        allow list: if signedIn() && resource.data.hostId == request.auth.uid;
+        allow create: if signedIn() && request.auth.uid == guestId
+          && request.resource.data.keys().hasOnly(['guestId','hostId'])
+          && request.resource.data.guestId == guestId
+          && request.resource.data.hostId != guestId
+          && request.resource.data.hostId == get(/databases/$(database)/documents/rendezvous/$(roomId)).data.hostId;
+        allow update: if endpoint(resource.data)
+          && ((request.auth.uid == resource.data.hostId
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer'])
+              && request.resource.data.offer.type == 'offer' && request.resource.data.offer.sdp is string && request.resource.data.offer.sdp.size() < 32768)
+            || (request.auth.uid == guestId
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer'])
+              && request.resource.data.answer.type == 'answer' && request.resource.data.answer.sdp is string && request.resource.data.answer.sdp.size() < 32768));
+        allow delete: if endpoint(resource.data);
+        match /{side}/{candidateId} {
+          allow read, delete: if endpoint(signal());
+          allow create: if endpoint(signal())
+            && ((side == 'hostCandidates' && request.auth.uid == signal().hostId)
+              || (side == 'guestCandidates' && request.auth.uid == guestId))
+            && request.resource.data.candidate is string && request.resource.data.candidate.size() < 8192;
+        }
+      }
+    }
   }
 }

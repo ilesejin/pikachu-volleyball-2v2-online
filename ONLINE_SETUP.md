@@ -22,6 +22,30 @@ Use your Firebase console's actual values. These are browser configuration value
 
 Install dependencies with `npm ci`, then use `npm start` and open `/en/` or `/ko/`. A room code is required to discover a room; there is no public room directory. Guests must remain connected before the host starts the match. WebRTC needs HTTPS on a published site (localhost works for development).
 
+## Signaling-only update (protocol v5)
+
+Deploy these changes in this order:
+
+1. Publish the complete `firestore.2v2.rules` in your Firebase project's Firestore Rules tab. It retains the existing `/rooms` rules for deployed v4 clients and adds `/rendezvous` for v5. Do not replace it with the original public P2P rules.
+2. Update/redeploy `pikachu-volleyball-2v2-online-quick-match-server-main`. New clients use `/v2/match`; `/v1/match` remains available for older clients. The v2 queue authenticates Firebase tokens but performs no Firestore reads or writes. Keep one server instance because advertisements and reservations are in memory.
+3. Run `npm run deploy` in this online frontend repository. This builds and publishes the frontend only; it does not deploy rules or the matchmaking server. All participants should reload and create/join a new room after upgrading.
+
+Firestore now stores only a small join entry (`schema`, `hostId`, `layout`, `status`) and temporary host/guest signaling. The host validates admission, names, free-slot changes, random assignment, readiness, settings, and start requests in memory and broadcasts authoritative lobby updates over reliable WebRTC channels. Guests cannot modify another participant or change host-only settings. Each browser still has its own anonymous identity, including separate tabs.
+
+A guest reads the join entry and creates its own authenticated signaling request. After the host connection opens, it requests admission over WebRTC. Both endpoints acknowledge opening and finish pending candidate writes before the host removes the temporary offers, answers, candidates, and listeners. Only the three host links in a four-browser room use Firestore; guest-to-guest mesh signaling is relayed through the host over WebRTC. Pair rooms need one Firestore-assisted link. Topology changes keep host links open and rebuild guest links without Firestore signaling. The physics engine, lockstep and snapshot modes, checkpoint rules, and chat are unchanged.
+
+Starting a match removes its join entry. Returning to the lobby recreates the same room code, so new guests can join again. Refreshing requires rejoining; host departure ends the room. Abrupt browser closure or a network failure can still leave temporary signaling/entries because cleanup is best effort. Older v4 rooms and v5 rooms cannot connect to each other.
+
+The host keeps its request listener while the room is open, but unchanged listeners do not generate periodic document reads. Quick Match still sends HTTP heartbeats every two seconds; its v2 server keeps advertisements and capacity reservations in memory instead of fetching rooms from Firestore. Advertisements are advisory: the authenticated host makes the final admission decision, and the joining client checks that the advertised host matches the Firestore entry.
+
+To verify the new rules locally:
+
+```powershell
+firebase emulators:exec --project demo-pikavolley-2v2 --config firebase.2v2.json --only firestore,auth "node tests/signaling-rules.cjs"
+```
+
+The existing `tests/firestore-rules.cjs` exercises the retained v4 rules. No test or build command publishes to a live Firebase project.
+
 ## Connectivity
 
 `src/resources/js/data_channel/rtc_configuration.js` supplies the existing STUN configuration. Add your TURN service to its `iceServers` if direct connections fail across restrictive networks. Use short-lived TURN credentials supplied by an appropriate backend for a public deployment; static browser code cannot keep a long-lived TURN password secret.
@@ -46,7 +70,7 @@ In the intended GitHub repository, configure Pages to publish from `gh-pages` at
 
 ## Optional Quick Match backend
 
-The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server now implements this client's `/v1/match` protocol. It verifies Firebase tokens from the same project and reads advertised room documents using Admin SDK credentials. See its README for environment variables and deployment. It does not run physics or relay gameplay.
+The sibling `pikachu-volleyball-2v2-online-quick-match-server-main` server implements this client's `/v2/match` protocol. It verifies Firebase tokens from the same project and keeps the new queue in memory. The retained `/v1/match` endpoint still reads Firestore for older clients. See its README for environment variables and deployment. It does not run physics or relay gameplay.
 
 After deploying that server, edit `src/resources/js/online_2v2/quick_match_config.js`:
 
@@ -58,7 +82,7 @@ For local development use `http://localhost:3000`. Published HTTPS pages need an
 
 To run the combined local browser/server integration tests, build with `npx webpack --config webpack.dev.js`, set `PIKA_QUICK_MATCH_SERVER` to the absolute sibling server directory, then run `npm run test:browser`. These tests use the actual server matchmaker/HTTP handler, a local signaling fixture, and real WebRTC, without live Firebase requests.
 
-## Lobby and synchronization update (protocol v4)
+## Retained older protocol v4 (historical deployment notes)
 
 Publish the current `firestore.2v2.rules` and update the Quick Match backend together with the frontend. The new rules allow unassigned lobby members, atomic free-slot selection/release, own-player name editing, and deny starting while a joined human is unassigned. Player names and slots are locked during matches. This uses `pikavolley-2v2-v4`; create new rooms after upgrading. Version-1/version-2/version-3 clients cannot join version-4 rooms. The Quick Match server and Firestore rules also need this protocol update; npm run deploy publishes only the frontend.
 

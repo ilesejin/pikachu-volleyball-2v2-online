@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const root = path.resolve(__dirname, '../dist'),
   artifacts = path.resolve(__dirname, '../.test-artifacts');
+const signalingOperations = new Map();
 const rooms = new Map(),
   signals = new Map(),
   candidates = new Map();
@@ -23,13 +24,44 @@ const randomizedPositions = Function(
 )(require('node:crypto').webcrypto);
 function handle(data) {
   const { action, id, peerId, side } = data;
+  signalingOperations.set(action, (signalingOperations.get(action) || 0) + 1);
   const names = Array.isArray(data.name)
     ? data.name
     : [data.name, ...(data.layout === 'pairs' ? ['Player 2'] : [])];
+  if (action === 'publish') {
+    rooms.set(id, {
+      schema: 'pikavolley-2v2-v5',
+      hostId: data.data.hostId,
+      layout: data.data.layout,
+      status: 'lobby',
+    });
+    return {};
+  }
+  if (action === 'unpublish') {
+    rooms.delete(id);
+    return {};
+  }
+  if (action === 'requestJoin') {
+    signals.set(id + '/' + data.guestId, {
+      guestId: data.guestId,
+      hostId: data.hostId,
+    });
+    return {};
+  }
+  if (action === 'requests')
+    return Array.from(signals)
+      .filter(([key]) => key.startsWith(id + '/'))
+      .map(([key, value]) => [key.slice(id.length + 1), value]);
+  if (action === 'clearSignal') {
+    signals.delete(id + '/' + peerId);
+    for (const key of candidates.keys())
+      if (key.startsWith(id + '/' + peerId + '/')) candidates.delete(key);
+    return {};
+  }
   if (action === 'create') {
     if (rooms.has(id)) throw Error('Room already exists');
     const room = {
-      schema: 'pikavolley-2v2-v4',
+      schema: 'pikavolley-2v2-v5',
       hostId: data.hostId,
       layout: data.layout,
       settings: data.settings,
@@ -61,7 +93,11 @@ function handle(data) {
         if (key.startsWith(id + '/')) map.delete(key);
     return {};
   }
-  if (!room) throw Error('Room not found');
+  if (
+    !room &&
+    !['offer', 'answer', 'signal', 'candidate', 'candidates'].includes(action)
+  )
+    throw Error('Room not found');
   if (action === 'claim') {
     if (
       room.status !== 'lobby' ||
@@ -169,7 +205,11 @@ function handle(data) {
     return {};
   }
   if (action === 'offer') {
-    signals.set(key, { ...data.endpoints, offer: data.offer });
+    signals.set(key, {
+      ...signals.get(key),
+      ...data.endpoints,
+      offer: data.offer,
+    });
     return {};
   }
   if (action === 'answer') {
@@ -196,7 +236,7 @@ const types = {
 };
 let matchmakingApp;
 const server = http.createServer(async (req, res) => {
-  if (req.url === '/v1/match' && matchmakingApp)
+  if (['/v1/match', '/v2/match'].includes(req.url) && matchmakingApp)
     return matchmakingApp(req, res);
   if (req.url === '/__test_signaling' && req.method === 'POST') {
     let body = '';
@@ -400,7 +440,7 @@ async function randomizeLobby(host, guests) {
   await host.until(
     'document.getElementById("status").textContent.includes("Positions randomized") || document.getElementById("status").textContent.includes("무작위로 배정")'
   );
-  const data = await host.ev('__volley.room.store.peek(__volley.room.id)');
+  const data = await host.ev('__volley.room.data');
   for (const page of pages) {
     await page.until(
       'JSON.stringify(__volley.room.data.seats)===' +
@@ -783,6 +823,18 @@ async function screenshot(page, name) {
     '__volley.room.peers.size===3 && Array.from(__volley.room.peers.keys()).every(id=>__volley.room.connected(id))'
   );
   await assertConnections(host, guests, 'mesh');
+  assert.equal(
+    signalingOperations.get('offer'),
+    3,
+    'The other three mesh links must use WebRTC signaling'
+  );
+  await delay(200);
+  assert.equal(
+    signals.size,
+    0,
+    'Successful setup must delete temporary signaling'
+  );
+  assert.equal(candidates.size, 0);
   await randomizeLobby(host, guests);
   for (const [index, page] of [host, ...guests].entries())
     await selectSlot(page, String(index));
@@ -1447,6 +1499,22 @@ async function screenshot(page, name) {
       'Quick Match: real server assignment for four solo browsers and two pairs, WebRTC, early AI start, and no joining a running match passed.'
     );
   }
+  for (const action of [
+    'claim',
+    'selectSlots',
+    'randomizeSlots',
+    'rename',
+    'networkReady',
+    'beginMatch',
+    'update',
+    'remove',
+    'rebuildNetwork',
+  ])
+    assert.equal(
+      signalingOperations.get(action) || 0,
+      0,
+      action + ' must use WebRTC'
+    );
   console.log('Screenshots: ' + artifacts);
 })()
   .catch((error) => {

@@ -1,4 +1,6 @@
-import { FirebaseRoomStore } from './firebase_store.js';
+import { SignalingStore } from './signaling_store.js';
+import { LobbyStore } from './lobby_store.js';
+import { RelaySignaling } from './relay_signaling.js';
 import { rtcConfiguration } from '../data_channel/rtc_configuration.js';
 import {
   ROOM_SCHEMA,
@@ -17,8 +19,10 @@ export function randomId() {
 }
 
 export class OnlineRoom {
-  constructor(callbacks = {}, store = new FirebaseRoomStore()) {
-    this.store = store;
+  constructor(callbacks = {}, store = new SignalingStore()) {
+    this.transport = store;
+    this.store = new LobbyStore(this);
+    this.relay = new RelaySignaling(this);
     this.callbacks = callbacks;
     this.selfId = randomId();
     this.id = null;
@@ -41,7 +45,7 @@ export class OnlineRoom {
   }
   async create(name, layout, slots, settings) {
     if (!this.closed) throw new Error('Leave the current room first.');
-    if (this.store.identity) this.selfId = await this.store.identity();
+    if (this.transport.identity) this.selfId = await this.transport.identity();
     this.departed.clear();
     this.closed = false;
     this.isHost = true;
@@ -62,56 +66,110 @@ export class OnlineRoom {
       throw error;
     }
   }
-  async join(id, name, slots) {
+  async join(id, name, slots, expectedHost) {
     if (!this.closed) throw new Error('Leave the current room first.');
     if (!/^[a-z0-9]{20}$/.test(id))
       throw new Error('Enter a valid 20-character room ID.');
-    if (this.store.identity) this.selfId = await this.store.identity();
+    if (this.transport.identity) this.selfId = await this.transport.identity();
     this.departed.clear();
     this.closed = false;
     this.isHost = false;
     this.id = id;
     try {
-      this.data = await this.store.claim(id, this.selfId, name, slots);
-      this.subscribe();
+      const entry = await this.transport.peek(id);
+      if (!entry || entry.schema !== ROOM_SCHEMA || entry.status !== 'lobby')
+        throw new Error('Room not found, or the match has already started.');
+      if (expectedHost && entry.hostId !== expectedHost)
+        throw new Error('The advertised host does not own this room.');
+      this.data = {
+        ...entry,
+        networkRevision: 0,
+        settings: { topology: 'star' },
+        seats: ['', '', '', ''],
+        members: {
+          [entry.hostId]: { slots: [], connected: true },
+          [this.selfId]: { slots: [], connected: false },
+        },
+      };
+      this.joinDetails = { name, slots };
+      const admitted = new Promise((resolve, reject) => {
+        this.joinResolve = resolve;
+        this.joinReject = reject;
+        this.joinTimer = setTimeout(
+          () => reject(new Error('The host did not respond.')),
+          30000
+        );
+      });
+      admitted.catch(() => {});
+      this.startReports();
+      await this.transport.requestJoin(id, this.selfId, entry.hostId);
+      await this.makePeer(entry.hostId, false);
+      await admitted;
+      clearTimeout(this.joinTimer);
+      this.joinResolve = null;
+      this.joinReject = null;
     } catch (error) {
-      this.closed = true;
+      this.shutdown();
+      await this.transport.clearSignal(id, this.selfId).catch(() => {});
       throw error;
     }
   }
-  subscribe() {
+  startReports() {
     const watchedRoomId = this.id;
     clearInterval(this.reportTimer);
     this.reportTimer = setInterval(() => {
       if (!this.closed && this.id === watchedRoomId) this.reportReady();
     }, 1000);
-    this.unsubscribe = this.store.watch(
-      this.id,
-      (data) => {
-        if (this.closed || this.id !== watchedRoomId) return;
+  }
+  subscribe() {
+    this.startReports();
+    const roomId = this.id;
+    this.unsubscribe = this.transport.watchRequests(
+      roomId,
+      (id, request) => {
         if (
-          !data ||
-          data.schema !== ROOM_SCHEMA ||
-          data.status === 'closed' ||
-          !data.members ||
-          !data.members[this.selfId]
-        ) {
-          this.shutdown();
-          this.emit('ended');
+          this.closed ||
+          this.id !== roomId ||
+          request.hostId !== this.selfId ||
+          request.guestId !== id ||
+          this.peers.has(id)
+        )
+          return;
+        if (this.data.status !== 'lobby' || this.peers.size >= 7) {
+          this.transport
+            .clearSignal(roomId, id)
+            .catch((error) => this.fail(error));
           return;
         }
-        this.acceptData(data);
+        this.makePeer(id, true).catch((error) => this.fail(error));
       },
       (error) => this.fail(error)
     );
+    this.emit('change', this.data);
+  }
+  publishData(data) {
+    // Send through the retained host channels before dropping obsolete mesh links.
+    for (const id of Object.keys(data.members))
+      if (id !== this.selfId) this.send(id, { type: 'lobby-state', data });
+    this.acceptData(data);
   }
   acceptData(data) {
+    if (
+      this.data &&
+      data.stateVersion !== undefined &&
+      data.stateVersion < (this.data.stateVersion || 0)
+    )
+      return;
     if (this.data && data.networkRevision < this.data.networkRevision) return;
     const reset =
       this.data && data.networkRevision !== this.data.networkRevision;
     this.data = data;
     if (reset) {
-      this.peers.forEach((peer, id) => this.dropPeer(id));
+      this.peers.forEach((peer, id) => {
+        if (this.selfId !== data.hostId && id !== data.hostId)
+          this.dropPeer(id);
+      });
+      this.relay.clear();
       this.readyReports.clear();
       this.readyWrites.clear();
       this.networkFault = false;
@@ -121,10 +179,16 @@ export class OnlineRoom {
     }
     const wanted = requiredPeers(data, this.selfId);
     this.peers.forEach((peer, id) => {
-      if (!wanted.includes(id)) this.dropPeer(id);
+      if (!wanted.includes(id) && !peer.pendingAdmission) this.dropPeer(id);
     });
     for (const id of wanted) {
       if (this.peers.has(id) || this.departed.has(id)) continue;
+      if (
+        this.selfId !== data.hostId &&
+        id !== data.hostId &&
+        !this.connected(data.hostId)
+      )
+        continue;
       const offerer =
         this.selfId === data.hostId || (id !== data.hostId && this.selfId < id);
       const revision = data.networkRevision;
@@ -206,6 +270,29 @@ export class OnlineRoom {
       });
   }
   internalMessage(id, message) {
+    if (this.store?.receive && this.store.receive(id, message)) return true;
+    if (this.relay?.receive(id, message)) return true;
+    if (message.type === 'signal-open') {
+      const peer = this.peers.get(id);
+      if (peer) {
+        peer.remoteOpened = true;
+        this.finishSignal(id, peer);
+      }
+      return true;
+    }
+    if (message.type === 'room-leave' && this.isHost) {
+      this.emit('peerClosed', id);
+      return true;
+    }
+    if (
+      message.type === 'room-closed' &&
+      !this.isHost &&
+      id === this.data.hostId
+    ) {
+      this.shutdown();
+      this.emit('ended');
+      return true;
+    }
     if (
       message.type === 'network-rebuild' &&
       !this.isHost &&
@@ -369,7 +456,7 @@ export class OnlineRoom {
     }
   }
   async makePeer(id, host) {
-    if (this.closed) return;
+    if (this.closed || this.peers.has(id)) return;
     const pc = new RTCPeerConnection(rtcConfiguration);
     const peer = {
       pc,
@@ -380,10 +467,35 @@ export class OnlineRoom {
       remoteSet: false,
       notifiedClosed: false,
       timer: null,
+      pendingAdmission: this.isHost && !this.data.members[id],
+      signalingWrites: Promise.resolve(),
     };
     this.peers.set(id, peer);
     const revision = this.data.networkRevision;
-    const signalId = connectionKey(this.data, this.selfId, id);
+    const roomId = this.id;
+    const hostLink = this.isHost || id === this.data.hostId;
+    const signalStore = hostLink ? this.transport : this.relay;
+    const signalId = hostLink
+      ? this.isHost
+        ? id
+        : this.selfId
+      : connectionKey(this.data, this.selfId, id);
+    peer.hostLink = hostLink;
+    peer.signalId = signalId;
+    peer.setupTimer = setTimeout(() => {
+      if (
+        this.peers.get(id) === peer &&
+        (!peer.openNotified || peer.pendingAdmission)
+      ) {
+        if (this.data.members[id]) this.peerClosed(id);
+        else {
+          this.dropPeer(id);
+          this.transport
+            .clearSignal(roomId, id)
+            .catch((error) => this.fail(error));
+        }
+      }
+    }, 30000);
     const endpoints = {
       revision,
       offererId: host ? this.selfId : id,
@@ -394,24 +506,33 @@ export class OnlineRoom {
     const current = () =>
       !this.closed &&
       this.peers.get(id) === peer &&
-      this.data.networkRevision === revision;
+      (hostLink || this.data.networkRevision === revision);
     const localSide = host ? 'hostCandidates' : 'guestCandidates';
     const remoteSide = host ? 'guestCandidates' : 'hostCandidates';
     pc.addEventListener('icecandidate', (event) => {
-      if (!event.candidate || !current()) return;
+      if (!event.candidate || !current() || peer.signalingFinished) return;
       if (!signalReady) {
         localCandidates.push(event.candidate.toJSON());
         return;
       }
-      this.store
-        .candidate(this.id, signalId, localSide, event.candidate.toJSON())
+      peer.signalingWrites = peer.signalingWrites
+        .then(() =>
+          current() && !peer.signalCleaned
+            ? signalStore.candidate(
+                roomId,
+                signalId,
+                localSide,
+                event.candidate.toJSON()
+              )
+            : undefined
+        )
         .catch((error) => {
           if (current()) this.fail(error);
         });
     });
     peer.unsubs.push(
-      this.store.watchCandidates(
-        this.id,
+      signalStore.watchCandidates(
+        roomId,
         signalId,
         remoteSide,
         async (candidate) => {
@@ -436,8 +557,8 @@ export class OnlineRoom {
         await pc.addIceCandidate(candidate);
     };
     peer.unsubs.push(
-      this.store.watchSignal(
-        this.id,
+      signalStore.watchSignal(
+        roomId,
         signalId,
         async (data) => {
           if (!current() || peer.negotiating || peer.remoteSet) return;
@@ -449,7 +570,7 @@ export class OnlineRoom {
             if (!host && current()) {
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
-              if (current()) await this.store.answer(this.id, signalId, answer);
+              if (current()) await signalStore.answer(roomId, signalId, answer);
             }
           } catch (error) {
             this.fail(error);
@@ -478,11 +599,24 @@ export class OnlineRoom {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       if (current()) {
-        await this.store.offer(this.id, signalId, offer, endpoints);
+        await signalStore.offer(roomId, signalId, offer, endpoints);
         signalReady = true;
         for (const candidate of localCandidates.splice(0)) {
           if (current())
-            await this.store.candidate(this.id, signalId, localSide, candidate);
+            peer.signalingWrites = peer.signalingWrites
+              .then(() =>
+                current() && !peer.signalCleaned
+                  ? signalStore.candidate(
+                      roomId,
+                      signalId,
+                      localSide,
+                      candidate
+                    )
+                  : undefined
+              )
+              .catch((error) => {
+                if (current()) this.fail(error);
+              });
         }
       }
     } else {
@@ -503,6 +637,23 @@ export class OnlineRoom {
       if (this.closed || this.peers.get(id) !== peer || peer.openNotified)
         return;
       peer.openNotified = true;
+      peer.signalingFinished = true;
+      (peer.signalingWrites || Promise.resolve()).then(() => {
+        if (!this.closed && this.peers.get(id) === peer) {
+          this.send(id, { type: 'signal-open' });
+          this.finishSignal(id, peer);
+        }
+      });
+      if (!this.isHost && id === this.data?.hostId && this.joinDetails) {
+        this.store.request('claim', this.joinDetails).then(
+          () => {
+            this.joinDetails = null;
+            this.joinResolve?.();
+            this.reportReady();
+          },
+          (error) => this.joinReject?.(error)
+        );
+      }
       this.reportReady();
       this.emit('open', id);
     };
@@ -527,7 +678,7 @@ export class OnlineRoom {
         typeof message.type === 'string' &&
         !this.internalMessage(id, message)
       )
-        this.emit('message', id, message);
+        if (this.data.members[id]) this.emit('message', id, message);
     });
     channel.addEventListener('close', () => {
       if (this.peers.get(id) === peer) this.peerClosed(id);
@@ -535,6 +686,17 @@ export class OnlineRoom {
     channel.addEventListener('error', () => {
       if (this.peers.get(id) === peer) this.peerClosed(id);
     });
+  }
+  finishSignal(id, peer) {
+    if (!peer.openNotified || !peer.remoteOpened || peer.signalCleaned) return;
+    peer.signalCleaned = true;
+    peer.unsubs.splice(0).forEach((unsubscribe) => unsubscribe());
+    if (peer.hostLink && this.isHost) {
+      const roomId = this.id;
+      peer.signalingWrites
+        .then(() => this.transport.clearSignal(roomId, peer.signalId))
+        .catch((error) => this.fail(error));
+    }
   }
   peerClosed(id) {
     const peer = this.peers.get(id);
@@ -557,6 +719,7 @@ export class OnlineRoom {
     if (!peer) return;
     this.peers.delete(id);
     clearTimeout(peer.timer);
+    clearTimeout(peer.setupTimer);
     peer.unsubs.forEach((unsubscribe) => unsubscribe());
     if (peer.channel) peer.channel.close();
     peer.pc.close();
@@ -585,7 +748,9 @@ export class OnlineRoom {
     }
   }
   broadcast(message, disposable = false) {
-    this.peers.forEach((peer, id) => this.send(id, message, disposable));
+    this.peers.forEach((peer, id) => {
+      if (this.data.members[id]) this.send(id, message, disposable);
+    });
   }
   async removeMember(id) {
     if (!this.isHost || id === this.selfId || this.closed) return;
@@ -597,11 +762,19 @@ export class OnlineRoom {
     if (this.closed) return;
     const id = this.id,
       host = this.isHost;
+    if (host) this.broadcast({ type: 'room-closed' });
+    else this.send(this.data.hostId, { type: 'room-leave' });
     this.shutdown();
-    if (host) await this.store.close(id);
-    else await this.store.remove(id, this.selfId);
+    if (host) await this.transport.close(id);
   }
   shutdown() {
+    clearTimeout(this.joinTimer);
+    if (this.joinReject) this.joinReject(new Error('The room has closed.'));
+    this.joinResolve = null;
+    this.joinReject = null;
+    this.joinDetails = null;
+    if (this.store.shutdown) this.store.shutdown();
+    this.relay.clear();
     clearInterval(this.reportTimer);
     clearTimeout(this.rebuildTimer);
     if (this.rebuildWait)

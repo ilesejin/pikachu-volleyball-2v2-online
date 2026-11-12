@@ -1,6 +1,6 @@
 import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
 
-export const ROOM_SCHEMA = 'pikavolley-2v2-v4';
+export const ROOM_SCHEMA = 'pikavolley-2v2-v5';
 export const SERVE_MODES = ['rotate-players', 'rotate-ball', 'fixed'];
 export const PLAYER_KEYS = [
   ['KeyA', 'KeyD', 'KeyW', 'KeyX', 'KeyZ', 'KeyS'],

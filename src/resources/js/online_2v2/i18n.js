@@ -101,6 +101,17 @@ export const ZH_MESSAGES = {
     '玩家之間的直接連線失敗。請在大廳重試連線，或切換為3條連線的模式。',
   'Wait for all host connections, or remove disconnected players before retrying.':
     '請等待房主與所有玩家連線，或先移除已斷線的玩家再重試。',
+  'The host did not respond.': '房主未回應。',
+  'Wait for the host connection.': '請等待與房主建立連線。',
+  'The host connection is unavailable.': '無法連線至房主。',
+  'The advertised host does not own this room.':
+    '配對資訊中的房主與此房間的房主不符。',
+  'Only the host can change this setting.': '只有房主可以變更此設定。',
+  'This action is only available in the lobby.': '只能在大廳中執行此操作。',
+  'The host must close the room.': '房主必須關閉房間。',
+  'Invalid lobby update.': '大廳更新無效。',
+  'Invalid room status.': '房間狀態無效。',
+  'Invalid lobby request.': '大廳請求無效。',
   'The room has closed.': '房間已關閉。',
   'Only the room host can start a match.': '只有房主可以開始比賽。',
   'Wait for all players to connect, or remove the disconnected player.':

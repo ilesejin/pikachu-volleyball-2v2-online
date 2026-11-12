@@ -301,7 +301,7 @@ test('Quick Match creates and advertises an immediately playable host room', asy
     closed: true,
     isHost: true,
     id: 'a'.repeat(20),
-    data: { status: 'lobby' },
+    data: { status: 'lobby', members: { host: {} } },
     async create(name, layout, slots, settings) {
       this.closed = false;
       assert.equal(layout, 'four');

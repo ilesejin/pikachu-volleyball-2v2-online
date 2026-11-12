@@ -37,11 +37,11 @@ export class QuickMatch {
         try {
           if (result.action === 'create')
             await this.room.create(name, layout, slots, settings);
-          else await this.room.join(result.roomId, name, slots);
+          else await this.room.join(result.roomId, name, slots, result.hostId);
         } catch (error) {
           if (
             result.action === 'create' ||
-            !/started|closed|occupied|not found/i.test(error.message)
+            !/started|closed|occupied|not found|full/i.test(error.message)
           )
             throw error;
           // A host may start early, or an invited player may claim this advisory reservation.
@@ -58,12 +58,13 @@ export class QuickMatch {
             action: 'publish',
             roomId: this.room.id,
             ...this.options,
+            ...this.advertisement(),
           });
           this.notify('hosting');
           this.heartbeat(generation);
         } else {
           this.active = false;
-          // Joining is committed in Firestore before acknowledging the reservation.
+          // The host admitted this browser over WebRTC before acknowledging.
           await this.request({ action: 'joined' }).catch(() => {});
           this.notify('joined');
         }
@@ -79,6 +80,12 @@ export class QuickMatch {
       }
     }
   }
+  advertisement() {
+    return {
+      status: this.room.data.status,
+      members: Object.keys(this.room.data.members),
+    };
+  }
   heartbeat(generation) {
     clearTimeout(this.timer);
     this.timer = setTimeout(async () => {
@@ -92,6 +99,7 @@ export class QuickMatch {
           action: 'publish',
           roomId: this.room.id,
           ...this.options,
+          ...this.advertisement(),
         });
         if (result.action === 'closed') {
           await this.stop();
