@@ -67,8 +67,12 @@ Run `npm run test:replay` to build the development viewer and run muted browser 
 
 - `src/resources/js/offline_2v2/`: copied offline game, rendering, audio, and physics.
 - `src/resources/js/online_2v2/`: original P2P UI integration, lobby, authenticated Firestore signaling, WebRTC mesh/star connections, validated numbered frame inputs, deterministic lockstep, optional snapshot rendering, and room-wide chat.
-- `src/resources/js/main_online_2v2.js`: current entry point. Older online/replay modules remain in the repository.
+- `src/resources/js/main_online_2v2.js`: current entry point.
+- `src/resources/js/replay/`: current 2v2 playback and compatible original 1v1 playback; `legacy_chat.js` renders old-file chat without networking or recording.
+- `src/resources/js/offline_version_js/`: original engine and helpers retained for 1v1 replay compatibility.
 - `firestore.2v2.rules`: rules for the new Firebase project, with no public room listing and per-participant signaling access.
+
+The retired live 1v1 game, regional matchmaking, IP blocking, NAT test, old settings-agreement UI and recorder, and unused iframe notice are removed. Old 1v1 replay files still support their original physics, seeded chat positions, nicknames, and recorded partial-IP display. Only the current 2v2 code performs online matchmaking and signaling. The deny rules for retired `/rooms` remain in place.
 
 The original `physics.js` is unchanged in the copied core. The separate `doubles_physics.js` retains movement, ball collisions, and their existing quirks, adapting court geometry and four-player orchestration. Hits are processed in P1/P2/P3/P4 order with individual collision latches. This can make simultaneous overlapping hits order-dependent; it is intentionally preserved. The ball advances once per simulation step. Neither synchronization mode changes these physics rules. Lockstep uses the existing custom-RNG hook; no physics code is modified.
 

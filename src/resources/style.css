@@ -308,7 +308,6 @@ canvas.graphic-soft {
 #chat-open-btn-and-chat-disabling-btn-container {
   width: var(--canvas-width);
 }
-#network-test-btn,
 #create-btn,
 #exit-room-btn,
 #join-room-id-input,
@@ -330,7 +329,6 @@ canvas.graphic-soft {
 #create-btn {
   grid-column-start: 1;
 }
-#network-test-btn,
 #create-btn,
 #exit-room-btn,
 #join-btn,
@@ -497,7 +495,7 @@ button.btn-in-box {
   border-radius: 10px;
 }
 button.btn-in-box.key-y,
-button.btn-in-box.key-n  {
+button.btn-in-box.key-n {
   width: calc(8 * var(--font-size));
 }
 button.large {
@@ -697,13 +695,6 @@ div.nicknames-container {
 .text-align-start {
   text-align: start;
 }
-.match-group-btns-container {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: calc(1 * var(--font-size));
-}
 /* CSS for replay is below */
 #dropbox {
   border-style: solid;
@@ -849,67 +840,6 @@ label[for='fps-input'] {
 }
 .no-margin-top {
   margin-top: 0;
-}
-.if-embedded-in-other-website {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-top: calc(var(--font-size) - 10px);
-  font-size: calc(0.8 * var(--font-size));
-  margin-bottom: var(--font-size);
-  padding: var(--font-size);
-  border: 3px solid;
-  border-radius: 10px;
-}
-.if-embedded-in-other-website .limit-width {
-  max-width: calc(23 * var(--font-size));
-}
-.if-embedded-in-other-website button {
-  margin-top: var(--font-size);
-  background-color: var(--background-color);
-  color: var(--color);
-  font-size: calc(0.8 * var(--font-size));
-  border: 3px solid;
-  height: calc(1.6 * var(--font-size));
-  width: calc(4 * var(--font-size));
-}
-.original-address {
-  margin-top: var(--font-size);
-}
-table.blocked-ip-addresses-table {
-  /* box-sizing below is necessary for Chrome and Safari, not for Firefox.
-     Is it a bug in Chrome and Safari? */
-  box-sizing: border-box;
-  border-collapse: collapse;
-  border: 2px solid rgb(200, 200, 200);
-  width: 100%;
-}
-table.blocked-ip-addresses-table th,
-table.blocked-ip-addresses-table td {
-  border: 1px solid rgb(190, 190, 190);
-  padding: 5px;
-  text-align: center;
-}
-table.blocked-ip-addresses-table tbody td {
-  cursor: default;
-}
-table.blocked-ip-addresses-table tfoot td {
-  padding: 0;
-}
-table.blocked-ip-addresses-table tr.selected {
-  background-color: var(--link-hover-color);
-}
-table.blocked-ip-addresses-table input {
-  width: 100%;
-  height: 100%;
-  border: none;
-  font-size: var(--font-size);
-}
-table.blocked-ip-addresses-table .delete-btn {
-  height: 100%;
-  width: 100%;
-  font-size: var(--font-size);
 }
 details {
   border: 1px solid #aaa;

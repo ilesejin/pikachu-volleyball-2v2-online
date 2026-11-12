@@ -127,13 +127,6 @@ export function randomizedPositions(data, chooseIndex = randomIndex) {
   return { members, seats };
 }
 
-export function occupiedSlots(members) {
-  return Object.values(members || {}).reduce(
-    (all, member) => all.concat(member.slots || []),
-    []
-  );
-}
-
 export function normalizeInput(input) {
   return {
     xDirection:

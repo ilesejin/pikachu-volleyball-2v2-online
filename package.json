@@ -65,11 +65,8 @@
     "@pixi/text": "^6.4.2",
     "@pixi/ticker": "^6.4.2",
     "@pixi/utils": "^6.4.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
     "file-saver": "^2.0.5",
     "firebase": "^9.8.2",
-    "mplaynet": "0.0.5",
     "seedrandom": "3.0.5"
   }
 }

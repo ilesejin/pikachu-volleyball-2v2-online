@@ -1,7 +1,7 @@
 import seedrandom from 'seedrandom';
 import { PikachuVolleyball } from '../offline_version_js/pikavolley.js';
 import { setCustomRng } from '../offline_version_js/rand.js';
-import { setChatRngs, displayChatMessageAt } from '../chat_display.js';
+import { setChatRngs, displayChatMessageAt } from './legacy_chat.js';
 import {
   displayNicknameFor,
   displayPartialIPFor,

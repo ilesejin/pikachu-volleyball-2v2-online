@@ -1,6 +1,6 @@
 # Online setup
 
-The new 2v2 entry point deliberately has placeholder configuration. It does not use the older project's `data_channel/firebase_config.js`. Until you supply your new Firebase Web app configuration, room creation displays a setup error.
+The 2v2 entry point reads its Firebase Web app configuration from `src/resources/js/online_2v2/config.js`. Supply your project's configuration there; missing configuration causes room creation to display a setup error. The retired live P2P implementation and its configuration template have been removed. Legacy 1v1 replay playback requires no Firebase configuration.
 
 ## New Firebase project
 

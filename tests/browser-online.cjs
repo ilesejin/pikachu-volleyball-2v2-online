@@ -579,6 +579,141 @@ async function key(page, code, type) {
       : code.replace('Key', '').toLowerCase(),
   });
 }
+async function assertLegacyReplay(port) {
+  const loadLegacy = (file, name) =>
+    Function(
+      fs
+        .readFileSync(
+          path.join(__dirname, '../src/resources/js/utils', file),
+          'utf8'
+        )
+        .replace(/export /g, '') +
+        ';return ' +
+        name +
+        ';'
+    )();
+  const serialize = loadLegacy('serialize.js', 'serialize'),
+    hash = loadLegacy('hash_code.js', 'getHashCode');
+  const legacyPack = {
+    version: 'p2p-online',
+    roomID: 'a'.repeat(20),
+    nicknames: ['Legacy A', 'Legacy B'],
+    partialPublicIPs: ['1.2.*.*', '3.4.*.*'],
+    chats: [
+      [10, 1, 'Legacy left'],
+      [20, 2, '<b>Legacy right</b>'],
+      [25, 1, 'Hidden message'],
+      [40, 1, 'Legacy after toggle'],
+    ],
+    options: [],
+    inputs: Array(120).fill(0),
+    hash: 0,
+  };
+  legacyPack.hash = hash(serialize(legacyPack));
+  const legacy = await tab(port, 'en');
+  await legacy.send('Page.navigate', {
+    url: await legacy.ev('new URL("replay/", location.href).href'),
+  });
+  await legacy.until('!!window.__replayPlayer');
+  await legacy.ev(
+    '(()=>{const transfer=new DataTransfer();transfer.items.add(new File([' +
+      JSON.stringify(JSON.stringify({ pack: legacyPack })) +
+      '],"old.txt",{type:"text/plain"}));const input=document.getElementById("file-input");input.files=transfer.files;input.dispatchEvent(new Event("change"));})()'
+  );
+  await legacy.until('!!window.__replayPlayer.pikaVolley');
+  assert.equal(
+    await legacy.ev(
+      'document.getElementById("dropbox").classList.contains("hidden")'
+    ),
+    true
+  );
+  await legacy.ev('__replayPlayer.ticker.stop();__replayPlayer.seekFrame(80)');
+  assert.equal(
+    await legacy.ev('__replayPlayer.pikaVolley.replayFrameCounter'),
+    80
+  );
+  assert.equal(await legacy.ev('!!__replayPlayer.doubles'), false);
+  await legacy.ev(
+    '__replayPlayer.seekFrame(0);for(let i=0;i<21;i++)__replayPlayer.pikaVolley.gameLoop();__replayPlayer.renderer.render(__replayPlayer.stage)'
+  );
+  assert.equal(
+    await legacy.ev('document.getElementById("player1-chat-box").textContent'),
+    'Legacy left'
+  );
+  assert.equal(
+    await legacy.ev('document.getElementById("player2-chat-box").textContent'),
+    '<b>Legacy right</b>'
+  );
+  assert.equal(
+    await legacy.ev(
+      'document.getElementById("player2-chat-box").children.length'
+    ),
+    0
+  );
+  const seeded = require('seedrandom').alea('aaaaa');
+  const expectedTop = 20 + 30 * seeded(),
+    expectedOffset = 55 + 25 * seeded();
+  const positions = await legacy.ev(
+    '[1,2].map(n=>{const style=document.getElementById("player"+n+"-chat-box").style;return {top:parseFloat(style.top),offset:parseFloat(n===1?style.right:style.left)}})'
+  );
+  console.log(
+    'Legacy chat positions:',
+    JSON.stringify({ expectedTop, expectedOffset, positions })
+  );
+  // CSSOM serializes percentages with limited decimal precision.
+  for (const position of positions) {
+    assert.ok(Math.abs(position.top - expectedTop) < 0.0001);
+    assert.ok(Math.abs(position.offset - expectedOffset) < 0.0001);
+  }
+  await legacy.until(
+    'Number(getComputedStyle(document.getElementById("player1-chat-box")).opacity)>0.9'
+  );
+  await legacy.ev(
+    'document.getElementById("show-chat-checkbox").checked=false;document.getElementById("show-chat-checkbox").dispatchEvent(new Event("change"));for(let i=21;i<31;i++)__replayPlayer.pikaVolley.gameLoop()'
+  );
+  assert.equal(
+    await legacy.ev('document.getElementById("player1-chat-box").textContent'),
+    'Legacy left'
+  );
+  assert.equal(
+    await legacy.ev(
+      'document.getElementById("player1-chat-box").classList.contains("hidden")'
+    ),
+    true
+  );
+  await legacy.ev(
+    'document.getElementById("show-chat-checkbox").checked=true;document.getElementById("show-chat-checkbox").dispatchEvent(new Event("change"));for(let i=31;i<41;i++)__replayPlayer.pikaVolley.gameLoop()'
+  );
+  assert.equal(
+    await legacy.ev('document.getElementById("player1-chat-box").textContent'),
+    'Legacy after toggle'
+  );
+  assert.deepEqual(
+    await legacy.ev(
+      '[1,2].map(n=>document.getElementById("player"+n+"-nickname").textContent).sort()'
+    ),
+    ['Legacy A', 'Legacy B']
+  );
+  assert.deepEqual(
+    await legacy.ev(
+      '[1,2].map(n=>document.getElementById("player"+n+"-partial-ip").textContent).sort()'
+    ),
+    ['1.2.*.*', '3.4.*.*']
+  );
+  await legacy.ev(
+    'document.getElementById("show-ip-addresses-checkbox").checked=true;document.getElementById("show-ip-addresses-checkbox").dispatchEvent(new Event("change"))'
+  );
+  assert.equal(
+    await legacy.ev(
+      'document.getElementById("player1-partial-ip").classList.contains("hidden")'
+    ),
+    false
+  );
+  await screenshot(legacy, 'legacy-replay-chat-preserved.png');
+  console.log(
+    'Legacy replay: original seeded chat positions, painted visibility, safe text, local chat toggle, nicknames and recorded partial-IP display passed without the retired networking stack.'
+  );
+}
 async function screenshot(page, name) {
   const data = await page.send('Page.captureScreenshot', {
     format: 'png',
@@ -669,6 +804,11 @@ async function screenshot(page, name) {
       'Live Firebase configuration detected; live requests skipped. All room tests use local fixtures.'
     );
   const host = await tab(port);
+  if (process.env.PIKA_LEGACY_REPLAY_ONLY) {
+    await assertLegacyReplay(port);
+    assert.deepEqual(errors, []);
+    return;
+  }
   if (process.env.PIKA_INPUT_PACING_ONLY) {
     const guest = await tab(port);
     // A delayed begin reproduces a host starting its interval before the guest.
@@ -1738,50 +1878,7 @@ async function screenshot(page, name) {
       'Automatic room-exit saving must download once'
     );
     assert.ok(await guest.ev('__volley.session.replay.pack.events.length>0'));
-    const loadLegacy = (file, name) =>
-      Function(
-        fs
-          .readFileSync(
-            path.join(__dirname, '../src/resources/js/utils', file),
-            'utf8'
-          )
-          .replace(/export /g, '') +
-          ';return ' +
-          name +
-          ';'
-      )();
-    const serialize = loadLegacy('serialize.js', 'serialize'),
-      hash = loadLegacy('hash_code.js', 'getHashCode');
-    const legacyPack = {
-      version: 'p2p-online',
-      roomID: 'a'.repeat(20),
-      nicknames: ['Legacy A', 'Legacy B'],
-      partialPublicIPs: ['*.*.*.*', '*.*.*.*'],
-      chats: [],
-      options: [],
-      inputs: Array(120).fill(0),
-      hash: 0,
-    };
-    legacyPack.hash = hash(serialize(legacyPack));
-    const legacy = await tab(port, 'en');
-    await legacy.send('Page.navigate', {
-      url: `http://127.0.0.1:${server.address().port}/en/replay/`,
-    });
-    await legacy.until('!!window.__replayPlayer');
-    await legacy.ev(
-      '__replayPlayer.readFile(new File([' +
-        JSON.stringify(JSON.stringify({ pack: legacyPack })) +
-        '],"old.txt"))'
-    );
-    await legacy.until('!!window.__replayPlayer.pikaVolley');
-    await legacy.ev(
-      '__replayPlayer.ticker.stop();__replayPlayer.seekFrame(80)'
-    );
-    assert.equal(
-      await legacy.ev('__replayPlayer.pikaVolley.replayFrameCounter'),
-      80
-    );
-    assert.equal(await legacy.ev('!!__replayPlayer.doubles'), false);
+    await assertLegacyReplay(port);
     await screenshot(second, 'replay-2v2-zh.png');
     await host.ev('document.getElementById("layout").value="pairs"');
     await click(host, 'create');

@@ -1,6 +1,6 @@
 import { translateMessage } from '../online_2v2/i18n.js';
 import { replayPlayer } from './replay_player.js';
-import { enableChat, hideChat } from '../chat_display';
+import { enableChat, hideChat } from './legacy_chat.js';
 import '../../style.css';
 
 /** @typedef {import('../offline_version_js/physics.js').PikaUserInput} PikaUserInput */
@@ -354,10 +354,6 @@ export function noticeFileOpenError(error) {
     'notice-file-open-error'
   );
   noticeBoxFileOpenError.classList.remove('hidden');
-}
-
-export function getCommentText() {
-  return document.getElementById('replay-viewer-at').textContent;
 }
 
 export function setMaxForScrubberRange(max) {

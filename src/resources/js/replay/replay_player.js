@@ -13,7 +13,7 @@ import { CanvasPrepare } from '@pixi/canvas-prepare';
 import '@pixi/canvas-display';
 import { ASSETS_PATH } from '../offline_version_js/assets_path.js';
 import { PikachuVolleyballReplay } from './pikavolley_replay.js';
-import { setGetSpeechBubbleNeeded, hideChat } from '../chat_display.js';
+import { setGetSpeechBubbleNeeded, hideChat } from './legacy_chat.js';
 import {
   setMaxForScrubberRange,
   adjustPlayPauseBtnIcon,
@@ -81,14 +81,7 @@ class ReplayPlayer {
 
     this.renderer.render(this.stage); // To make the initial canvas painting stable in the Firefox browser.
     this.ticker.add(() => {
-      // Redering and gameLoop order is the opposite of
-      // the offline web version (refer: ./offline_version_js/main.js).
-      // It's for the smooth rendering for the online version
-      // which gameLoop can not always succeed right on this "ticker.add"ed code
-      // because of the transfer delay or connection status. (If gameLoop here fails,
-      // it is recovered by the callback gameLoop which is called after peer input received.)
-      // Now the rendering is delayed 40ms (when pikaVolley.normalFPS == 25)
-      // behind gameLoop.
+      // Render before stepping to preserve original 1v1 replay frame timing.
       this.renderer.render(this.stage);
       showTimeCurrent(this.pikaVolley.timeCurrent);
       if (this.doubles) this.doubles.tick();

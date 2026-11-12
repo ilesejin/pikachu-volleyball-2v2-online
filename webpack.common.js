@@ -15,15 +15,13 @@ module.exports = {
       './src/resources/js/update_history/main_update_history.js',
     dark_color_scheme:
       './src/resources/js/offline_version_js/utils/dark_color_scheme.js',
-    is_embedded_in_other_website:
-      './src/resources/js/offline_version_js/utils/is_embedded_in_other_website.js',
   },
   output: {
     filename: '[name].[contenthash].js',
     path: path.resolve(__dirname, 'dist'),
   },
   optimization: {
-    runtimeChunk: { name: 'runtime' }, // this is for code-sharing between "main_online.js" and "ko.js"
+    runtimeChunk: { name: 'runtime' }, // Share runtime across game, replay, and localization entries.
     splitChunks: {
       chunks: 'all',
     },

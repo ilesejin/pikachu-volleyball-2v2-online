@@ -31,7 +31,6 @@ const protocol = load(
     'requiredPeers',
     'connectionKey',
     'validSlots',
-    'occupiedSlots',
     'randomizedPositions',
     'normalizeInput',
     'ownedInputs',
