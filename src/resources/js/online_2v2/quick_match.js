@@ -94,6 +94,7 @@ export class QuickMatch {
       const open =
         !room.closed &&
         room.isHost &&
+        !room.handoff &&
         room.data?.visibility === 'public' &&
         room.data.status === 'lobby';
       try {

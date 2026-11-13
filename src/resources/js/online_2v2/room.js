@@ -2,6 +2,7 @@ import { generatePushID } from '../utils/generate_pushid.js';
 import { CLIENT_VERSION } from './client_version.js';
 import { SignalingStore } from './signaling_store.js';
 import { LobbyStore } from './lobby_store.js';
+import { HostTransfer } from './host_transfer.js';
 import { RelaySignaling } from './relay_signaling.js';
 import { rtcConfiguration } from '../data_channel/rtc_configuration.js';
 import {
@@ -26,6 +27,8 @@ export class OnlineRoom {
     this.store = new LobbyStore(this);
     this.relay = new RelaySignaling(this);
     this.callbacks = callbacks;
+    this.hostTransfer = new HostTransfer(this);
+    this.handoff = null;
     this.selfId = randomId();
     this.id = null;
     this.data = null;
@@ -151,13 +154,21 @@ export class OnlineRoom {
       (id, request) => {
         if (
           this.closed ||
+          !this.isHost ||
           this.id !== roomId ||
           request.hostId !== this.selfId ||
           request.guestId !== id ||
           this.peers.has(id)
         )
           return;
-        if (this.data.status !== 'lobby' || this.peers.size >= 7) {
+        if (
+          (this.handoff &&
+            !(
+              this.handoff.stage === 'reconnecting' && this.data.members[id]
+            )) ||
+          this.data.status !== 'lobby' ||
+          this.peers.size >= 7
+        ) {
           this.transport
             .clearSignal(roomId, id)
             .catch((error) => this.fail(error));
@@ -205,6 +216,8 @@ export class OnlineRoom {
     });
     for (const id of wanted) {
       if (this.peers.has(id) || this.departed.has(id)) continue;
+      // Host links require the guest to create its authenticated signal first.
+      if (this.isHost) continue;
       if (
         this.selfId !== data.hostId &&
         id !== data.hostId &&
@@ -220,6 +233,7 @@ export class OnlineRoom {
       });
     }
     this.reportReady();
+    this.hostTransfer?.completeIfReady();
     this.emit('change', data);
   }
   ready() {
@@ -247,7 +261,12 @@ export class OnlineRoom {
     );
   }
   reportReady() {
-    if (this.closed || !this.data) return;
+    if (
+      this.closed ||
+      !this.data ||
+      (this.handoff && this.handoff.stage !== 'reconnecting')
+    )
+      return;
     const peers = requiredPeers(this.data, this.selfId).filter((id) =>
       this.connected(id)
     );
@@ -273,6 +292,9 @@ export class OnlineRoom {
             .then(() => {
               if (
                 this.closed ||
+                !this.isHost ||
+                (this.handoff && this.handoff.stage !== 'reconnecting') ||
+                this.data.networkRevision !== Number(key.split(':')[0]) ||
                 this.id !== roomId ||
                 this.readyWrites.get(key) !== value
               )
@@ -298,6 +320,7 @@ export class OnlineRoom {
       });
   }
   internalMessage(id, message) {
+    if (this.hostTransfer?.receive(id, message)) return true;
     if (this.diagnostics?.receive(id, message)) return true;
     if (this.store?.receive && this.store.receive(id, message)) return true;
     if (this.relay?.receive(id, message)) return true;
@@ -540,10 +563,9 @@ export class OnlineRoom {
     };
     let signalReady = !host;
     const localCandidates = [];
+    const active = () => !this.closed && this.peers.get(id) === peer;
     const current = () =>
-      !this.closed &&
-      this.peers.get(id) === peer &&
-      (hostLink || this.data.networkRevision === revision);
+      active() && (hostLink || this.data.networkRevision === revision);
     const localSide = host ? 'hostCandidates' : 'guestCandidates';
     const remoteSide = host ? 'guestCandidates' : 'hostCandidates';
     pc.addEventListener('icecandidate', (event) => {
@@ -617,7 +639,7 @@ export class OnlineRoom {
       )
     );
     pc.addEventListener('connectionstatechange', () => {
-      if (!current()) return;
+      if (!active()) return;
       if (pc.connectionState === 'connected') {
         clearTimeout(peer.timer);
         peer.timer = null;
@@ -627,6 +649,17 @@ export class OnlineRoom {
       }
       if (['failed', 'closed'].includes(pc.connectionState))
         this.peerClosed(id);
+    });
+    // Replay channels can originate at either endpoint after a host handoff.
+    // Established peer lifetimes outlive the signaling revision that created them.
+    pc.addEventListener('datachannel', (event) => {
+      if (
+        active() &&
+        (event.channel.label.startsWith('pikavolley-replay:') ||
+          (event.channel.label === 'pikavolley-2v2' && !peer.channel))
+      )
+        this.attachChannel(id, event.channel);
+      else event.channel.close();
     });
     if (host) {
       this.attachChannel(
@@ -656,11 +689,6 @@ export class OnlineRoom {
               });
         }
       }
-    } else {
-      pc.addEventListener('datachannel', (event) => {
-        if (current()) this.attachChannel(id, event.channel);
-        else event.channel.close();
-      });
     }
   }
   attachChannel(id, channel) {
@@ -744,6 +772,7 @@ export class OnlineRoom {
     const peer = this.peers.get(id);
     if (this.closed || !peer || peer.notifiedClosed) return;
     peer.notifiedClosed = true;
+    this.hostTransfer?.peerClosed(id);
     if (this.rebuildingTarget !== null) return;
     this.reportReady();
     if (!this.isHost && id !== this.data.hostId) {
@@ -803,6 +832,37 @@ export class OnlineRoom {
     this.dropPeer(id);
     await this.store.remove(this.id, id);
   }
+  transferHost(targetId) {
+    this.hostTransfer.validate(targetId);
+    return this.store.request('transferHost', { targetId });
+  }
+  async adoptHostTransfer(data) {
+    const roomId = this.id;
+    this.rebuildingTarget = data.networkRevision;
+    clearInterval(this.reportTimer);
+    if (this.unsubscribe) this.unsubscribe();
+    this.unsubscribe = null;
+    this.store.shutdown();
+    const host = data.hostId === this.selfId;
+    if (!host && !this.peers.has(data.hostId))
+      await this.transport.requestJoin(roomId, this.selfId, data.hostId);
+    if (this.closed || this.id !== roomId) return;
+    this.isHost = host;
+    this.departed.clear();
+    this.readyReports.clear();
+    this.readyWrites.clear();
+    this.readyTasks.clear();
+    this.diagnostics?.clear();
+    if (this.replay) this.replay.commitTakeover(host);
+    this.handoff = { ...this.handoff, stage: 'reconnecting' };
+    this.acceptData(data);
+    this.rebuildingTarget = null;
+    if (host) this.subscribe();
+    else this.startReports();
+    this.reportReady();
+    this.hostTransfer?.completeIfReady();
+    this.emit('change', this.data);
+  }
   async becomeLobbyHost() {
     if (
       this.closed ||
@@ -830,6 +890,7 @@ export class OnlineRoom {
         settings,
         visibility
       );
+      this.replay?.commitTakeover(true);
       this.subscribe();
     } catch (error) {
       this.shutdown();
@@ -862,6 +923,7 @@ export class OnlineRoom {
     if (host) await this.transport.close(id);
   }
   shutdown() {
+    this.hostTransfer?.close();
     this.diagnostics?.clear();
     clearTimeout(this.joinTimer);
     if (this.joinReject) this.joinReject(new Error('The room has closed.'));

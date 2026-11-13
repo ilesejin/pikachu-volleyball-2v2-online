@@ -17,11 +17,19 @@ export class RoomChat {
   }
   reset() {
     this.roomId = this.room.id;
+    this.hostId = this.room.data?.hostId;
     this.sequence = this.lastSequence = 0;
     this.lastSent.clear();
   }
   sync() {
     if (this.roomId !== this.room.id) this.reset();
+    if (this.hostId !== this.room.data?.hostId) {
+      this.sequence = this.lastSequence = Math.max(
+        this.sequence,
+        this.lastSequence
+      );
+      this.hostId = this.room.data?.hostId;
+    }
   }
   text(value) {
     return typeof value === 'string' &&
@@ -32,7 +40,7 @@ export class RoomChat {
   }
   send(text, speaker = 0) {
     this.sync();
-    if (this.room.closed || !this.enabled) return false;
+    if (this.room.closed || this.room.handoff || !this.enabled) return false;
     text = this.text(text);
     if (!text) return false;
     if (this.room.isHost) return this.relay(this.room.selfId, text, speaker);
@@ -43,6 +51,7 @@ export class RoomChat {
     });
   }
   relay(id, text, speaker = 0) {
+    if (this.room.handoff) return false;
     const member = this.room.data.members[id];
     if (!member) return false;
     const names = member.names || [member.name];

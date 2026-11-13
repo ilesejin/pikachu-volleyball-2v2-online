@@ -37,6 +37,13 @@ function handle(data) {
     });
     return {};
   }
+  if (action === 'transferHost') {
+    const entry = rooms.get(id);
+    if (!entry || entry.hostId !== data.actor)
+      throw Error('Only the owner may transfer');
+    entry.hostId = data.targetId;
+    return {};
+  }
   if (action === 'unpublish') {
     rooms.delete(id);
     return {};
@@ -50,7 +57,11 @@ function handle(data) {
   }
   if (action === 'requests')
     return Array.from(signals)
-      .filter(([key]) => key.startsWith(id + '/'))
+      .filter(
+        ([key, value]) =>
+          key.startsWith(id + '/') &&
+          (!data.hostId || value.hostId === data.hostId)
+      )
       .map(([key, value]) => [key.slice(id.length + 1), value]);
   if (action === 'clearSignal') {
     signals.delete(id + '/' + peerId);
@@ -381,6 +392,10 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
         (process.env.PIKA_QUICK_MATCH_SERVER
           ? '\nwindow.__PIKA_TEST_MATCH_URL__=location.origin;'
           : ''),
+    });
+  if (injected)
+    await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: 'window.__PIKA_REQUIRE_TEST_STORE__=true;',
     });
   await page.send('Page.navigate', {
     url: `http://127.0.0.1:${server.address().port}/${lang}/`,
@@ -805,6 +820,265 @@ async function screenshot(page, name) {
     );
   const host = await tab(port);
 
+  if (process.env.PIKA_HOST_TRANSFER_ONLY) {
+    const pages = [
+      host,
+      await tab(port, 'ko'),
+      await tab(port, 'zh'),
+      await tab(port),
+    ];
+    for (const [i, p] of pages.entries())
+      await p.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"));document.getElementById("nickname").value=' +
+          JSON.stringify('Player ' + i)
+      );
+    const chat = async (p, text) => {
+      await p.ev(
+        'document.getElementById("chat-input").value=' +
+          JSON.stringify(text) +
+          ';document.getElementById("send-btn").click()'
+      );
+      for (const page of active)
+        await page.until(
+          'document.getElementById("chat-log").textContent.includes(' +
+            JSON.stringify(text) +
+            ')'
+        );
+    };
+    let active = [];
+    for (const [layout, topology] of [
+      ['four', 'mesh'],
+      ['four', 'star'],
+      ['pairs', 'mesh'],
+    ]) {
+      active = pages.slice(0, layout === 'pairs' ? 2 : 4);
+      await host.ev(
+        'document.getElementById("layout").value=' +
+          JSON.stringify(layout) +
+          ';document.getElementById("topology").value=' +
+          JSON.stringify(topology)
+      );
+      await click(host, 'create');
+      await host.until('!__volley.room.closed');
+      await selectSlot(host, layout === 'pairs' ? '0,1' : '0');
+      const roomId = await host.ev('__volley.room.id');
+      for (let i = 1; i < active.length; i++)
+        await join(active[i], roomId, layout === 'pairs' ? '2,3' : String(i));
+      await assertConnections(host, active.slice(1), topology);
+      if (matchmakingApp && topology === 'mesh') {
+        await host.ev(
+          '__volley.room.store.request("visibility",{value:"public"})'
+        );
+        await host.ev('__volley.quickMatch.sync()');
+      }
+      const target = active[1],
+        targetId = await target.ev('__volley.room.selfId');
+      await assert.rejects(
+        target.ev(
+          '__volley.room.transferHost(' +
+            JSON.stringify(await host.ev('__volley.room.selfId')) +
+            ')'
+        ),
+        /Only the host/
+      );
+      if (layout === 'four' && topology === 'mesh') {
+        for (const [giver, receiver] of [
+          [host, target],
+          [target, host],
+        ]) {
+          const newOwner = await receiver.ev('__volley.room.selfId');
+          console.log(
+            'Fresh handoff beginning:',
+            await giver.ev('__volley.room.selfId'),
+            'to',
+            newOwner
+          );
+          await giver.ev(
+            'window.freshDone=false;window.freshError=null;__volley.room.transferHost(' +
+              JSON.stringify(newOwner) +
+              ').then(()=>window.freshDone=true).catch(e=>window.freshError=e.message);true'
+          );
+          try {
+            await giver.until('freshDone || freshError');
+            assert.equal(await giver.ev('freshError'), null);
+          } catch (error) {
+            for (const page of active)
+              console.error(
+                'Handoff detail:',
+                await page.ev(
+                  'JSON.stringify({self:__volley.room.selfId,host:__volley.room.data.hostId,isHost:__volley.room.isHost,handoff:__volley.room.handoff,wait:__volley.room.hostTransfer.wait&&{phase:__volley.room.hostTransfer.wait.phase,pending:[...__volley.room.hostTransfer.wait.pending]},replay:{sending:__volley.session.replay.sending,requests:[...__volley.session.replay.requests.keys()],channels:[...__volley.session.replay.transfers].map(c=>({label:c.label,state:c.readyState,buffer:c.bufferedAmount}))}})'
+                )
+              );
+            throw error;
+          }
+
+          for (const page of active)
+            await page.until(
+              '!__volley.room.handoff && __volley.room.data.hostId===' +
+                JSON.stringify(newOwner)
+            );
+          await assertConnections(
+            receiver,
+            active.filter((page) => page !== receiver),
+            topology
+          );
+          assert.equal(
+            await receiver.ev('__volley.session.replay.pack.authoritative'),
+            true
+          );
+          assert.equal(
+            await receiver.ev(
+              '__volley.session.replay.pack.events.some(e=>e.type==="step")'
+            ),
+            false
+          );
+        }
+      }
+      await host.ev('__volley.session.start(__volley.room.data.settings)');
+      await host.until('__volley.session.lastFrame>10');
+      await assert.rejects(
+        host.ev('__volley.room.transferHost(' + JSON.stringify(targetId) + ')'),
+        /ready lobby/
+      );
+      await click(host, 'back-lobby');
+      for (const p of active)
+        await p.until(
+          '__volley.session.epoch===null && __volley.room.data.status==="lobby"'
+        );
+      await assertConnections(host, active.slice(1), topology);
+      await chat(host, 'Before handoff ' + layout + topology);
+      const roster = await host.ev(
+        'JSON.stringify({settings:__volley.room.data.settings,seats:__volley.room.data.seats,names:Object.fromEntries(Object.entries(__volley.room.data.members).map(([id,m])=>[id,m.names])),visibility:__volley.room.data.visibility})'
+      );
+      const prefix = await host.ev(
+        'JSON.stringify(__volley.session.replay.pack.events)'
+      );
+      // A rejected ownership write must leave the original host and room intact.
+      await host.ev(
+        'window.actualTransfer=__volley.room.transport.transferHost.bind(__volley.room.transport);__volley.room.transport.transferHost=async()=>{throw Error("Ownership write rejected fixture")}'
+      );
+      await assert.rejects(
+        host.ev('__volley.room.transferHost(' + JSON.stringify(targetId) + ')'),
+        /Ownership write rejected/
+      );
+      await host.ev('__volley.room.transport.transferHost=actualTransfer');
+      for (const p of active) await p.until('!__volley.room.handoff');
+      assert.equal(await host.ev('__volley.room.isHost'), true);
+      const button = '.transfer-host[data-client-id="' + targetId + '"]';
+      await host.until(
+        '(()=>{const b=document.querySelector(' +
+          JSON.stringify(button) +
+          ');if(!b||b.disabled)return false;b.click();return true;})()'
+      );
+      for (const p of active)
+        await p.until(
+          '!__volley.room.handoff && __volley.room.data.hostId===' +
+            JSON.stringify(targetId)
+        );
+      await assertConnections(
+        target,
+        active.filter((p) => p !== target),
+        topology
+      );
+      assert.equal(
+        rooms.get(roomId).hostId,
+        targetId,
+        'The same rendezvous entry must change owner'
+      );
+      for (const p of active) {
+        assert.equal(await p.ev('__volley.room.id'), roomId);
+        assert.equal(
+          await p.ev(
+            'JSON.stringify({settings:__volley.room.data.settings,seats:__volley.room.data.seats,names:Object.fromEntries(Object.entries(__volley.room.data.members).map(([id,m])=>[id,m.names])),visibility:__volley.room.data.visibility})'
+          ),
+          roster
+        );
+      }
+      assert.equal(
+        await target.ev(
+          'JSON.stringify(__volley.session.replay.pack.events.slice(0,' +
+            JSON.parse(prefix).length +
+            '))'
+        ),
+        prefix,
+        'The new host must preserve the old authoritative recording'
+      );
+      if (matchmakingApp && topology === 'mesh') {
+        await target.ev('__volley.quickMatch.sync()');
+        await host.ev('__volley.quickMatch.sync()');
+        assert.ok(await target.ev('!!__volley.quickMatch.advertised'));
+        assert.equal(await host.ev('__volley.quickMatch.advertised'), null);
+      }
+      await chat(target, 'New host chat ' + layout + topology);
+      await chat(host, 'Former host chat ' + layout + topology);
+      assert.equal(
+        await target.ev('__volley.session.replay.pack.authoritative'),
+        true
+      );
+      assert.equal(
+        await host.ev('__volley.session.replay.pack.authoritative'),
+        false
+      );
+      await target.ev('__volley.session.start(__volley.room.data.settings)');
+      for (const p of active) await p.until('__volley.session.lastFrame>5');
+      await click(target, 'back-lobby');
+      for (const p of active) await p.until('__volley.session.epoch===null');
+      await screenshot(
+        target,
+        'host-transfer-' + layout + '-' + topology + '.png'
+      );
+      if (layout === 'pairs') {
+        await target.ev('__volley.session.start(__volley.room.data.settings)');
+        await host.until('__volley.session.epoch!==null');
+        await click(target, 'leave');
+        await host.until(
+          '__volley.room.isHost && __volley.session.epoch===null'
+        );
+        assert.equal(
+          await host.ev('__volley.session.replay.pack.authoritative'),
+          true
+        );
+        assert.equal(
+          await host.ev('__volley.session.replay.pack.complete'),
+          false
+        );
+        const newcomer = pages[2];
+        await join(newcomer, roomId, '2,3');
+        await assertConnections(host, [newcomer], 'mesh');
+        const nextId = await newcomer.ev('__volley.room.selfId');
+        await host.ev(
+          '__volley.room.transferHost(' + JSON.stringify(nextId) + ')'
+        );
+        for (const page of [host, newcomer])
+          await page.until(
+            '!__volley.room.handoff && __volley.room.data.hostId===' +
+              JSON.stringify(nextId)
+          );
+        assert.equal(
+          await newcomer.ev('__volley.session.replay.pack.authoritative'),
+          true
+        );
+        assert.equal(
+          await newcomer.ev('__volley.session.replay.pack.complete'),
+          false
+        );
+        await click(newcomer, 'leave');
+        await host.until('__volley.room.closed');
+      } else {
+        await click(target, 'leave');
+        for (const p of active.filter((p) => p !== target))
+          await p.until('__volley.room.closed');
+      }
+      console.log(
+        'Host transfer passed:',
+        layout,
+        topology,
+        'same-code roster/settings, chat, full replay, rejected ownership rollback, and new-host match start.'
+      );
+    }
+    assert.deepEqual(errors, []);
+    return;
+  }
   if (process.env.PIKA_PUBLIC_ROOMS_ONLY) {
     assert.ok(
       matchmakingApp,
@@ -2101,8 +2375,9 @@ async function screenshot(page, name) {
       )
       .filter((index) => index !== null);
     let aiLit = false;
-    for (const count of [100, 120, 140, 160]) {
-      await replay.ev('__replay.seekFrame(' + stepIndexes[count - 1] + ')');
+    // Sample the whole rally window: the AI may be idle at four isolated frames.
+    for (const index of stepIndexes.slice(65)) {
+      await replay.ev('__replay.seekFrame(' + index + ')');
       const expected = expectedKeys(
         await replay.ev(
           '__replay.doubles.driver.inputs.map(({xDirection,yDirection,powerHit})=>({xDirection,yDirection,powerHit}))'

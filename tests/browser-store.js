@@ -22,6 +22,9 @@ class BrowserTestStore {
   publish(id, data) {
     return this.request('publish', { id, data });
   }
+  transferHost(id, targetId) {
+    return this.request('transferHost', { id, targetId, actor: this.uid });
+  }
   unpublish(id) {
     return this.request('unpublish', { id });
   }
@@ -32,7 +35,7 @@ class BrowserTestStore {
     const seen = new Set();
     return this.poll(
       'requests',
-      { id },
+      { id, hostId: this.uid },
       (values) => {
         for (const [guestId, data] of values)
           if (!seen.has(guestId)) {

@@ -2,6 +2,7 @@ import { saveAs } from 'file-saver';
 import { ReplayRecorder } from './replay_recorder.js';
 import {
   decodeReplay,
+  encodeReplay,
   MAX_REPLAY_BYTES,
   replayChunks,
 } from './replay_format.js';
@@ -89,6 +90,43 @@ export class RoomReplay extends ReplayRecorder {
       if (!silent) throw error;
     }
   }
+  async prepareTakeover() {
+    const room = this.session.room;
+    const request = crypto.randomUUID();
+    const text = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.requests.delete(request);
+        reject(new Error('Replay transfer timed out.'));
+      }, 30000);
+      this.requests.set(request, { resolve, reject, timer });
+      if (
+        !room.send(room.data.hostId, {
+          type: 'replay-request',
+          request,
+          takeover: true,
+        })
+      ) {
+        clearTimeout(timer);
+        this.requests.delete(request);
+        reject(new Error('The host connection is unavailable.'));
+      }
+    });
+    this.pendingTakeover = decodeReplay(text);
+  }
+  commitTakeover(host) {
+    if (host && this.pendingTakeover) {
+      this.pack = this.pendingTakeover;
+      this.count = this.pack.events.filter(
+        (event) => event.type === 'step'
+      ).length;
+      this.signature = this.roomSignature = '';
+    } else if (!host && this.pack) {
+      this.pack.authoritative = false;
+      this.pack.complete = false;
+    }
+    if (host && this.pack) this.pack.authoritative = true;
+    this.pendingTakeover = null;
+  }
   async save() {
     const room = this.session.room;
     if (
@@ -139,7 +177,11 @@ export class RoomReplay extends ReplayRecorder {
             request: packet.request,
           });
         else
-          this.send(id, packet.request).catch(() =>
+          this.send(
+            id,
+            packet.request,
+            !!packet.takeover && room.handoff?.targetId === id
+          ).catch(() =>
             room.send(id, {
               type: 'replay-unavailable',
               request: packet.request,
@@ -161,9 +203,10 @@ export class RoomReplay extends ReplayRecorder {
     }
     return false;
   }
-  async send(id, request) {
+  async send(id, request, takeover = false) {
+    this.sync();
     const room = this.session.room,
-      text = this.text();
+      text = takeover ? encodeReplay(this.pack) : this.text();
     if (text.length > MAX_REPLAY_BYTES)
       throw new Error('Replay file is too large.');
     const channel = room.peers

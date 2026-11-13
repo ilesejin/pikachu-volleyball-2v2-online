@@ -144,3 +144,9 @@ Four-browser mesh rooms report all six links, using small WebRTC summaries throu
 Ping is an application round trip, including channel queues and browser scheduling, not exact keyboard-to-screen delay. A separate observer reports sustained missing-input waits (sampled every 100 ms, excluding pauses and ordinary pacing); star guests can identify waiting for a host frame, not which remote input the host lacks. Background tabs may respond slowly. Diagnostics do not affect physics/RNG, are excluded from replay recordings, and add no Firestore or Quick Match operations.
 
 For muted local WebRTC checks, build development assets, set `$env:PIKA_DIAGNOSTICS_ONLY='1'`, and run `node tests/browser-online.cjs`.
+
+## Handing over the host
+
+In the lobby, the host can click **Make host** beside a connected participant. All participants must be connected. The former host stays in the room; its code, player names/slots, settings, visibility, chat, and authoritative replay history are retained. Star connections are rebuilt around the new host; mesh and duo lobbies also support handoff. Matchmaking advertising follows the new host. Handoff is disabled during a match and while lobby connections are being rebuilt.
+
+Publish the updated `firestore.2v2.rules` before deploying the frontend. The ownership transaction changes only `hostId` on the existing rendezvous document; the previous owner loses write access. If the ownership write is rejected, the handoff is cancelled and the original host remains in control. This feature requires no Quick Match server update beyond the existing public-room support. See [setup](ONLINE_SETUP.md#manual-host-handoff).

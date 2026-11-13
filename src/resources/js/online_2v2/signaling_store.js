@@ -12,6 +12,7 @@ import {
   writeBatch,
   query,
   where,
+  runTransaction,
 } from 'firebase/firestore';
 import { ROOM_SCHEMA } from './protocol.js';
 
@@ -38,6 +39,21 @@ export class SignalingStore extends FirebaseIdentity {
       hostId: data.hostId,
       layout: data.layout,
       status: 'lobby',
+    });
+  }
+  transferHost(id, targetId) {
+    const ref = this.room(id);
+    return runTransaction(this.db, async (transaction) => {
+      const entry = await transaction.get(ref);
+      if (!entry.exists() || entry.data().hostId !== this.auth.currentUser.uid)
+        throw new Error('The room owner changed. Rejoin the lobby.');
+      transaction.update(ref, { hostId: targetId });
+    }).catch((error) => {
+      if (error.code === 'permission-denied')
+        throw new Error(
+          'Deploy the updated Firestore rules before transferring host.'
+        );
+      throw error;
     });
   }
   unpublish(id) {

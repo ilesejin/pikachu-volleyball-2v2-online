@@ -109,3 +109,12 @@ Page templates: edit `src/en/index.html`, `src/ko/index.html`, or `src/zh/index.
 Run `npm run deploy` from the online repository to build and publish the whole frontend, including root `version.json`. The version file and JavaScript must come from the same build. Its protocol and engine metadata are exchanged over WebRTC, so the Quick Match server and Firestore rules do not need changes for this feature.
 
 Participants must reload after this first upgrade: pre-feature tabs cannot detect updates themselves. New clients reject older clients with missing compatibility metadata. Future stale tabs display an update notice and block new rooms/starts; active games are preserved. A failed version-file request blocks the attempted connection/start until a successful retry. Reloading retains local names and preferences. GitHub Pages propagation can briefly expose different release files; wait and reload if the update notice persists immediately after deployment.
+
+## Manual host handoff
+
+1. In the Firebase project used by `online_2v2/config.js`, open Firestore Database → Rules.
+2. Replace the rules with this repository's updated `firestore.2v2.rules` and publish them. The only added rendezvous permission lets its current authenticated owner change `hostId` without changing other fields. Guests and outsiders cannot take ownership.
+3. Deploy the rebuilt frontend and reload every participant before creating a room. No new configuration keys or service-account files are required, and the Quick Match server needs no additional change for this feature.
+4. In a connected lobby, use **Make host / 방장 위임 / 移交房主** next to another participant. The former host remains in the same room. During transfer the lobby is temporarily locked; controls return when the new connections are ready.
+
+The ownership update is atomic and keeps the same room code. A rejected write leaves the old host in place and displays an error. The new host receives the prior authoritative replay before ownership changes, and chat sequence numbers continue across the handoff. Host transfer is available only in the lobby, for solo and local-pair arrangements.

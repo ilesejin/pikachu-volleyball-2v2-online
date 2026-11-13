@@ -273,3 +273,17 @@ test('seeking rebuilds the latest chat per speaker across the full five-second w
   p.seek(12);
   assert.deepEqual(p.chats, []);
 });
+
+test('a promoted host can transfer its recording without claiming missing earlier frames are complete', () => {
+  const { RoomReplay } = load('online_2v2/replay_room.js', ['RoomReplay'], {
+    ReplayRecorder: class {},
+  });
+  const replay = Object.create(RoomReplay.prototype);
+  replay.pack = { authoritative: false, complete: false, events: [] };
+  replay.commitTakeover(true);
+  assert.equal(replay.pack.authoritative, true);
+  assert.equal(replay.pack.complete, false);
+  replay.commitTakeover(false);
+  assert.equal(replay.pack.authoritative, false);
+  assert.equal(replay.pack.complete, false);
+});

@@ -1,5 +1,21 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  'Make host': '移交房主',
+  'Transferring host…': '正在移交房主…',
+  'Host transferred.': '已移交房主。',
+  'Only the host can transfer hosting.': '只有房主可以移交房主權限。',
+  'Host transfer is only available in a ready lobby.':
+    '只能在連線準備就緒的大廳移交房主。',
+  'Wait for all players to connect before transferring host.':
+    '請等待所有玩家連線後再移交房主。',
+  'Host transfer is in progress.': '正在移交房主。',
+  'The host has changed. Retry in the lobby.': '房主已變更，請在大廳重試。',
+  'Host transfer preparation failed.': '房主移交準備失敗。',
+  'Host transfer timed out.': '房主移交逾時。',
+  'A player disconnected during host transfer.': '有玩家在移交房主時斷線。',
+  'Deploy the updated Firestore rules before transferring host.':
+    '請先部署更新的 Firestore 規則，再移交房主。',
+
   'Invalid room visibility.': '房間可見性無效。',
   'This room is private. Find another Quick Match room.':
     '此房間為私人房間，請尋找其他快速配對房間。',
@@ -211,6 +227,21 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  'Only the host can transfer hosting.': '방장만 방장을 위임할 수 있습니다.',
+  'Host transfer is only available in a ready lobby.':
+    '연결 준비가 완료된 대기실에서만 방장을 위임할 수 있습니다.',
+  'Wait for all players to connect before transferring host.':
+    '모든 플레이어의 연결이 완료된 후 방장을 위임하세요.',
+  'Host transfer is in progress.': '방장을 변경하는 중입니다.',
+  'The host has changed. Retry in the lobby.':
+    '방장이 변경되었습니다. 대기실에서 다시 시도하세요.',
+  'Host transfer preparation failed.': '방장 위임 준비에 실패했습니다.',
+  'Host transfer timed out.': '방장 위임 시간이 초과되었습니다.',
+  'A player disconnected during host transfer.':
+    '방장 위임 중 플레이어의 연결이 끊어졌습니다.',
+  'Deploy the updated Firestore rules before transferring host.':
+    '방장을 위임하기 전에 갱신된 Firestore 규칙을 배포하세요.',
+
   'Invalid room visibility.': '올바르지 않은 방 공개 설정입니다.',
   'This room is private. Find another Quick Match room.':
     '비공개 방입니다. 다른 빠른 대전 방을 찾아 주세요.',

@@ -17,6 +17,7 @@ export function setUpClassicUI({
   renderer,
   applySettings,
   setVisibility,
+  transferHost,
 }) {
   const $ = (id) => document.getElementById(id);
   const t = translate;
@@ -495,14 +496,17 @@ export function setUpClassicUI({
       const connected = !room.closed;
       $('before-connection').hidden = connected;
       $('flex-container').hidden = !connected;
-      $('match-dropdown-btn').disabled = !connected || !room.isHost;
+      $('match-dropdown-btn').disabled =
+        !connected || !room.isHost || !!room.handoff;
       $('synchronization').disabled = !room.isHost;
       $('topology').disabled = !room.isHost;
       $('topology-label').hidden = connected && room.data.layout === 'pairs';
       $('reconnect-network').hidden = !room.isHost;
       $('reconnect-network').disabled =
         !connected || room.data.status !== 'lobby';
-      $('network-status').textContent = connected
+      $('network-status').textContent = room.handoff
+        ? t('Transferring host…', '방장을 변경하는 중…')
+        : connected
         ? room.data.layout === 'pairs' &&
           Object.keys(room.data.members).length < 2
           ? t(
@@ -525,7 +529,7 @@ export function setUpClassicUI({
         'winning-score-submenu-btn',
         'court-submenu-btn',
       ])
-        $(id).disabled = !room.isHost;
+        $(id).disabled = !room.isHost || !!room.handoff;
       for (const id of [
         'slow-speed-btn',
         'medium-speed-btn',
@@ -534,9 +538,10 @@ export function setUpClassicUI({
         'practice-mode-off-btn',
         ...['5', '10', '15'].map((n) => 'winning-score-' + n + '-btn'),
       ])
-        $(id).disabled = !room.isHost;
+        $(id).disabled = !room.isHost || !!room.handoff;
       for (const value of ['public', 'private'])
-        $('visibility-' + value + '-btn').disabled = !connected || !room.isHost;
+        $('visibility-' + value + '-btn').disabled =
+          !connected || !room.isHost || !!room.handoff;
       selected(
         ['visibility-public-btn', 'visibility-private-btn'],
         'visibility-' +
@@ -565,6 +570,7 @@ export function setUpClassicUI({
         'practice-mode-' + (current.practice ? 'on' : 'off') + '-btn'
       );
       const me = connected ? room.data.members[room.selfId] : null;
+      $('lobby-editor').inert = !!room.handoff;
       $('lobby-editor').hidden = !connected || room.data.status !== 'lobby';
       $('randomize-slots').hidden = !room.isHost;
       $('randomize-slots').disabled =
@@ -640,6 +646,19 @@ export function setUpClassicUI({
             remove.textContent = t('Remove', '내보내기');
             remove.addEventListener('click', () => session.peerClosed(id));
             line.append(' ', remove);
+            const giveHost = document.createElement('button');
+            giveHost.type = 'button';
+            giveHost.className = 'transfer-host';
+            giveHost.dataset.clientId = id;
+            giveHost.textContent = t('Make host', '방장 위임');
+            giveHost.disabled =
+              room.data.status !== 'lobby' ||
+              !!room.handoff ||
+              !member.connected ||
+              !room.connected(id) ||
+              !room.ready();
+            giveHost.addEventListener('click', () => transferHost(id));
+            line.append(' ', giveHost);
           }
           $('lobby-participants').appendChild(line);
         }

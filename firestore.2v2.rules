@@ -12,7 +12,12 @@ service cloud.firestore {
         && request.resource.data.hostId == request.auth.uid
         && request.resource.data.schema == 'pikavolley-2v2-v5'
         && request.resource.data.layout in ['four','pairs'] && request.resource.data.status == 'lobby';
-      allow update: if owner() && request.resource.data == resource.data;
+      // The current owner may hand the same lobby to another authenticated
+      // participant chosen over WebRTC. No other metadata may change here.
+      allow update: if owner() && (request.resource.data == resource.data
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hostId'])
+          && request.resource.data.hostId is string
+          && request.resource.data.hostId.size() > 0 && request.resource.data.hostId.size() <= 128));
       allow delete: if signedIn() && (resource == null || owner());
       match /requests/{guestId} {
         function endpoint(data) { return signedIn() && request.auth.uid in [data.hostId, data.guestId]; }

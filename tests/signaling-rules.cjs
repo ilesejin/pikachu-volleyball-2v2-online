@@ -178,6 +178,20 @@ const denied = (action) =>
     false
   );
   await host.store.clearSignal(id, guest.uid);
+  await host.store.publish(id, { hostId: host.uid, layout: 'four' });
+  await denied(
+    db.updateDoc(host.store.room(id), { hostId: guest.uid, layout: 'pairs' })
+  );
+  await denied(db.updateDoc(outsider.store.room(id), { hostId: outsider.uid }));
+  await denied(db.updateDoc(host.store.room(id), { hostId: '' }));
+  await host.store.transferHost(id, guest.uid);
+  assert.equal((await guest.store.peek(id)).hostId, guest.uid);
+  await denied(host.store.unpublish(id));
+  await assert.rejects(host.store.transferHost(id, host.uid), /owner changed/);
+  await guest.store.publish(id, { hostId: guest.uid, layout: 'four' });
+  await guest.store.transferHost(id, host.uid);
+  assert.equal((await host.store.peek(id)).hostId, host.uid);
+  await host.store.close(id);
   console.log(
     'v5 signaling rules: authenticated ownership, endpoint isolation, host query, ICE permissions, cleanup after unpublish, and same-code reopening passed.'
   );

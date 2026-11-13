@@ -97,6 +97,18 @@ export class LobbyStore {
   async apply(actor, action, args) {
     const room = this.room;
     if (room.closed) throw new Error('The room has closed.');
+    if (!room.isHost)
+      throw new Error('The host has changed. Retry in the lobby.');
+    if (
+      room.handoff &&
+      !(room.handoff.stage === 'reconnecting' && action === 'networkReady')
+    )
+      throw new Error('Host transfer is in progress.');
+    if (action === 'transferHost') {
+      if (actor !== room.selfId)
+        throw new Error('Only the host can transfer hosting.');
+      return room.hostTransfer.perform(args.targetId);
+    }
     const generation = this.generation;
     const data = JSON.parse(JSON.stringify(room.data));
     const host = actor === data.hostId;

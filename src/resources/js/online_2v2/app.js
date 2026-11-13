@@ -195,13 +195,14 @@ function update(error) {
   $('start').disabled =
     busy ||
     updates?.state === 'outdated' ||
+    !!room.handoff ||
     !lobbyReady(room.data) ||
     !room.ready() ||
     Object.values(room.data.members).some((member) => !member.connected) ||
     Object.keys(room.data.members).some(
       (id) => id !== room.selfId && !room.connected(id)
     );
-  $('leave').disabled = busy;
+  $('leave').disabled = busy || !!room.handoff;
   $('connect-panel').hidden = true;
   $('room-panel').hidden = false;
   $('host-panel').hidden = !room.isHost;
@@ -255,6 +256,7 @@ function update(error) {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'secondary';
+      remove.disabled = busy || !!room.handoff;
       remove.textContent = text('Remove', '내보내기');
       remove.addEventListener('click', () =>
         run(async () => {
@@ -326,6 +328,9 @@ function makeRoom(store) {
       beforeConnect: () => updates.ensureCurrent(),
       connecting: (active) => feedback.connecting('room', active),
       creating: (active) => feedback.connecting('create', active),
+      beforeHostTransfer: () => quickMatch?.sync(),
+      hostTransferred: () =>
+        status(text('Host transferred.', '방장을 변경했습니다.')),
       networkReset: () => session.stop(),
       change: () => {
         if (session.epoch && room.data.status === 'lobby') session.stop();
@@ -428,6 +433,12 @@ async function boot() {
   });
   session = new OnlineMatch(game, ticker, update);
   let store = new SignalingStore();
+  if (
+    process.env.NODE_ENV === 'development' &&
+    window.__PIKA_REQUIRE_TEST_STORE__ &&
+    !window.__PIKA_TEST_STORE__
+  )
+    throw new Error('Local signaling fixture failed; Firebase access blocked.');
   // Browser tests may inject a local signaling store; production builds ignore this hook.
   if (
     process.env.NODE_ENV === 'development' &&
@@ -528,6 +539,7 @@ async function boot() {
     game,
     renderer,
     setVisibility,
+    transferHost: (id) => run(() => room.transferHost(id)),
     applySettings: (value) =>
       run(async () => {
         if (!room.isHost) return;
