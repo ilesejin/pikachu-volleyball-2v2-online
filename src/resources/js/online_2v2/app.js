@@ -1,3 +1,4 @@
+import { createPlayerIcons } from './player_icons.js';
 import { setUpConnectionFeedback } from './connection_feedback.js';
 import { formatRoomCode, normalizeRoomCode } from './room_code.js';
 import { NetworkDiagnostics } from './diagnostics.js';
@@ -63,6 +64,7 @@ const status = (message, error = false) => {
 };
 const feedback = setUpConnectionFeedback();
 const params = new URLSearchParams(location.search);
+let lobbyPlayerIcons = [];
 let classicUI,
   quickMatch,
   room,
@@ -226,7 +228,30 @@ function update(error) {
           'Two humans per browser · two browsers',
           '브라우저당 2명 · 2개 브라우저'
         );
-  $('roster').replaceChildren();
+  const roster = $('roster');
+  roster.replaceChildren();
+  const pairs = data.layout === 'pairs';
+  roster.classList.toggle('paired-roster', pairs);
+  const slotControl = (slots) => {
+    const container = document.createElement('div');
+    container.className = 'slot-choice';
+    container.dataset.choice = slots.join(',');
+    return container;
+  };
+  const teams = pairs
+    ? [
+        [0, 1],
+        [2, 3],
+      ].map((slots) => {
+        const team = document.createElement('li');
+        team.className = 'roster-team';
+        const players = document.createElement('ul');
+        players.className = 'roster-team-players';
+        team.append(players, slotControl(slots));
+        roster.append(team);
+        return players;
+      })
+    : null;
   for (let slot = 0; slot < 4; slot++) {
     const owner = data.seats[slot];
     const member = owner && data.members[owner];
@@ -251,7 +276,12 @@ function update(error) {
         ? text('Connected', '연결됨')
         : text('Connecting…', '연결 중…')
       : text('AI fills this position', 'AI가 이 자리를 담당합니다');
-    card.append(title, name, connection);
+    const icon = document.createElement('img');
+    icon.className = 'player-sprite-icon';
+    icon.src = lobbyPlayerIcons[slot];
+    icon.alt = '';
+    icon.width = icon.height = 64;
+    card.append(icon, title, name, connection);
     if (room.isHost && owner && owner !== room.selfId) {
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -265,7 +295,11 @@ function update(error) {
       );
       card.appendChild(remove);
     }
-    $('roster').appendChild(card);
+    if (pairs) teams[Math.floor(slot / 2)].append(card);
+    else {
+      card.append(slotControl([slot]));
+      roster.append(card);
+    }
   }
   const me = data.members[room.selfId];
   $('my-positions').textContent =
@@ -431,6 +465,12 @@ async function boot() {
       String(304 / width)
     );
   });
+  lobbyPlayerIcons = createPlayerIcons(
+    loader.resources[ASSETS_PATH.SPRITE_SHEET].textures[
+      ASSETS_PATH.TEXTURES.PIKACHU(0, 0)
+    ],
+    DOUBLES_CONFIG.playerTints
+  );
   session = new OnlineMatch(game, ticker, update);
   let store = new SignalingStore();
   if (

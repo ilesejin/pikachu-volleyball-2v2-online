@@ -493,7 +493,20 @@
           <span id="phase"></span>
         </summary>
         <p id="arrangement"></p>
+        <div id="slot-selection-intro">
+          <h3>Choose your slot</h3>
+          <p>
+            You entered without a slot. Select an empty position or team; cancel
+            to release it. Every joined human must be assigned before starting.
+          </p>
+        </div>
         <ul id="roster"></ul>
+        <div id="slot-actions">
+          <button hidden="" id="randomize-slots" type="button">
+            Randomize positions
+          </button>
+          <button id="cancel-slot" type="button">Cancel slot selection</button>
+        </div>
         <div class="invite-controls">
           <label>Invitation link<input id="invite-link" readonly="" /></label
           ><button id="copy-link" type="button">Copy link</button>
@@ -510,16 +523,6 @@
           <button hidden="" id="reconnect-network" type="button">
             Retry connections
           </button>
-          <h3>Choose your slot</h3>
-          <p>
-            You entered without a slot. Select an empty position or team; cancel
-            to release it. Every joined human must be assigned before starting.
-          </p>
-          <div id="slot-choices"></div>
-          <button hidden="" id="randomize-slots" type="button">
-            Randomize positions
-          </button>
-          <button id="cancel-slot" type="button">Cancel slot selection</button>
           <div id="lobby-participants"></div>
           <form id="names-form">
             <label

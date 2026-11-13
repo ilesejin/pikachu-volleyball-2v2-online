@@ -1715,6 +1715,64 @@ async function screenshot(page, name) {
     const pages = [host, await tab(port, 'ko'), await tab(port, 'zh')];
     for (const page of pages) {
       await page.ev(
+        'document.getElementById("layout").value="four";document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+      await click(page, 'create');
+      await page.until(
+        '!__volley.room.closed && __volley.room.data?.layout==="four"'
+      );
+      assert.equal(
+        await page.ev(
+          'document.querySelectorAll("#roster .player .slot-choice [data-slots]").length'
+        ),
+        4
+      );
+      await page.until(
+        'Array.from(document.querySelectorAll("#roster .player-sprite-icon")).length===4 && Array.from(document.querySelectorAll("#roster .player-sprite-icon")).every(img=>img.complete&&img.naturalWidth===64)'
+      );
+      assert.equal(
+        await page.ev(
+          'new Set(Array.from(document.querySelectorAll("#roster .player-sprite-icon"),img=>img.src)).size'
+        ),
+        4,
+        'Every player must have its own tinted sprite'
+      );
+      assert.equal(
+        await page.ev(
+          'Array.from(document.querySelectorAll("#roster .player")).every(card=>parseFloat(getComputedStyle(card).borderTopWidth)===0)'
+        ),
+        true,
+        'Sprites replace the old color bars'
+      );
+      await selectSlot(page, '2');
+      await click(page, 'cancel-slot');
+      await page.until(
+        '__volley.room.data.members[__volley.room.selfId].slots.length===0'
+      );
+      for (const width of [390, 1200]) {
+        await page.send('Emulation.setDeviceMetricsOverride', {
+          width,
+          height: 844,
+          deviceScaleFactor: 1,
+          mobile: width === 390,
+        });
+        const positions = await page.ev(
+          'Array.from(document.querySelectorAll("#roster .slot-choice button")).map(b=>{const c=b.closest(".player").getBoundingClientRect(),r=b.getBoundingClientRect();return r.top>c.top+3&&r.left>=c.left-1&&r.right<=c.right+1&&r.bottom<=c.bottom+1;})'
+        );
+        assert.ok(
+          positions.every(Boolean),
+          'Each solo button must be below its Pikachu sprite and inside its player card'
+        );
+        if (width === 390)
+          await screenshot(
+            page,
+            'slot-cards-solo-' +
+              (await page.ev('document.documentElement.lang')) +
+              '.png'
+          );
+      }
+      await click(page, 'leave');
+      await page.ev(
         'document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"));document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
       );
       await click(page, 'create');
@@ -1737,6 +1795,28 @@ async function screenshot(page, name) {
           deviceScaleFactor: 1,
           mobile: width === 390,
         });
+
+        const teams = await page.ev(
+          'Array.from(document.querySelectorAll("#roster .roster-team")).map(t=>{const cards=Array.from(t.querySelectorAll(".player")).map(c=>c.getBoundingClientRect()),r=t.querySelector("[data-slots]").getBoundingClientRect(),box=t.getBoundingClientRect();return cards.length===2&&r.top>=Math.max(...cards.map(c=>c.bottom))&&r.left>=box.left-1&&r.right<=box.right+1;})'
+        );
+        assert.equal(teams.length, 2);
+        assert.ok(
+          teams.every(Boolean),
+          'Each duo button must sit below both teammate cards'
+        );
+        assert.equal(
+          await page.ev(
+            'document.querySelectorAll("#roster [data-slots]").length'
+          ),
+          2
+        );
+        if (width === 390)
+          await screenshot(
+            page,
+            'slot-cards-duo-' +
+              (await page.ev('document.documentElement.lang')) +
+              '.png'
+          );
         const boxes = await page.ev(
           '(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width}};return {parent:rect(document.querySelector(".invite-controls")),items:["invite-link","copy-link","copy-code"].map(id=>rect(document.getElementById(id)))}})()'
         );
@@ -1771,6 +1851,13 @@ async function screenshot(page, name) {
     await click(host, 'start');
     for (const page of [host, pages[1]])
       await page.until('__volley.session.lastFrame>10');
+    assert.equal(
+      await host.ev(
+        'document.querySelector("#roster [data-slots]").getClientRects().length'
+      ),
+      0,
+      'Slot choices must stay hidden during gameplay'
+    );
     await click(host, 'back-lobby');
     await host.until('__volley.room.data.status==="lobby"');
     await click(pages[1], 'leave');

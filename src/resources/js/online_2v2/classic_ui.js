@@ -577,8 +577,14 @@ export function setUpClassicUI({
         randomizing ||
         !connected ||
         !room.isHost ||
-        room.data.status !== 'lobby';
-      $('slot-choices').replaceChildren();
+        room.data.status !== 'lobby' ||
+        !!room.handoff;
+      const choosing = connected && room.data.status === 'lobby';
+      $('slot-selection-intro').hidden = $('slot-actions').hidden = !choosing;
+      document.querySelectorAll('#roster .slot-choice').forEach((container) => {
+        container.replaceChildren();
+        container.hidden = !choosing;
+      });
       $('lobby-participants').replaceChildren();
       if (me) {
         const names = me.names || [me.name];
@@ -622,16 +628,23 @@ export function setUpClassicUI({
             (own ? t(' (selected)', ' (선택됨)') : '');
           button.disabled =
             room.data.status !== 'lobby' ||
+            !!room.handoff ||
             own ||
             slots.some(
               (slot) =>
                 room.data.seats[slot] && room.data.seats[slot] !== room.selfId
             );
           button.addEventListener('click', () => selectSlots(slots));
-          $('slot-choices').appendChild(button);
+          document
+            .querySelector(
+              '#roster .slot-choice[data-choice="' + slots.join(',') + '"]'
+            )
+            .append(button);
         }
         $('cancel-slot').disabled =
-          me.slots.length === 0 || room.data.status !== 'lobby';
+          me.slots.length === 0 ||
+          room.data.status !== 'lobby' ||
+          !!room.handoff;
         for (const [id, member] of Object.entries(room.data.members)) {
           const line = document.createElement('p');
           line.textContent =

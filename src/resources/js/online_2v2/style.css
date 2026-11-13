@@ -127,28 +127,14 @@
   padding: 0;
   gap: 12px;
 }
-#roster li {
+#roster .player {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-top: 3px solid;
-  padding-top: 6px;
   overflow-wrap: anywhere;
 }
 #roster button {
   align-self: flex-start;
-}
-.player-0 {
-  border-color: #d8b021 !important;
-}
-.player-1 {
-  border-color: #ef9146 !important;
-}
-.player-2 {
-  border-color: #7abb31 !important;
-}
-.player-3 {
-  border-color: #e85544 !important;
 }
 .invite-controls {
   --invite-control-height: 2rem;
@@ -309,13 +295,13 @@ summary:focus-visible {
   padding: 10px;
   font-size: calc(1.5 * var(--font-size));
 }
-#slot-choices {
+#slot-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin: 12px 0;
 }
-#slot-choices button,
+#roster .slot-choice button,
 #cancel-slot,
 #save-names,
 #lobby-participants button {
@@ -577,4 +563,42 @@ select:focus-visible {
   flex-wrap: wrap;
   gap: 0.75em;
   margin: 1em 0;
+}
+
+#roster.paired-roster {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.roster-team {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.roster-team-players {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#roster .slot-choice {
+  margin-top: 8px;
+}
+#roster .slot-choice button {
+  max-width: 100%;
+  white-space: normal;
+}
+@media (max-width: 600px) {
+  #roster.paired-roster {
+    grid-template-columns: 1fr;
+  }
+}
+
+.player-sprite-icon {
+  width: 64px;
+  height: 64px;
+  align-self: flex-start;
+  object-fit: contain;
+  image-rendering: pixelated;
 }

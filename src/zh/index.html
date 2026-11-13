@@ -476,7 +476,19 @@
           <span id="phase"></span>
         </summary>
         <p id="arrangement"></p>
+        <div id="slot-selection-intro">
+          <h3>選擇你的位置</h3>
+          <p>
+            加入時尚未選擇位置。請選擇空位或完整隊伍，也可以取消選擇。開始前，每位已加入的玩家都必須選擇位置。
+          </p>
+        </div>
         <ul id="roster"></ul>
+        <div id="slot-actions">
+          <button hidden="" id="randomize-slots" type="button">
+            隨機分配位置
+          </button>
+          <button id="cancel-slot" type="button">取消選擇位置</button>
+        </div>
         <div class="invite-controls">
           <label>邀請連結<input id="invite-link" readonly="" /></label
           ><button id="copy-link" type="button">複製連結</button>
@@ -493,15 +505,6 @@
           <button hidden="" id="reconnect-network" type="button">
             重試連線
           </button>
-          <h3>選擇你的位置</h3>
-          <p>
-            加入時尚未選擇位置。請選擇空位或完整隊伍，也可以取消選擇。開始前，每位已加入的玩家都必須選擇位置。
-          </p>
-          <div id="slot-choices"></div>
-          <button hidden="" id="randomize-slots" type="button">
-            隨機分配位置
-          </button>
-          <button id="cancel-slot" type="button">取消選擇位置</button>
           <div id="lobby-participants"></div>
           <form id="names-form">
             <label
