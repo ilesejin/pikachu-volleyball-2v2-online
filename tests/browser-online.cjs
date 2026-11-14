@@ -820,6 +820,342 @@ async function screenshot(page, name) {
     );
   const host = await tab(port);
 
+  if (process.env.PIKA_COSTUMES_ONLY) {
+    const guest = await tab(port, 'ko');
+    for (const page of [host, guest])
+      await page.ev(
+        'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"));document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"))'
+      );
+    const choose = async (page, index, id, where) => {
+      await page.ev(
+        'document.querySelector(' +
+          JSON.stringify(
+            '#costume-' + where + ' [data-local-costume="' + index + '"]'
+          ) +
+          ').click()'
+      );
+      await page.until('document.getElementById("costume-picker").open');
+      const head = id.startsWith('headband')
+        ? 'headband'
+        : id.startsWith('cap')
+        ? 'cap'
+        : 'none';
+      const neck = id.includes('scarf') ? 'scarf' : 'none';
+      for (const [part, option] of [
+        ['head', head],
+        ['neck', neck],
+      ])
+        await page.ev(
+          'document.querySelector(' +
+            JSON.stringify(
+              '#costume-picker [data-part="' +
+                part +
+                '"][data-option="' +
+                option +
+                '"]'
+            ) +
+            ').click()'
+        );
+      await page.ev('document.querySelector("[data-costume-apply]").click()');
+      await page.until('!document.getElementById("costume-picker").open');
+    };
+    assert.equal(
+      await host.ev(`(async()=>{
+      const load=async(name)=>{const img=new Image();img.src='../resources/assets/images/costumes/'+name+'.png';await img.decode();return img;};
+      const sheets={cap:await load('cap'),headband:await load('headband'),scarf:await load('scarf')};
+      const layout=await (await fetch('../resources/assets/images/costumes/frames.json')).json();
+      for(const image of Object.values(sheets)) if(image.width!==layout.size.w||image.height!==layout.size.h) throw Error('Atlas dimensions changed');
+      const expected=document.createElement('canvas'),actual=document.createElement('canvas');expected.width=actual.width=64;expected.height=actual.height=64;
+      const e=expected.getContext('2d'),a=actual.getContext('2d');
+      for(const id of ['cap','headband','scarf','cap-scarf','headband-scarf'])for(let i=0;i<28;i++){
+        const base=__volley.costumes.frames.classic[i],f=base.frame,t=__volley.costumes.frames[id][i];
+        e.clearRect(0,0,64,64);a.clearRect(0,0,64,64);
+        e.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
+        const head=id.startsWith('cap')?'cap':id.startsWith('headband')?'headband':null;
+        for(const name of [id.includes('scarf')?'scarf':null,head].filter(Boolean))e.drawImage(sheets[name],f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+        a.drawImage(t.baseTexture.resource.source,0,0);
+        const ep=e.getImageData(0,0,64,64).data,ap=a.getImageData(0,0,64,64).data;
+        if(ep.some((v,j)=>v!==ap[j]))throw Error('Misaligned costume '+id+' frame '+i);
+      }
+      return true;
+    })()`),
+      true
+    );
+    await host.ev('document.querySelector("#costume-landing button").click()');
+    await host.ev(
+      `document.querySelector('[data-part="neck"][data-option="scarf"]').click();document.getElementById("costume-picker").close()`
+    );
+    assert.deepEqual(
+      await host.ev('JSON.parse(localStorage.getItem("pv-online-costumes"))'),
+      null,
+      'Closing the picker must not save un-applied choices'
+    );
+    await choose(host, 0, 'cap', 'landing');
+    await choose(host, 1, 'scarf', 'landing');
+    const reopen = await tab(port, 'en', true, host.contextId);
+    await reopen.ev(
+      'document.getElementById("layout").value="pairs";document.getElementById("layout").dispatchEvent(new Event("change"))'
+    );
+    assert.equal(
+      await reopen.ev(
+        'document.querySelectorAll("#costume-landing button")[0].textContent.includes("Cap")'
+      ),
+      true
+    );
+    assert.equal(
+      await reopen.ev(
+        'document.querySelectorAll("#costume-landing button")[1].textContent.includes("Scarf")'
+      ),
+      true
+    );
+    await browser.send('Target.closeTarget', { targetId: reopen.targetId });
+    await host.ev('document.querySelector("#costume-landing button").click()');
+    await screenshot(host, 'costume-picker-en.png');
+    await host.ev('document.getElementById("costume-picker").close()');
+    await host.ev(
+      `(()=>{const c=document.createElement('canvas');c.id='costume-contact';c.width=560;c.height=540;Object.assign(c.style,{position:'fixed',left:'0',top:'0',zIndex:999999,background:'white'});const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.fillStyle='white';ctx.fillRect(0,0,560,540);ctx.font='12px monospace';const indexes=[0,5,10,15,17,18,23];['classic','cap','headband','scarf','cap-scarf','headband-scarf'].forEach((id,row)=>indexes.forEach((index,col)=>{const t=__volley.costumes.frames[id][index],f=t.frame;ctx.drawImage(t.baseTexture.resource.source,f.x,f.y,f.width,f.height,col*80+8,row*90+20,64,64);ctx.fillStyle='black';ctx.fillText(id+' '+index,col*80+2,row*90+12);}));document.body.append(c);})()`
+    );
+    await screenshot(host, 'costume-animation-contact.png');
+    await host.ev('document.getElementById("costume-contact").remove()');
+    await choose(guest, 0, 'cap-scarf', 'landing');
+    await choose(guest, 1, 'scarf', 'landing');
+    await click(host, 'create');
+    await host.until('!!__volley.room.data?.members[__volley.room.selfId]');
+    await selectSlot(host, '0,1');
+    const roomId = await host.ev('__volley.room.id');
+    await join(guest, roomId, '2,3');
+    await assertConnections(host, [guest], 'mesh');
+    await choose(host, 1, 'headband-scarf', 'lobby');
+    const hostId = await host.ev('__volley.room.selfId'),
+      guestId = await guest.ev('__volley.room.selfId');
+    await guest.until(
+      '__volley.room.data.members[' +
+        JSON.stringify(hostId) +
+        '].skins[1]==="headband-scarf"'
+    );
+    await click(guest, 'cancel-slot');
+    await guest.until(
+      '__volley.room.data.members[__volley.room.selfId].slots.length===0'
+    );
+    await selectSlot(host, '2,3');
+    await selectSlot(guest, '0,1');
+    await host.ev(
+      '__volley.room.transferHost(' + JSON.stringify(guestId) + ')'
+    );
+    for (const page of [host, guest])
+      await page.until(
+        '!__volley.room.handoff && __volley.room.data.hostId===' +
+          JSON.stringify(guestId)
+      );
+    assert.deepEqual(
+      await guest.ev(
+        '__volley.room.data.members[' + JSON.stringify(hostId) + '].skins'
+      ),
+      ['cap', 'headband-scarf']
+    );
+    await guest.ev('__volley.session.start(__volley.room.data.settings)');
+    for (const page of [host, guest])
+      await page.until('__volley.session.lastFrame>100');
+    assert.deepEqual(await guest.ev('__volley.session.skins'), [
+      'cap-scarf',
+      'scarf',
+      'cap',
+      'headband-scarf',
+    ]);
+    assert.equal(
+      await guest.ev(
+        '__volley.game.view.game.playerSprites.every(s=>s.tint===0xffffff)'
+      ),
+      true,
+      'Costume colors must not receive the old whole-body tint'
+    );
+    await assert.rejects(
+      guest.ev(
+        '__volley.room.store.request("skin",{index:0,skinId:"classic"})'
+      ),
+      /only available in the lobby/
+    );
+    await screenshot(guest, 'costumes-in-game-ko.png');
+    await click(guest, 'pause');
+    await host.until('__volley.session.phase==="paused"');
+    const text = await guest.ev('__volley.session.replay.text()');
+    assert.ok(
+      JSON.parse(text).pack.events.some(
+        (e) =>
+          e.type === 'checkpoint' &&
+          e.skins?.join(',') === 'cap-scarf,scarf,cap,headband-scarf'
+      )
+    );
+    const viewer = await tab(port, 'zh');
+    await viewer.send('Page.navigate', {
+      url: `http://127.0.0.1:${server.address().port}/zh/replay/`,
+    });
+    await viewer.until('!!window.__replayPlayer');
+    await viewer.ev(
+      '(()=>{const f=new File([' +
+        JSON.stringify(text) +
+        '],"costumes.txt");const d=new DataTransfer();d.items.add(f);const i=document.getElementById("file-input");i.files=d.files;i.dispatchEvent(new Event("change"));})()'
+    );
+    await viewer.until('!!window.__replay?.doubles');
+    await viewer.ev(
+      '__replay.ticker.stop();__replay.doubles.seek(__replay.doubles.events.length)'
+    );
+    assert.deepEqual(await viewer.ev('__replay.doubles.skins'), [
+      'cap-scarf',
+      'scarf',
+      'cap',
+      'headband-scarf',
+    ]);
+    assert.equal(
+      await viewer.ev(
+        '__replay.pikaVolley.view.game.playerSprites.every(s=>s.tint===0xffffff)'
+      ),
+      true
+    );
+    await screenshot(viewer, 'costumes-replay-zh.png');
+    await click(guest, 'back-lobby');
+    for (const page of [host, guest])
+      await page.until('__volley.session.epoch===null');
+    await click(guest, 'leave');
+    await host.until('__volley.room.closed');
+
+    // Host-only snapshots must retain costume IDs; a disconnected solo becomes
+    // AI without changing its costume while other humans continue playing.
+    const third = await tab(port, 'zh');
+    for (const page of [host, guest, third]) {
+      await page.ev(
+        'document.getElementById("layout").value="four";document.getElementById("layout").dispatchEvent(new Event("change"));document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+      );
+    }
+    await choose(host, 0, 'headband', 'landing');
+    await choose(guest, 0, 'scarf', 'landing');
+    await choose(third, 0, 'cap', 'landing');
+    await third.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    await third.ev('document.querySelector("#costume-landing button").click()');
+    const picker = await third.ev(
+      '(()=>{const r=document.getElementById("costume-picker").getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,text:document.getElementById("costume-picker").textContent}})()'
+    );
+    assert.ok(picker.left >= 0 && picker.right <= picker.width);
+    assert.ok(picker.text.includes('帽子') && picker.text.includes('關閉'));
+    await screenshot(third, 'costume-picker-zh-mobile.png');
+    await third.ev('document.getElementById("costume-picker").close()');
+    await click(host, 'create');
+    await host.until(
+      '!__volley.room.closed && __volley.room.data?.layout==="four"'
+    );
+    await selectSlot(host, '0');
+    const soloRoom = await host.ev('__volley.room.id');
+    await join(guest, soloRoom, '1');
+    await join(third, soloRoom, '3');
+    await assertConnections(host, [guest, third], 'mesh');
+    await host.ev(
+      '__volley.session.start({...__volley.room.data.settings,synchronization:"host"})'
+    );
+    for (const page of [host, guest, third])
+      await page.until(
+        '__volley.session.lastFrame>10 || __volley.session.frame>10'
+      );
+    assert.deepEqual(await third.ev('__volley.session.skins'), [
+      'headband',
+      'scarf',
+      'classic',
+      'cap',
+    ]);
+    await click(guest, 'leave');
+    await host.until('__volley.game.players[1].isComputer');
+    assert.equal(await host.ev('__volley.session.skins[1]'), 'scarf');
+    await click(host, 'pause');
+    await third.until('__volley.session.phase==="paused"');
+    const snapshotReplay = JSON.parse(
+      await third.ev('__volley.session.replay.text()')
+    ).pack;
+    assert.ok(
+      snapshotReplay.events.some(
+        (e) => e.type === 'snapshot' && e.skins?.[1] === 'scarf'
+      )
+    );
+    await click(host, 'back-lobby');
+    await third.until('__volley.session.epoch===null');
+    await click(third, 'leave');
+    await click(host, 'leave');
+    // Files created before costumes have no appearance metadata.
+    const old = JSON.parse(text);
+    for (const event of old.pack.events) {
+      delete event.skins;
+      if (event.visual) delete event.visual.skins;
+    }
+    const hash = Function(
+      fs
+        .readFileSync(
+          path.join(__dirname, '../src/resources/js/utils/hash_code.js'),
+          'utf8'
+        )
+        .replace(/export /g, '') + ';return getHashCode;'
+    )();
+    old.checksum = hash(JSON.stringify(old.pack));
+    const legacy = await tab(port, 'en');
+    await legacy.send('Page.navigate', {
+      url: `http://127.0.0.1:${server.address().port}/en/replay/`,
+    });
+    await legacy.until('!!window.__replayPlayer');
+    await legacy.ev(
+      '(()=>{const f=new File([' +
+        JSON.stringify(JSON.stringify(old)) +
+        '],"old.txt");const d=new DataTransfer();d.items.add(f);const i=document.getElementById("file-input");i.files=d.files;i.dispatchEvent(new Event("change"));})()'
+    );
+    await legacy.until('!!window.__replay?.doubles');
+    await legacy.ev(
+      '__replay.ticker.stop();__replay.doubles.seek(__replay.doubles.events.length)'
+    );
+    assert.equal(await legacy.ev('__replay.doubles.legacySkins'), true);
+    assert.deepEqual(
+      await legacy.ev(
+        '__replay.pikaVolley.view.game.playerSprites.map(s=>s.tint)'
+      ),
+      [0xffdf72, 0xffa080, 0x70ffff, 0xff70ff]
+    );
+    await legacy.ev(
+      '__replay.doubles.legacySkins=false;__replay.doubles.skins=["__proto__","missing",null,{}];__replay.doubles.render()'
+    );
+
+    if (matchmakingApp) {
+      await click(host, 'quick-match');
+      await host.until(
+        '__volley.room.isHost && !__volley.room.closed && !!__volley.quickMatch.advertised'
+      );
+      await selectSlot(host, '0');
+      assert.deepEqual(
+        await host.ev('__volley.room.data.members[__volley.room.selfId].skins'),
+        ['headband']
+      );
+      const quickRoom = await host.ev('__volley.room.id');
+      await click(guest, 'quick-match');
+      await guest.until(
+        '!__volley.room.closed && !__volley.quickMatch.active && __volley.room.joinDetails===null'
+      );
+      assert.equal(await guest.ev('__volley.room.id'), quickRoom);
+      assert.deepEqual(
+        await guest.ev(
+          '__volley.room.data.members[__volley.room.selfId].skins'
+        ),
+        ['scarf']
+      );
+      await selectSlot(guest, '3');
+      await assertConnections(host, [guest], 'mesh');
+      await click(host, 'leave');
+      await guest.until('__volley.room.closed');
+    }
+    assert.deepEqual(errors, []);
+    console.log(
+      'Costumes: landing selection, independent pair preferences after reopening, duplicates, position swaps, host handoff, in-game palettes/markers, lobby-only validation, and replay seeking passed.'
+    );
+    return;
+  }
   if (process.env.PIKA_HOST_TRANSFER_ONLY) {
     const pages = [
       host,
@@ -1196,20 +1532,46 @@ async function screenshot(page, name) {
       'Quick Match rooms default public'
     );
     await click(next, 'leave');
-    await host.ev(
-      '__volley.session.start({...__volley.room.data.settings,synchronization:"host"})'
-    );
-    await guest.until('__volley.session.epoch!==null');
-    await host.ev(
-      '(()=>{const s=__volley.session,g=s.game;if(!g.paused)s.pause();g.gameEnded=true;g.state=g.round;g.frameCounter=g.frameTotal.gameEnd-2;g.players.forEach(p=>p.gameEnded=true);s.pause();})()'
-    );
-    await host.until('__volley.session.phase==="finished"');
-    await delay(250);
-    assert.equal(
-      await host.ev('__volley.room.data.status'),
-      'playing',
-      'Private matches retain the finished screen until the host returns'
-    );
+    for (const sync of ['host', 'lockstep']) {
+      await host.ev(
+        '__volley.session.start({...__volley.room.data.settings,synchronization:' +
+          JSON.stringify(sync) +
+          '})'
+      );
+      await guest.until('__volley.session.epoch!==null');
+      await host.until(
+        '__volley.session.frame>3 || __volley.session.lastFrame>3'
+      );
+      await host.ev(
+        '(()=>{const s=__volley.session;if(!s.game.paused)s.pause();})()'
+      );
+      await guest.until('__volley.session.phase==="paused"');
+      await host.ev(
+        '(()=>{const s=__volley.session,g=s.game;g.gameEnded=true;g.state=g.round;g.frameCounter=g.frameTotal.gameEnd-2;g.players.forEach(p=>p.gameEnded=true);if(s.lockstep)s.meshControl({paused:false});else s.pause();})()'
+      );
+      for (const page of [host, guest]) {
+        await page.until(
+          '__volley.session.epoch===null && __volley.room.data.status==="lobby"'
+        );
+        assert.equal(await page.ev('__volley.room.id'), id);
+        assert.equal(
+          await page.ev('__volley.room.data.visibility'),
+          'private',
+          'Finished private matches must stay private'
+        );
+        assert.equal(
+          await page.ev('Object.keys(__volley.room.data.members).length'),
+          2
+        );
+      }
+      await host.ev('__volley.quickMatch.sync()');
+      assert.equal(
+        await host.ev('!!__volley.quickMatch.advertised'),
+        false,
+        'Finished private rooms must not be advertised'
+      );
+      console.log('Private auto-return passed:', sync);
+    }
     await click(host, 'visibility-public-btn');
     await host.until(
       '__volley.session.epoch===null && __volley.room.data.status==="lobby"'
@@ -1242,7 +1604,7 @@ async function screenshot(page, name) {
     await click(guest, 'leave');
     assert.deepEqual(errors, []);
     console.log(
-      'Public rooms: shared queue, private defaults, public friend-room discovery, host-only live visibility, same-code automatic reopening after the game-over animation in host/lockstep, and public host promotion passed.'
+      'Public rooms: shared queue, private defaults, public friend-room discovery, host-only live visibility, same-code automatic reopening after the game-over animation in host/lockstep for public and private rooms, and public host promotion passed.'
     );
     return;
   }

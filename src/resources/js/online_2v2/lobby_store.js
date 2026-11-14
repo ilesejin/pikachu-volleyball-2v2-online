@@ -7,6 +7,8 @@ import {
   ROOM_SCHEMA,
   validSlots,
   playerNames,
+  playerSkins,
+  SKIN_IDS,
   matchSettings,
   lobbyReady,
   randomizedPositions,
@@ -28,7 +30,8 @@ export class LobbyStore {
     layout,
     slots,
     settings,
-    visibility = 'private'
+    visibility = 'private',
+    skins
   ) {
     if (!['public', 'private'].includes(visibility))
       throw new Error('Invalid room visibility.');
@@ -49,6 +52,7 @@ export class LobbyStore {
         [hostId]: {
           name: names[0],
           names,
+          skins: playerSkins(skins, layout),
           slots,
           connected: true,
           compatibility: CLIENT_VERSION,
@@ -112,14 +116,19 @@ export class LobbyStore {
     const generation = this.generation;
     const data = JSON.parse(JSON.stringify(room.data));
     const host = actor === data.hostId;
-    if (!host && !['claim', 'selectSlots', 'rename', 'remove'].includes(action))
+    if (
+      !host &&
+      !['claim', 'selectSlots', 'rename', 'remove', 'skin'].includes(action)
+    )
       throw new Error('Only the host can change this setting.');
     if (action !== 'claim' && !data.members[actor])
       throw new Error('Join the lobby first.');
     if (action === 'claim' && data.status !== 'lobby')
       throw new Error('The match has started or the room has closed.');
     if (
-      ['claim', 'selectSlots', 'rename', 'randomizeSlots'].includes(action) &&
+      ['claim', 'selectSlots', 'rename', 'randomizeSlots', 'skin'].includes(
+        action
+      ) &&
       data.status !== 'lobby'
     )
       throw new Error('This action is only available in the lobby.');
@@ -137,6 +146,7 @@ export class LobbyStore {
         name: names[0],
         compatibility: args.compatibility,
         names,
+        skins: playerSkins(args.skins, data.layout),
         slots: [],
         connected: false,
       };
@@ -155,6 +165,17 @@ export class LobbyStore {
       data.seats = data.seats.map((owner, slot) =>
         args.slots.includes(slot) ? actor : owner === actor ? '' : owner
       );
+    } else if (action === 'skin') {
+      const skins = playerSkins(data.members[actor].skins, data.layout);
+      if (
+        !Number.isInteger(args.index) ||
+        args.index < 0 ||
+        args.index >= skins.length ||
+        !SKIN_IDS.includes(args.skinId)
+      )
+        throw new Error('Invalid costume selection.');
+      skins[args.index] = args.skinId;
+      data.members[actor].skins = skins;
     } else if (action === 'rename') {
       const names = playerNames(args.names, data.layout);
       Object.assign(data.members[actor], { name: names[0], names });

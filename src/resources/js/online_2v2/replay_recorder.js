@@ -65,6 +65,7 @@ export class ReplayRecorder {
       epoch: s.epoch,
       settings: copy(s.settings),
       members: copy(s.room.data.members),
+      skins: s.skins ? copy(s.skins) : undefined,
       checkpoint: captureCheckpoint(s.game, s.inputs, s.rng),
       visual: captureSnapshot(
         s.game,
@@ -128,6 +129,7 @@ export class ReplayRecorder {
     this.snapshotSignature = signature;
     this.pack.events.push({
       type: 'snapshot',
+      skins: this.session.skins ? copy(this.session.skins) : undefined,
       dt: packet.phase === 'playing' ? 1 / this.session.settings.fps : 0,
       epoch: packet.epoch,
       settings: copy(this.session.settings),

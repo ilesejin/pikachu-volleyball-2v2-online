@@ -415,6 +415,7 @@ export function setUpClassicUI({
     if (!chat.enabled) $('chat-bubbles').replaceChildren();
   });
   document.addEventListener('keydown', (event) => {
+    if (document.querySelector('dialog[open]')) return;
     const typing = event.target.closest('input,select,textarea,button');
     const dialog = document.querySelector('.fade-in-box:not(.hidden)');
     if (event.code === 'Tab' && dialog) {

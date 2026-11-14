@@ -29,6 +29,13 @@ module.exports = {
   module: {
     rules: [
       {
+        test: /\.png$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'resources/assets/costumes/[name].[contenthash][ext]',
+        },
+      },
+      {
         test: /\.css$/i,
         use: [MiniCssExtractPlugin.loader, 'css-loader'],
       },

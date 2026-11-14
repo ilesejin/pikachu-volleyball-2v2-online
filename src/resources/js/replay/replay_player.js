@@ -1,4 +1,5 @@
 'use strict';
+import { loadCostumeSheets } from '../online_2v2/costumes.js';
 import { settings } from '@pixi/settings';
 import { SCALE_MODES } from '@pixi/constants';
 import { Renderer, BatchRenderer, autoDetectRenderer } from '@pixi/core';
@@ -104,6 +105,7 @@ class ReplayPlayer {
         pack = packWithComment.pack;
         if (pack && pack.version === REPLAY_VERSION) {
           pack = decodeReplay(event.target.result);
+          loadCostumeSheets(this.loader);
           this.loader.load(() => {
             try {
               this.doubles = new DoublesPlayback(this, pack);

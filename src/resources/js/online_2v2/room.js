@@ -67,7 +67,8 @@ export class OnlineRoom {
           layout,
           slots,
           settings,
-          visibility
+          visibility,
+          this.callbacks.skins?.(layout)
         );
         this.subscribe();
         return this.id;
@@ -112,6 +113,7 @@ export class OnlineRoom {
           name,
           slots,
           quickMatch,
+          skins: this.callbacks.skins?.(entry.layout),
           compatibility: CLIENT_VERSION,
         };
         const admitted = new Promise((resolve, reject) => {
@@ -888,7 +890,8 @@ export class OnlineRoom {
         layout,
         member.slots,
         settings,
-        visibility
+        visibility,
+        member.skins
       );
       this.replay?.commitTakeover(true);
       this.subscribe();

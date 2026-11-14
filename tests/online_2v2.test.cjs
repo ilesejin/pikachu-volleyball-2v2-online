@@ -22,6 +22,9 @@ const protocol = load(
   'online_2v2/protocol.js',
   [
     'ROOM_SCHEMA',
+    'SKIN_IDS',
+    'playerSkins',
+    'slotSkins',
     'playerNames',
     'playerName',
     'lobbyReady',
@@ -1803,4 +1806,103 @@ test('dropping a mesh peer clears its cached signaling before it can rejoin', ()
   assert.equal(room.peers.has('guest-b'), false);
   assert.equal(room.relay.entries.has(key), false);
   assert.equal(room.relay.entries.has('other'), true);
+});
+
+test('saved costumes survive reopening and invalid saved IDs fall back to Classic', () => {
+  const { loadCostumes } = load(
+    'online_2v2/costume_selector.js',
+    ['loadCostumes'],
+    { ...protocol }
+  );
+  const storage = { get: () => JSON.stringify(['cap', 'scarf']) };
+  assert.deepEqual(plain(loadCostumes('four', storage)), ['cap']);
+  assert.deepEqual(plain(loadCostumes('pairs', storage)), ['cap', 'scarf']);
+  assert.deepEqual(
+    plain(
+      loadCostumes('pairs', {
+        get: () => JSON.stringify(['__proto__', 'missing']),
+      })
+    ),
+    ['classic', 'classic']
+  );
+  assert.deepEqual(plain(loadCostumes('pairs', { get: () => '{bad json' })), [
+    'classic',
+    'classic',
+  ]);
+});
+
+test('combined costumes preserve old IDs and allow independent head/neck choices', () => {
+  const { costumeParts, costumeId } = load(
+    'online_2v2/costumes.js',
+    ['costumeParts', 'costumeId'],
+    {
+      ...protocol,
+      capSheet: 'cap.png',
+      headbandSheet: 'headband.png',
+      scarfSheet: 'scarf.png',
+    }
+  );
+  for (const id of protocol.SKIN_IDS) {
+    const parts = costumeParts(id);
+    assert.equal(costumeId(parts.head, parts.neck), id);
+    assert.deepEqual(plain(protocol.playerSkins([id], 'four')), [id]);
+  }
+  assert.equal(costumeId('cap', 'scarf'), 'cap-scarf');
+  assert.equal(costumeId('headband', 'scarf'), 'headband-scarf');
+  assert.equal(costumeId('none', 'scarf'), 'scarf');
+  assert.equal(costumeId('cap', 'none'), 'cap');
+  assert.equal(costumeId('__proto__', 'missing'), 'classic');
+  assert.deepEqual(plain(costumeParts('__proto__')), {
+    head: 'none',
+    neck: 'none',
+  });
+  const { loadCostumes } = load(
+    'online_2v2/costume_selector.js',
+    ['loadCostumes'],
+    { ...protocol }
+  );
+  assert.deepEqual(
+    plain(
+      loadCostumes('pairs', {
+        get: () => JSON.stringify(['cap-scarf', 'headband-scarf']),
+      })
+    ),
+    ['cap-scarf', 'headband-scarf']
+  );
+});
+
+test('accessory PNG sheets use every original Pikachu atlas rectangle', () => {
+  const root = path.join(__dirname, '../src/resources/assets/images');
+  const original = JSON.parse(
+    fs.readFileSync(path.join(root, 'sprite_sheet.json'), 'utf8')
+  );
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, 'costumes/frames.json'), 'utf8')
+  );
+  assert.deepEqual(manifest.sourceSize, original.meta.size);
+  const frames = Object.values(manifest.frames).map((info) => info.frame);
+  const top = Math.min(...frames.map((f) => f.y));
+  const bottom = Math.max(...frames.map((f) => f.y + f.h));
+  assert.deepEqual(manifest.offset, { x: 0, y: top });
+  assert.deepEqual(manifest.size, { w: original.meta.size.w, h: bottom - top });
+  assert.ok(manifest.size.h < original.meta.size.h);
+  for (const f of frames) {
+    assert.ok(f.x - manifest.offset.x >= 0);
+    assert.ok(f.y - manifest.offset.y >= 0);
+    assert.ok(f.x - manifest.offset.x + f.w <= manifest.size.w);
+    assert.ok(f.y - manifest.offset.y + f.h <= manifest.size.h);
+  }
+  assert.deepEqual(
+    Object.keys(manifest.frames),
+    Object.keys(original.frames).filter((name) => name.startsWith('pikachu/'))
+  );
+  for (const [name, frame] of Object.entries(manifest.frames))
+    assert.deepEqual(frame, original.frames[name]);
+  for (const name of ['cap', 'headband', 'scarf']) {
+    const png = fs.readFileSync(path.join(root, 'costumes', name + '.png'));
+    assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    assert.equal(png.readUInt32BE(16), manifest.size.w);
+    assert.equal(png.readUInt32BE(20), manifest.size.h);
+    assert.equal(png[25], 6, 'Accessory sheets must retain RGBA transparency');
+  }
 });

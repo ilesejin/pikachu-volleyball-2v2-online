@@ -20,6 +20,9 @@ const protocol = load(
   'online_2v2/protocol.js',
   [
     'ROOM_SCHEMA',
+    'SKIN_IDS',
+    'playerSkins',
+    'slotSkins',
     'validSlots',
     'playerNames',
     'matchSettings',
@@ -400,5 +403,52 @@ test('visibility is host-only, live, and blocks stale Quick Match claims without
     calls.length,
     previousCalls,
     'Visibility changes must not write Firestore or restart the match'
+  );
+});
+
+test('costumes are per-local-player lobby metadata and duplicate choices are allowed', async () => {
+  const { room, store, calls } = await fixture('pairs');
+  assert.deepEqual(room.data.members.host.skins, ['classic', 'classic']);
+  await store.enqueue('a', 'claim', {
+    compatibility: clientVersion.CLIENT_VERSION,
+    name: ['A', 'B'],
+    slots: [],
+    skins: ['cap', 'scarf'],
+  });
+  const writes = calls.length;
+  await store.enqueue('a', 'skin', { index: 0, skinId: 'cap-scarf' });
+  await store.enqueue('a', 'skin', {
+    index: 1,
+    skinId: 'cap-scarf',
+    clientId: 'host',
+  });
+  assert.deepEqual(room.data.members.a.skins, ['cap-scarf', 'cap-scarf']);
+  assert.deepEqual(room.data.members.host.skins, ['classic', 'classic']);
+  await store.enqueue('a', 'selectSlots', { slots: [2, 3] });
+  assert.deepEqual(protocol.slotSkins(room.data.members), [
+    'classic',
+    'classic',
+    'cap-scarf',
+    'cap-scarf',
+  ]);
+  await store.enqueue('a', 'rename', { names: ['New A', 'New B'] });
+  assert.deepEqual(room.data.members.a.skins, ['cap-scarf', 'cap-scarf']);
+  for (const args of [
+    { index: 2, skinId: 'cap' },
+    { index: 0, skinId: 'unknown' },
+    { index: 0, skinId: '__proto__' },
+  ])
+    await assert.rejects(store.enqueue('a', 'skin', args), /Invalid costume/);
+  assert.equal(calls.length, writes, 'Costumes must not write Firestore');
+  await store.randomizeSlots();
+  const resolved = protocol.slotSkins(room.data.members);
+  for (const member of Object.values(room.data.members))
+    member.slots.forEach((slot, i) =>
+      assert.equal(resolved[slot], member.skins[i])
+    );
+  room.data.status = 'playing';
+  await assert.rejects(
+    store.enqueue('a', 'skin', { index: 0, skinId: 'scarf' }),
+    /only available in the lobby/
   );
 });

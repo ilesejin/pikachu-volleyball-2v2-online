@@ -1,4 +1,5 @@
-import { createPlayerIcons } from './player_icons.js';
+import { CostumeLibrary, loadCostumeSheets } from './costumes.js';
+import { CostumeSelector, loadCostumes } from './costume_selector.js';
 import { setUpConnectionFeedback } from './connection_feedback.js';
 import { formatRoomCode, normalizeRoomCode } from './room_code.js';
 import { NetworkDiagnostics } from './diagnostics.js';
@@ -64,7 +65,7 @@ const status = (message, error = false) => {
 };
 const feedback = setUpConnectionFeedback();
 const params = new URLSearchParams(location.search);
-let lobbyPlayerIcons = [];
+let costumes, costumeUI;
 let classicUI,
   quickMatch,
   room,
@@ -173,6 +174,7 @@ function updateSettingsForm(value) {
   $('synchronization').value = value.synchronization;
 }
 function update(error) {
+  costumeUI?.update();
   if (quickMatch && matchmakingURL)
     quickMatch.sync().catch((error) => status(error.message, true));
   if (session && session.replay) session.replay.update();
@@ -278,23 +280,23 @@ function update(error) {
       : text('AI fills this position', 'AI가 이 자리를 담당합니다');
     const icon = document.createElement('img');
     icon.className = 'player-sprite-icon';
-    icon.src = lobbyPlayerIcons[slot];
+    const skin = member?.skins?.[member.slots.indexOf(slot)] || 'classic';
+    icon.src = costumes.icon(skin, slot);
     icon.alt = '';
     icon.width = icon.height = 64;
-    card.append(icon, title, name, connection);
-    if (room.isHost && owner && owner !== room.selfId) {
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'secondary';
-      remove.disabled = busy || !!room.handoff;
-      remove.textContent = text('Remove', '내보내기');
-      remove.addEventListener('click', () =>
-        run(async () => {
-          session.peerClosed(owner);
-        })
+    if (owner === room.selfId && data.status === 'lobby') {
+      const change = document.createElement('button');
+      change.className = 'costume-avatar';
+      change.type = 'button';
+      change.setAttribute('aria-label', text('Choose costume', '의상 선택'));
+      change.disabled = !!room.handoff;
+      change.addEventListener('click', () =>
+        costumeUI.open(member.slots.indexOf(slot))
       );
-      card.appendChild(remove);
-    }
+      change.append(icon);
+      card.append(change);
+    } else card.append(icon);
+    card.append(title, name, connection);
     if (pairs) teams[Math.floor(slot / 2)].append(card);
     else {
       card.append(slotControl([slot]));
@@ -360,6 +362,7 @@ function makeRoom(store) {
   return new OnlineRoom(
     {
       beforeConnect: () => updates.ensureCurrent(),
+      skins: (layout) => loadCostumes(layout),
       connecting: (active) => feedback.connecting('room', active),
       creating: (active) => feedback.connecting('create', active),
       beforeHostTransfer: () => quickMatch?.sync(),
@@ -449,6 +452,7 @@ async function boot() {
     ticker = new Ticker(),
     loader = new Loader();
   loader.add(ASSETS_PATH.SPRITE_SHEET);
+  loadCostumeSheets(loader);
   Object.values(ASSETS_PATH.SOUNDS).forEach((url) => loader.add(url));
   await new Promise((resolve, reject) => {
     loader.onError.add((error) => reject(error));
@@ -465,11 +469,9 @@ async function boot() {
       String(304 / width)
     );
   });
-  lobbyPlayerIcons = createPlayerIcons(
-    loader.resources[ASSETS_PATH.SPRITE_SHEET].textures[
-      ASSETS_PATH.TEXTURES.PIKACHU(0, 0)
-    ],
-    DOUBLES_CONFIG.playerTints
+  costumes = new CostumeLibrary(
+    game.view.game.playerSprites[0].textures,
+    loader.resources
   );
   session = new OnlineMatch(game, ticker, update);
   let store = new SignalingStore();
@@ -545,14 +547,21 @@ async function boot() {
       return data;
     },
   });
+  costumeUI = new CostumeSelector({
+    room,
+    library: costumes,
+    status,
+    layout: () => $('layout').value,
+    changed: update,
+  });
   ticker.maxFPS = matchSettings().fps;
   ticker.add(() => {
     session.tick();
+    if (session.epoch) costumes.apply(game, session.skins);
     if (
       !busy &&
       room.isHost &&
       !room.closed &&
-      room.data.visibility === 'public' &&
       session.phase === 'finished' &&
       session.epoch !== autoReturnedEpoch
     ) {
@@ -571,6 +580,7 @@ async function boot() {
       updates,
       diagnostics,
       quickMatch,
+      costumes,
       version: CLIENT_VERSION,
     };
   classicUI = setUpClassicUI({
@@ -612,6 +622,7 @@ async function boot() {
   );
   $('layout').addEventListener('change', () => {
     renderPositions();
+    costumeUI.update();
   });
   $('quick-match').addEventListener('click', () =>
     run(async () => {

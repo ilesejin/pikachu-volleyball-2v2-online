@@ -13,6 +13,7 @@ import {
   PLAYER_KEYS,
   RemoteInput,
   matchSettings,
+  slotSkins,
   canUpdateLive,
   ownedInputs,
   lobbyReady,
@@ -321,6 +322,7 @@ export class OnlineMatch {
       type: 'begin',
       epoch: this.epoch,
       settings: checked,
+      skins: this.skins,
       members: this.room.data.members,
     });
     if (!this.lockstep) this.sendState();
@@ -358,6 +360,8 @@ export class OnlineMatch {
         type: 'begin',
         epoch: this.epoch,
         settings: this.settings,
+        members: this.room.data.members,
+        skins: this.skins,
       });
       this.room.send(
         id,
@@ -614,6 +618,7 @@ export class OnlineMatch {
     this.stopInputTimer();
     this.lockstep = null;
     this.matchSlots = members[this.room.selfId].slots.slice();
+    this.skins = slotSkins(members);
     this.rng =
       settings.synchronization === 'lockstep'
         ? seedrandom.alea(this.epoch, { state: true })
@@ -738,16 +743,14 @@ export class OnlineMatch {
   }
   sendState() {
     if (!this.epoch || !this.room || !this.room.isHost || this.lockstep) return;
-    this.room.broadcast(
-      captureSnapshot(
-        this.game,
-        this.epoch,
-        ++this.frame,
-        this.phase,
-        this.events.splice(0)
-      ),
-      true
+    const packet = captureSnapshot(
+      this.game,
+      this.epoch,
+      ++this.frame,
+      this.phase,
+      this.events.splice(0)
     );
+    this.room.broadcast(packet, true);
   }
   message(id, message) {
     if (!this.room || this.room.closed) return;
@@ -846,6 +849,10 @@ export class OnlineMatch {
         this.epoch = message.epoch;
         this.lastFrame = -1;
         this.phase = 'playing';
+        this.skins =
+          Array.isArray(message.skins) && message.skins.length === 4
+            ? message.skins.slice()
+            : slotSkins(message.members);
         if (settings.synchronization === 'lockstep') {
           if (
             !message.members ||
@@ -873,6 +880,8 @@ export class OnlineMatch {
     }
     if (this.lockstep || !validSnapshot(message, this.epoch, this.lastFrame))
       return;
+    if (Array.isArray(message.skins) && message.skins.length === 4)
+      this.skins = message.skins.slice();
     if (this.replay) this.replay.snapshot(message);
     this.lastFrame = message.frame;
     const phaseChanged = this.phase !== message.phase;

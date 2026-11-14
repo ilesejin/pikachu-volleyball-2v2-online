@@ -215,3 +215,33 @@ export function lobbyReady(data) {
     )
   );
 }
+
+// Cosmetic IDs are metadata; they never enter the physics input or RNG stream.
+export const SKIN_IDS = [
+  'classic',
+  'cap',
+  'headband',
+  'scarf',
+  'cap-scarf',
+  'headband-scarf',
+];
+export function playerSkins(value, layout) {
+  const count = layout === 'pairs' ? 2 : 1;
+  if (value === undefined) return Array(count).fill('classic');
+  if (
+    !Array.isArray(value) ||
+    value.length !== count ||
+    value.some((id) => !SKIN_IDS.includes(id))
+  )
+    throw new Error('Invalid costume selection.');
+  return value.slice();
+}
+export function slotSkins(members) {
+  const skins = Array(4).fill('classic');
+  for (const member of Object.values(members || {}))
+    (member.slots || []).forEach((slot, index) => {
+      const id = member.skins?.[index];
+      if (SKIN_IDS.includes(id)) skins[slot] = id;
+    });
+  return skins;
+}

@@ -1,3 +1,4 @@
+import { CostumeLibrary } from '../online_2v2/costumes.js';
 import { applyChatPosition } from '../online_2v2/chat_position.js';
 import { PikachuVolleyball } from '../offline_2v2/pikavolley.js';
 import { ASSETS_PATH as DOUBLES_ASSETS } from '../offline_2v2/assets_path.js';
@@ -51,6 +52,10 @@ export class DoublesPlayback {
           String(304 / width)
         );
       }
+    );
+    this.costumes = new CostumeLibrary(
+      this.game.view.game.playerSprites[0].textures,
+      owner.loader.resources
     );
     this.game.keyboardArray.forEach((keyboard) => keyboard.unsubscribe());
     this.driver = {
@@ -136,6 +141,8 @@ export class DoublesPlayback {
     this.game.isPracticeMode = settings.practice;
     this.settings = settings;
     this.members = event.members || {};
+    this.skins = event.skins || event.visual?.skins;
+    this.legacySkins = !Array.isArray(this.skins);
     const baseline = new Set(
       Object.keys(this.game).filter((key) =>
         ['number', 'boolean', 'string'].includes(typeof this.game[key])
@@ -357,6 +364,7 @@ export class DoublesPlayback {
         bubble.style.animationPlayState = 'paused';
         this.chatLayer.append(bubble);
       }
+    this.costumes.apply(this.game, this.skins, this.legacySkins);
     this.owner.renderer.render(this.owner.stage);
     moveScrubberTo(this.cursor);
     showTimeCurrent(time);

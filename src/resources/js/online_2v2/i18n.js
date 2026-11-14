@@ -1,5 +1,22 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
+  Classic: '經典',
+  Cap: '帽子',
+  Headband: '頭帶',
+  Scarf: '圍巾',
+  'Cap + Scarf': '帽子 + 圍巾',
+  'Headband + Scarf': '頭帶 + 圍巾',
+  Apply: '套用',
+  Head: '頭部',
+  Neck: '頸部',
+  None: '無',
+  Costume: '造型',
+  Close: '關閉',
+  'Second player costume': '第二位玩家造型',
+  'Choose costume': '選擇造型',
+  'Choose a costume': '選擇造型',
+  'Invalid costume selection.': '無效的造型選擇。',
+
   'Make host': '移交房主',
   'Transferring host…': '正在移交房主…',
   'Host transferred.': '已移交房主。',
@@ -227,6 +244,14 @@ export const ZH_MESSAGES = {
 };
 
 const REPLAY_KO = {
+  Classic: '기본',
+  Cap: '모자',
+  Headband: '머리띠',
+  Scarf: '스카프',
+  'Cap + Scarf': '모자 + 스카프',
+  'Headband + Scarf': '머리띠 + 스카프',
+  'Invalid costume selection.': '올바르지 않은 의상 선택입니다.',
+
   'Only the host can transfer hosting.': '방장만 방장을 위임할 수 있습니다.',
   'Host transfer is only available in a ready lobby.':
     '연결 준비가 완료된 대기실에서만 방장을 위임할 수 있습니다.',
