@@ -680,7 +680,7 @@ select:focus-visible {
   }
 }
 
-#costume-picker > button {
+.costume-actions button {
   font: inherit;
   padding: 8px 14px;
 }
@@ -710,6 +710,20 @@ select:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
-#costume-picker > button + button {
-  margin-left: 10px;
+#costume-picker[open] {
+  display: flex;
+  flex-direction: column;
+}
+#costume-picker h2,
+.costume-preview,
+.costume-actions {
+  flex: none;
+}
+.costume-grid {
+  min-height: 0;
+  overflow: auto;
+}
+.costume-actions {
+  display: flex;
+  gap: 10px;
 }

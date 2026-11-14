@@ -835,15 +835,33 @@ async function screenshot(page, name) {
           ').click()'
       );
       await page.until('document.getElementById("costume-picker").open');
-      const head = id.startsWith('headband')
-        ? 'headband'
-        : id.startsWith('cap')
-        ? 'cap'
+      const accessories = id.replace(/^cyborg-?/, '');
+      const skin = id.startsWith('cyborg') ? 'cyborg' : 'pikachu';
+      const head =
+        ['cap', 'headband', 'crown', 'headphones'].find(
+          (part) => accessories === part || accessories.startsWith(part + '-')
+        ) || 'none';
+      const neck = id.includes('bowtie')
+        ? 'bowtie'
+        : id.includes('scarf')
+        ? 'scarf'
         : 'none';
-      const neck = id.includes('scarf') ? 'scarf' : 'none';
       for (const [part, option] of [
+        ['skin', skin],
         ['head', head],
         ['neck', neck],
+        [
+          'eyes',
+          id.endsWith('star-sunglasses')
+            ? 'star-sunglasses'
+            : id.endsWith('triangle-sunglasses')
+            ? 'triangle-sunglasses'
+            : id.endsWith('round-glasses')
+            ? 'round-glasses'
+            : id.endsWith('sunglasses')
+            ? 'sunglasses'
+            : 'none',
+        ],
       ])
         await page.ev(
           'document.querySelector(' +
@@ -859,20 +877,96 @@ async function screenshot(page, name) {
       await page.ev('document.querySelector("[data-costume-apply]").click()');
       await page.until('!document.getElementById("costume-picker").open');
     };
+    const eyeLandmarks = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, '../art/sunglasses/eye_landmarks.json'),
+        'utf8'
+      )
+    );
+    assert.equal(
+      await host.ev(
+        `typeof Object.getOwnPropertyDescriptor(__volley.costumes.frames,'cyborg-crown-bowtie-star-sunglasses').get`
+      ),
+      'function',
+      'Unused outfits must not be prebuilt'
+    );
     assert.equal(
       await host.ev(`(async()=>{
       const load=async(name)=>{const img=new Image();img.src='../resources/assets/images/costumes/'+name+'.png';await img.decode();return img;};
-      const sheets={cap:await load('cap'),headband:await load('headband'),scarf:await load('scarf')};
+      const sheets={crown:await load('crown'),headphones:await load('headphones'),bowtie:await load('bowtie'),'star-sunglasses':await load('star-sunglasses'),cap:await load('cap'),headband:await load('headband'),scarf:await load('scarf'),sunglasses:await load('sunglasses'),'round-glasses':await load('round-glasses'),'triangle-sunglasses':await load('triangle-sunglasses')};
+      const cyborg=new Image();cyborg.src='../resources/assets/images/skins/cyborg.png';await cyborg.decode();
+      const skinMeta=await (await fetch('../resources/assets/images/skins/cyborg.json')).json();
       const layout=await (await fetch('../resources/assets/images/costumes/frames.json')).json();
+      const eyeLandmarks=${JSON.stringify(eyeLandmarks)};
       for(const image of Object.values(sheets)) if(image.width!==layout.size.w||image.height!==layout.size.h) throw Error('Atlas dimensions changed');
       const expected=document.createElement('canvas'),actual=document.createElement('canvas');expected.width=actual.width=64;expected.height=actual.height=64;
       const e=expected.getContext('2d'),a=actual.getContext('2d');
-      for(const id of ['cap','headband','scarf','cap-scarf','headband-scarf'])for(let i=0;i<28;i++){
+      for(const id of Object.keys(__volley.costumes.frames).filter(id=>id!=='classic'))for(let i=0;i<28;i++){
         const base=__volley.costumes.frames.classic[i],f=base.frame,t=__volley.costumes.frames[id][i];
         e.clearRect(0,0,64,64);a.clearRect(0,0,64,64);
-        e.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
-        const head=id.startsWith('cap')?'cap':id.startsWith('headband')?'headband':null;
-        for(const name of [id.includes('scarf')?'scarf':null,head].filter(Boolean))e.drawImage(sheets[name],f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+        const isComputer=id.startsWith('cyborg');
+        if(isComputer)e.drawImage(cyborg,f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+        else e.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
+        const frameName=Object.keys(layout.frames).find(name=>layout.frames[name].frame.x===f.x&&layout.frames[name].frame.y===f.y);
+        const attachment=skinMeta.attachments[frameName];
+        if(id==='cyborg') {
+          a.clearRect(0,0,64,64);a.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
+          const original=a.getImageData(0,0,64,64).data,skinPixels=e.getImageData(0,0,64,64).data;
+          let changed=0;
+          for(let pixel=0;pixel<original.length;pixel+=4){
+            if(original[pixel+3]!==skinPixels[pixel+3])throw Error('Cyborg silhouette changed at frame '+i);
+            if(original[pixel]!==skinPixels[pixel]||original[pixel+1]!==skinPixels[pixel+1]||original[pixel+2]!==skinPixels[pixel+2])changed++;
+          }
+          if(!changed)throw Error('Unmodified cyborg frame '+i);
+          a.clearRect(0,0,64,64);
+        }
+        if(id==='sunglasses'||id==='triangle-sunglasses'||id==='star-sunglasses') {
+          a.clearRect(0,0,64,64);a.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
+          const original=a.getImageData(0,0,64,64).data;
+          a.clearRect(0,0,64,64);a.drawImage(sheets[id],f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+          const glasses=a.getImageData(0,0,64,64).data;
+          for(const [left,top,right,bottom] of eyeLandmarks.frames[frameName]) {
+            let eyePixels=0;
+            for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+              const pixel=(y*64+x)*4;
+              const dark=Math.max(original[pixel],original[pixel+1],original[pixel+2])<80;
+              const white=Math.min(original[pixel],original[pixel+1],original[pixel+2])>200;
+              if(original[pixel+3]>200&&(dark||white)) {
+                eyePixels++;
+                if(glasses[pixel+3]!==255)throw Error('Uncovered eye at '+frameName+' '+x+','+y);
+              }
+            }
+            if(eyePixels<5)throw Error('Eye landmark no longer matches the source: '+frameName);
+          }
+          a.clearRect(0,0,64,64);
+        }
+        if(['cap','headband','crown','headphones','bowtie'].includes(id)) {
+          a.clearRect(0,0,64,64);a.drawImage(base.baseTexture.resource.source,f.x,f.y,64,64,0,0,64,64);
+          const original=a.getImageData(0,0,64,64).data;
+          a.clearRect(0,0,64,64);a.drawImage(sheets[id],f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+          const accessory=a.getImageData(0,0,64,64).data;
+          for(const [left,top,right,bottom] of eyeLandmarks.frames[frameName])for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+            const p=(y*64+x)*4;
+            if(original[p+3]>200&&(Math.max(original[p],original[p+1],original[p+2])<80||Math.min(original[p],original[p+1],original[p+2])>200)&&accessory[p+3])throw Error(id+' covers an eye at '+frameName);
+          }
+          a.clearRect(0,0,64,64);
+        }
+        if(id==='round-glasses') {
+          a.clearRect(0,0,64,64);a.drawImage(sheets[id],f.x-layout.offset.x,f.y-layout.offset.y,64,64,0,0,64,64);
+          const round=a.getImageData(0,0,64,64).data;
+          const centers=eyeLandmarks.fixedLensCenters[frameName]||eyeLandmarks.frames[frameName].map(([l,t,r,b])=>[Math.ceil((l+r)/2),Math.ceil((t+b)/2)]);
+          for(const [x,y] of centers){
+            if(round[(y*64+x)*4+3]!==0)throw Error('Round lens must be clear at '+frameName);
+            const radius=eyeLandmarks.fixedLensCenters[frameName]?6:5;
+            for(let dy=-(radius-2);dy<=radius-2;dy++)for(let dx=-(radius-2);dx<=radius-2;dx++)
+              if(dx*dx+dy*dy<=(radius-2)**2&&round[((y+dy)*64+x+dx)*4+3]!==0)throw Error('Painted round lens interior at '+frameName);
+          }
+          a.clearRect(0,0,64,64);
+        }
+        const accessory=id.replace(/^cyborg-?/, '');
+        const head=['cap','headband','crown','headphones'].find(part=>accessory===part||accessory.startsWith(part+'-'));
+        const eyewear=id.endsWith('star-sunglasses')?'star-sunglasses':id.endsWith('triangle-sunglasses')?'triangle-sunglasses':id.endsWith('round-glasses')?'round-glasses':id.endsWith('sunglasses')?'sunglasses':null;
+        for(const name of [id.includes('bowtie')?'bowtie':id.includes('scarf')?'scarf':null,head,eyewear].filter(Boolean)){const offset=isComputer?attachment[['scarf','bowtie'].includes(name)?'neck':['sunglasses','round-glasses','triangle-sunglasses','star-sunglasses'].includes(name)?'eyes':'head']:{x:0,y:0};e.drawImage(sheets[name],f.x-layout.offset.x,f.y-layout.offset.y,64,64,offset.x,offset.y,64,64);}
         a.drawImage(t.baseTexture.resource.source,0,0);
         const ep=e.getImageData(0,0,64,64).data,ap=a.getImageData(0,0,64,64).data;
         if(ep.some((v,j)=>v!==ap[j]))throw Error('Misaligned costume '+id+' frame '+i);
@@ -890,7 +984,7 @@ async function screenshot(page, name) {
       null,
       'Closing the picker must not save un-applied choices'
     );
-    await choose(host, 0, 'cap', 'landing');
+    await choose(host, 0, 'cyborg-crown-bowtie-star-sunglasses', 'landing');
     await choose(host, 1, 'scarf', 'landing');
     const reopen = await tab(port, 'en', true, host.contextId);
     await reopen.ev(
@@ -898,7 +992,7 @@ async function screenshot(page, name) {
     );
     assert.equal(
       await reopen.ev(
-        'document.querySelectorAll("#costume-landing button")[0].textContent.includes("Cap")'
+        'document.querySelectorAll("#costume-landing button")[0].textContent.includes("Cyborg Pikachu + Crown + Bow Tie + Star Sunglasses")'
       ),
       true
     );
@@ -910,14 +1004,59 @@ async function screenshot(page, name) {
     );
     await browser.send('Target.closeTarget', { targetId: reopen.targetId });
     await host.ev('document.querySelector("#costume-landing button").click()');
+    await host.ev(
+      `document.querySelector('[data-part="skin"][data-option="pikachu"]').click()`
+    );
+    assert.equal(
+      await host.ev(
+        `document.querySelector('[data-part="head"][data-option="crown"]').getAttribute('aria-pressed')`
+      ),
+      'true'
+    );
+    assert.equal(
+      await host.ev(
+        `document.querySelector('[data-part="neck"][data-option="bowtie"]').getAttribute('aria-pressed')`
+      ),
+      'true'
+    );
+    await host.ev(
+      `document.querySelector('[data-part="skin"][data-option="cyborg"]').click()`
+    );
+    assert.equal(
+      await host.ev(
+        `document.querySelector('[data-part="eyes"][data-option="star-sunglasses"]').getAttribute('aria-pressed')`
+      ),
+      'true'
+    );
+    const selectedPreview = await host.ev(
+      'document.querySelector(".costume-preview img").src'
+    );
+    await host.ev(
+      `(()=>{const option=document.querySelector('[data-part="head"][data-option="headband"]');option.dispatchEvent(new MouseEvent('mouseenter'));option.focus();})()`
+    );
+    assert.equal(
+      await host.ev('document.querySelector(".costume-preview img").src'),
+      selectedPreview,
+      'Hovering or focusing an unselected option must not change the preview'
+    );
+    assert.equal(
+      await host.ev(
+        `Array.from(document.querySelectorAll('.costume-options')).every(row=>getComputedStyle(row).gridTemplateColumns.split(' ').length===3)`
+      ),
+      true,
+      'Every category must have three columns'
+    );
+    await host.ev(
+      `document.querySelector('[data-part="head"][aria-pressed="true"]').focus()`
+    );
     await screenshot(host, 'costume-picker-en.png');
     await host.ev('document.getElementById("costume-picker").close()');
     await host.ev(
-      `(()=>{const c=document.createElement('canvas');c.id='costume-contact';c.width=560;c.height=540;Object.assign(c.style,{position:'fixed',left:'0',top:'0',zIndex:999999,background:'white'});const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.fillStyle='white';ctx.fillRect(0,0,560,540);ctx.font='12px monospace';const indexes=[0,5,10,15,17,18,23];['classic','cap','headband','scarf','cap-scarf','headband-scarf'].forEach((id,row)=>indexes.forEach((index,col)=>{const t=__volley.costumes.frames[id][index],f=t.frame;ctx.drawImage(t.baseTexture.resource.source,f.x,f.y,f.width,f.height,col*80+8,row*90+20,64,64);ctx.fillStyle='black';ctx.fillText(id+' '+index,col*80+2,row*90+12);}));document.body.append(c);})()`
+      `(()=>{const c=document.createElement('canvas');c.id='costume-contact';c.width=560;c.height=720;Object.assign(c.style,{position:'fixed',left:'0',top:'0',zIndex:999999,background:'white'});const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.fillStyle='white';ctx.fillRect(0,0,560,720);ctx.font='12px monospace';const indexes=[0,5,10,15,17,18,23];['headband','crown','headphones','bowtie','star-sunglasses','cyborg-headband','cyborg-crown-bowtie-star-sunglasses','cyborg-headphones-bowtie-round-glasses'].forEach((id,row)=>indexes.forEach((index,col)=>{const t=__volley.costumes.frames[id][index],f=t.frame;ctx.drawImage(t.baseTexture.resource.source,f.x,f.y,f.width,f.height,col*80+8,row*90+20,64,64);ctx.fillStyle='black';ctx.fillText(id+' '+index,col*80+2,row*90+12);}));document.body.append(c);})()`
     );
     await screenshot(host, 'costume-animation-contact.png');
     await host.ev('document.getElementById("costume-contact").remove()');
-    await choose(guest, 0, 'cap-scarf', 'landing');
+    await choose(guest, 0, 'cyborg-headphones-bowtie-round-glasses', 'landing');
     await choose(guest, 1, 'scarf', 'landing');
     await click(host, 'create');
     await host.until('!!__volley.room.data?.members[__volley.room.selfId]');
@@ -925,13 +1064,13 @@ async function screenshot(page, name) {
     const roomId = await host.ev('__volley.room.id');
     await join(guest, roomId, '2,3');
     await assertConnections(host, [guest], 'mesh');
-    await choose(host, 1, 'headband-scarf', 'lobby');
+    await choose(host, 1, 'sunglasses', 'lobby');
     const hostId = await host.ev('__volley.room.selfId'),
       guestId = await guest.ev('__volley.room.selfId');
     await guest.until(
       '__volley.room.data.members[' +
         JSON.stringify(hostId) +
-        '].skins[1]==="headband-scarf"'
+        '].skins[1]==="sunglasses"'
     );
     await click(guest, 'cancel-slot');
     await guest.until(
@@ -951,16 +1090,16 @@ async function screenshot(page, name) {
       await guest.ev(
         '__volley.room.data.members[' + JSON.stringify(hostId) + '].skins'
       ),
-      ['cap', 'headband-scarf']
+      ['cyborg-crown-bowtie-star-sunglasses', 'sunglasses']
     );
     await guest.ev('__volley.session.start(__volley.room.data.settings)');
     for (const page of [host, guest])
       await page.until('__volley.session.lastFrame>100');
     assert.deepEqual(await guest.ev('__volley.session.skins'), [
-      'cap-scarf',
+      'cyborg-headphones-bowtie-round-glasses',
       'scarf',
-      'cap',
-      'headband-scarf',
+      'cyborg-crown-bowtie-star-sunglasses',
+      'sunglasses',
     ]);
     assert.equal(
       await guest.ev(
@@ -983,7 +1122,8 @@ async function screenshot(page, name) {
       JSON.parse(text).pack.events.some(
         (e) =>
           e.type === 'checkpoint' &&
-          e.skins?.join(',') === 'cap-scarf,scarf,cap,headband-scarf'
+          e.skins?.join(',') ===
+            'cyborg-headphones-bowtie-round-glasses,scarf,cyborg-crown-bowtie-star-sunglasses,sunglasses'
       )
     );
     const viewer = await tab(port, 'zh');
@@ -1001,10 +1141,10 @@ async function screenshot(page, name) {
       '__replay.ticker.stop();__replay.doubles.seek(__replay.doubles.events.length)'
     );
     assert.deepEqual(await viewer.ev('__replay.doubles.skins'), [
-      'cap-scarf',
+      'cyborg-headphones-bowtie-round-glasses',
       'scarf',
-      'cap',
-      'headband-scarf',
+      'cyborg-crown-bowtie-star-sunglasses',
+      'sunglasses',
     ]);
     assert.equal(
       await viewer.ev(
@@ -1028,7 +1168,12 @@ async function screenshot(page, name) {
       );
     }
     await choose(host, 0, 'headband', 'landing');
-    await choose(guest, 0, 'scarf', 'landing');
+    await choose(
+      guest,
+      0,
+      'cyborg-headphones-bowtie-star-sunglasses',
+      'landing'
+    );
     await choose(third, 0, 'cap', 'landing');
     await third.send('Emulation.setDeviceMetricsOverride', {
       width: 390,
@@ -1041,8 +1186,44 @@ async function screenshot(page, name) {
       '(()=>{const r=document.getElementById("costume-picker").getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,text:document.getElementById("costume-picker").textContent}})()'
     );
     assert.ok(picker.left >= 0 && picker.right <= picker.width);
-    assert.ok(picker.text.includes('帽子') && picker.text.includes('關閉'));
+    assert.ok(
+      picker.text.includes('帽子') &&
+        picker.text.includes('關閉') &&
+        picker.text.includes('機械皮卡丘') &&
+        picker.text.includes('圓框眼鏡') &&
+        picker.text.includes('三角太陽眼鏡') &&
+        picker.text.includes('皇冠') &&
+        picker.text.includes('耳機') &&
+        picker.text.includes('蝴蝶領結') &&
+        picker.text.includes('星形太陽眼鏡')
+    );
+    assert.equal(
+      await third.ev(
+        `(()=>{const d=document.getElementById('costume-picker').getBoundingClientRect(),b=document.querySelector('[data-costume-apply]').getBoundingClientRect();return b.top>=d.top&&b.bottom<=d.bottom&&b.bottom<=innerHeight;})()`
+      ),
+      true,
+      'Apply must remain visible without scrolling the dialog'
+    );
     await screenshot(third, 'costume-picker-zh-mobile.png');
+    await third.ev(
+      `document.querySelector('[data-part="eyes"][data-option="triangle-sunglasses"]').focus()`
+    );
+    assert.equal(
+      await third.ev(
+        `(()=>{const grid=document.querySelector('.costume-grid').getBoundingClientRect();return ['triangle-sunglasses','star-sunglasses'].every(id=>{const r=document.querySelector('[data-part="eyes"][data-option="'+id+'"]').getBoundingClientRect();return r.left>=grid.left&&r.right<=grid.right&&r.top>=grid.top&&r.bottom<=grid.bottom;});})()`
+      ),
+      true,
+      'Both new eyewear options must be visible and fit the mobile scrolling panel'
+    );
+    assert.equal(
+      await third.ev(
+        `Array.from(document.querySelectorAll('.costume-options')).every(row=>getComputedStyle(row).gridTemplateColumns.split(' ').length===3)`
+      ),
+      true,
+      'Mobile categories must share the same three-column layout'
+    );
+    await screenshot(third, 'new-eyewear-options-zh-mobile.png');
+
     await third.ev('document.getElementById("costume-picker").close()');
     await click(host, 'create');
     await host.until(
@@ -1062,13 +1243,16 @@ async function screenshot(page, name) {
       );
     assert.deepEqual(await third.ev('__volley.session.skins'), [
       'headband',
-      'scarf',
+      'cyborg-headphones-bowtie-star-sunglasses',
       'classic',
       'cap',
     ]);
     await click(guest, 'leave');
     await host.until('__volley.game.players[1].isComputer');
-    assert.equal(await host.ev('__volley.session.skins[1]'), 'scarf');
+    assert.equal(
+      await host.ev('__volley.session.skins[1]'),
+      'cyborg-headphones-bowtie-star-sunglasses'
+    );
     await click(host, 'pause');
     await third.until('__volley.session.phase==="paused"');
     const snapshotReplay = JSON.parse(
@@ -1076,7 +1260,9 @@ async function screenshot(page, name) {
     ).pack;
     assert.ok(
       snapshotReplay.events.some(
-        (e) => e.type === 'snapshot' && e.skins?.[1] === 'scarf'
+        (e) =>
+          e.type === 'snapshot' &&
+          e.skins?.[1] === 'cyborg-headphones-bowtie-star-sunglasses'
       )
     );
     await click(host, 'back-lobby');
@@ -1143,7 +1329,7 @@ async function screenshot(page, name) {
         await guest.ev(
           '__volley.room.data.members[__volley.room.selfId].skins'
         ),
-        ['scarf']
+        ['cyborg-headphones-bowtie-star-sunglasses']
       );
       await selectSlot(guest, '3');
       await assertConnections(host, [guest], 'mesh');

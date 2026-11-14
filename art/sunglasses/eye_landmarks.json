@@ -1,0 +1,321 @@
+{
+  "coordinateSpace": "64x64 local original Pikachu frame; inclusive [left, top, right, bottom] eye bounds",
+  "frames": {
+    "pikachu/pikachu_0_0.png": [
+      [
+        51,
+        15,
+        53,
+        20
+      ]
+    ],
+    "pikachu/pikachu_0_1.png": [
+      [
+        51,
+        16,
+        53,
+        21
+      ]
+    ],
+    "pikachu/pikachu_0_2.png": [
+      [
+        50,
+        17,
+        52,
+        22
+      ]
+    ],
+    "pikachu/pikachu_0_3.png": [
+      [
+        51,
+        16,
+        53,
+        21
+      ]
+    ],
+    "pikachu/pikachu_0_4.png": [
+      [
+        51,
+        15,
+        53,
+        20
+      ]
+    ],
+    "pikachu/pikachu_1_0.png": [
+      [
+        50,
+        18,
+        53,
+        23
+      ]
+    ],
+    "pikachu/pikachu_1_1.png": [
+      [
+        50,
+        17,
+        53,
+        22
+      ]
+    ],
+    "pikachu/pikachu_1_2.png": [
+      [
+        50,
+        17,
+        53,
+        22
+      ]
+    ],
+    "pikachu/pikachu_1_3.png": [
+      [
+        52,
+        18,
+        54,
+        23
+      ]
+    ],
+    "pikachu/pikachu_1_4.png": [
+      [
+        51,
+        19,
+        53,
+        24
+      ]
+    ],
+    "pikachu/pikachu_2_0.png": [
+      [
+        51,
+        20,
+        53,
+        24
+      ]
+    ],
+    "pikachu/pikachu_2_1.png": [
+      [
+        50,
+        19,
+        53,
+        24
+      ]
+    ],
+    "pikachu/pikachu_2_2.png": [
+      [
+        50,
+        19,
+        53,
+        24
+      ]
+    ],
+    "pikachu/pikachu_2_3.png": [
+      [
+        52,
+        19,
+        54,
+        23
+      ]
+    ],
+    "pikachu/pikachu_2_4.png": [
+      [
+        50,
+        18,
+        52,
+        23
+      ]
+    ],
+    "pikachu/pikachu_3_0.png": [
+      [
+        51,
+        30,
+        54,
+        35
+      ]
+    ],
+    "pikachu/pikachu_3_1.png": [
+      [
+        51,
+        30,
+        54,
+        35
+      ]
+    ],
+    "pikachu/pikachu_4_0.png": [
+      [
+        53,
+        45,
+        58,
+        48
+      ]
+    ],
+    "pikachu/pikachu_5_0.png": [
+      [
+        17,
+        22,
+        21,
+        26
+      ],
+      [
+        32,
+        20,
+        36,
+        24
+      ]
+    ],
+    "pikachu/pikachu_5_1.png": [
+      [
+        23,
+        17,
+        27,
+        21
+      ],
+      [
+        37,
+        19,
+        41,
+        23
+      ]
+    ],
+    "pikachu/pikachu_5_2.png": [
+      [
+        18,
+        15,
+        22,
+        19
+      ],
+      [
+        35,
+        17,
+        39,
+        21
+      ]
+    ],
+    "pikachu/pikachu_5_3.png": [
+      [
+        16,
+        16,
+        20,
+        20
+      ],
+      [
+        32,
+        15,
+        36,
+        19
+      ]
+    ],
+    "pikachu/pikachu_5_4.png": [
+      [
+        27,
+        19,
+        31,
+        23
+      ],
+      [
+        40,
+        25,
+        44,
+        29
+      ]
+    ],
+    "pikachu/pikachu_6_0.png": [
+      [
+        35,
+        19,
+        40,
+        24
+      ],
+      [
+        49,
+        19,
+        52,
+        24
+      ]
+    ],
+    "pikachu/pikachu_6_1.png": [
+      [
+        37,
+        16,
+        42,
+        21
+      ],
+      [
+        50,
+        22,
+        53,
+        25
+      ]
+    ],
+    "pikachu/pikachu_6_2.png": [
+      [
+        31,
+        42,
+        38,
+        48
+      ],
+      [
+        43,
+        42,
+        48,
+        47
+      ]
+    ],
+    "pikachu/pikachu_6_3.png": [
+      [
+        32,
+        42,
+        38,
+        49
+      ],
+      [
+        43,
+        42,
+        48,
+        48
+      ]
+    ],
+    "pikachu/pikachu_6_4.png": [
+      [
+        34,
+        43,
+        40,
+        49
+      ],
+      [
+        44,
+        42,
+        49,
+        48
+      ]
+    ]
+  },
+  "fixedLensCenters": {
+    "pikachu/pikachu_6_2.png": [
+      [
+        35,
+        46
+      ],
+      [
+        46,
+        46
+      ]
+    ],
+    "pikachu/pikachu_6_3.png": [
+      [
+        35,
+        46
+      ],
+      [
+        46,
+        46
+      ]
+    ],
+    "pikachu/pikachu_6_4.png": [
+      [
+        36,
+        46
+      ],
+      [
+        47,
+        46
+      ]
+    ]
+  }
+}

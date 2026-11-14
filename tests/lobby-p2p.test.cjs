@@ -416,23 +416,32 @@ test('costumes are per-local-player lobby metadata and duplicate choices are all
     skins: ['cap', 'scarf'],
   });
   const writes = calls.length;
-  await store.enqueue('a', 'skin', { index: 0, skinId: 'cap-scarf' });
+  await store.enqueue('a', 'skin', {
+    index: 0,
+    skinId: 'cyborg-crown-bowtie-star-sunglasses',
+  });
   await store.enqueue('a', 'skin', {
     index: 1,
-    skinId: 'cap-scarf',
+    skinId: 'cyborg-crown-bowtie-star-sunglasses',
     clientId: 'host',
   });
-  assert.deepEqual(room.data.members.a.skins, ['cap-scarf', 'cap-scarf']);
+  assert.deepEqual(room.data.members.a.skins, [
+    'cyborg-crown-bowtie-star-sunglasses',
+    'cyborg-crown-bowtie-star-sunglasses',
+  ]);
   assert.deepEqual(room.data.members.host.skins, ['classic', 'classic']);
   await store.enqueue('a', 'selectSlots', { slots: [2, 3] });
   assert.deepEqual(protocol.slotSkins(room.data.members), [
     'classic',
     'classic',
-    'cap-scarf',
-    'cap-scarf',
+    'cyborg-crown-bowtie-star-sunglasses',
+    'cyborg-crown-bowtie-star-sunglasses',
   ]);
   await store.enqueue('a', 'rename', { names: ['New A', 'New B'] });
-  assert.deepEqual(room.data.members.a.skins, ['cap-scarf', 'cap-scarf']);
+  assert.deepEqual(room.data.members.a.skins, [
+    'cyborg-crown-bowtie-star-sunglasses',
+    'cyborg-crown-bowtie-star-sunglasses',
+  ]);
   for (const args of [
     { index: 2, skinId: 'cap' },
     { index: 0, skinId: 'unknown' },

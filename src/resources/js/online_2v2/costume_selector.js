@@ -3,6 +3,13 @@ import { COSTUME_NAMES, costumeParts, costumeId } from './costumes.js';
 import { translate, translateMessage } from './i18n.js';
 import { localStorageWrapper } from '../offline_version_js/utils/local_storage_wrapper.js';
 const KEY = 'pv-online-costumes';
+function costumeLabel(id) {
+  const name = COSTUME_NAMES[id];
+  return (typeof name === 'string' ? name : 'Classic')
+    .split(' + ')
+    .map((part) => translateMessage(part))
+    .join(' + ');
+}
 export function loadCostumes(layout, storage = localStorageWrapper) {
   let saved;
   try {
@@ -30,7 +37,6 @@ export class CostumeSelector {
     this.preview.append(this.previewImage, this.previewName);
     this.grid = document.createElement('div');
     this.grid.className = 'costume-grid';
-    this.grid.addEventListener('mouseleave', () => this.showSelection());
     const close = document.createElement('button');
     close.type = 'button';
     close.textContent = translate('Close', '닫기');
@@ -38,18 +44,21 @@ export class CostumeSelector {
     this.applyButton = document.createElement('button');
     this.applyButton.type = 'button';
     this.applyButton.dataset.costumeApply = '';
-    this.applyButton.addEventListener('focus', () => this.showSelection());
     this.applyButton.textContent = translate('Apply', '적용');
     this.applyButton.addEventListener('click', () =>
-      this.choose(costumeId(this.draft.head, this.draft.neck))
+      this.choose(
+        costumeId(
+          this.draft.head,
+          this.draft.neck,
+          this.draft.skin,
+          this.draft.eyes
+        )
+      )
     );
-    this.dialog.append(
-      this.title,
-      this.preview,
-      this.grid,
-      this.applyButton,
-      close
-    );
+    const actions = document.createElement('div');
+    actions.className = 'costume-actions';
+    actions.append(this.applyButton, close);
+    this.dialog.append(this.title, this.preview, this.grid, actions);
     document.body.append(this.dialog);
     this.dialog.addEventListener('close', () =>
       document
@@ -92,28 +101,55 @@ export class CostumeSelector {
     if (!this.dialog.open) this.dialog.showModal();
     this.grid.querySelector('[aria-pressed="true"]')?.focus();
   }
-  showSelection(id = costumeId(this.draft.head, this.draft.neck)) {
+  showSelection() {
+    const id = costumeId(
+      this.draft.head,
+      this.draft.neck,
+      this.draft.skin,
+      this.draft.eyes
+    );
     this.previewImage.src = this.library.icon(id);
-    this.previewName.textContent = translateMessage(COSTUME_NAMES[id]);
+    this.previewName.textContent = costumeLabel(id);
   }
   renderOptions(focusPart, focusOption) {
     this.grid.replaceChildren();
-    const show = (id) => this.showSelection(id);
-    show(costumeId(this.draft.head, this.draft.neck));
+    this.showSelection();
     for (const [part, options] of [
-      ['head', ['none', 'cap', 'headband']],
-      ['neck', ['none', 'scarf']],
+      ['skin', ['pikachu', 'cyborg']],
+      ['head', ['none', 'cap', 'headband', 'crown', 'headphones']],
+      ['neck', ['none', 'scarf', 'bowtie']],
+      [
+        'eyes',
+        [
+          'none',
+          'sunglasses',
+          'round-glasses',
+          'triangle-sunglasses',
+          'star-sunglasses',
+        ],
+      ],
     ]) {
       const group = document.createElement('fieldset');
       const legend = document.createElement('legend');
       legend.textContent =
-        part === 'head' ? translate('Head', '머리') : translate('Neck', '목');
+        part === 'skin'
+          ? translate('Skin', '스킨')
+          : part === 'head'
+          ? translate('Head', '머리')
+          : part === 'neck'
+          ? translate('Neck', '목')
+          : translate('Eyewear', '안경');
       const row = document.createElement('div');
       row.className = 'costume-options';
       group.append(legend, row);
       for (const option of options) {
         const candidate = { ...this.draft, [part]: option };
-        const id = costumeId(candidate.head, candidate.neck);
+        const id = costumeId(
+          candidate.head,
+          candidate.neck,
+          candidate.skin,
+          candidate.eyes
+        );
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.part = part;
@@ -130,10 +166,10 @@ export class CostumeSelector {
         name.textContent =
           option === 'none'
             ? translate('None', '없음')
-            : translateMessage(COSTUME_NAMES[option]);
+            : translateMessage(
+                option === 'pikachu' ? 'Pikachu' : COSTUME_NAMES[option]
+              );
         button.append(image, name);
-        button.addEventListener('mouseenter', () => show(id));
-        button.addEventListener('focus', () => show(id));
         button.addEventListener('click', () => {
           this.draft[part] = option;
           this.renderOptions(part, option);
@@ -210,7 +246,7 @@ export class CostumeSelector {
             ? translate('Costume', '의상')
             : translate('Second player costume', '두 번째 선수 의상')) +
           ': ' +
-          translateMessage(COSTUME_NAMES[skins[i]]);
+          costumeLabel(skins[i]);
         button.addEventListener('click', () => this.open(i));
         card.append(image, button);
         root.append(card);

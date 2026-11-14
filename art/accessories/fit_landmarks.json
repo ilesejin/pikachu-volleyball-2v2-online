@@ -1,0 +1,912 @@
+{
+  "frames": {
+    "pikachu/pikachu_0_0.png": {
+      "headbandPath": [
+        [
+          29,
+          13
+        ],
+        [
+          38,
+          12
+        ],
+        [
+          55,
+          12
+        ]
+      ],
+      "crownBase": [
+        42,
+        9
+      ],
+      "neck": [
+        55,
+        35
+      ],
+      "headphoneCups": [
+        [
+          33,
+          19
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_0_1.png": {
+      "headbandPath": [
+        [
+          29,
+          14
+        ],
+        [
+          38,
+          13
+        ],
+        [
+          55,
+          13
+        ]
+      ],
+      "crownBase": [
+        42,
+        10
+      ],
+      "neck": [
+        55,
+        36
+      ],
+      "headphoneCups": [
+        [
+          33,
+          20
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_0_2.png": {
+      "headbandPath": [
+        [
+          28,
+          15
+        ],
+        [
+          37,
+          14
+        ],
+        [
+          54,
+          14
+        ]
+      ],
+      "crownBase": [
+        41,
+        11
+      ],
+      "neck": [
+        54,
+        37
+      ],
+      "headphoneCups": [
+        [
+          32,
+          21
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_0_3.png": {
+      "headbandPath": [
+        [
+          29,
+          14
+        ],
+        [
+          38,
+          13
+        ],
+        [
+          55,
+          13
+        ]
+      ],
+      "crownBase": [
+        42,
+        10
+      ],
+      "neck": [
+        55,
+        36
+      ],
+      "headphoneCups": [
+        [
+          33,
+          20
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_0_4.png": {
+      "headbandPath": [
+        [
+          29,
+          13
+        ],
+        [
+          38,
+          12
+        ],
+        [
+          55,
+          12
+        ]
+      ],
+      "crownBase": [
+        42,
+        9
+      ],
+      "neck": [
+        55,
+        35
+      ],
+      "headphoneCups": [
+        [
+          33,
+          19
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_1_0.png": {
+      "headbandPath": [
+        [
+          29,
+          16
+        ],
+        [
+          38,
+          15
+        ],
+        [
+          55,
+          15
+        ]
+      ],
+      "crownBase": [
+        42,
+        14
+      ],
+      "neck": [
+        55,
+        39
+      ],
+      "headphoneCups": [
+        [
+          33,
+          22
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_1_1.png": {
+      "headbandPath": [
+        [
+          29,
+          15
+        ],
+        [
+          38,
+          14
+        ],
+        [
+          55,
+          14
+        ]
+      ],
+      "crownBase": [
+        42,
+        13
+      ],
+      "neck": [
+        55,
+        38
+      ],
+      "headphoneCups": [
+        [
+          33,
+          21
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_1_2.png": {
+      "headbandPath": [
+        [
+          29,
+          15
+        ],
+        [
+          38,
+          14
+        ],
+        [
+          55,
+          14
+        ]
+      ],
+      "crownBase": [
+        42,
+        13
+      ],
+      "neck": [
+        55,
+        38
+      ],
+      "headphoneCups": [
+        [
+          33,
+          21
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_1_3.png": {
+      "headbandPath": [
+        [
+          30,
+          16
+        ],
+        [
+          39,
+          15
+        ],
+        [
+          56,
+          15
+        ]
+      ],
+      "crownBase": [
+        43,
+        12
+      ],
+      "neck": [
+        56,
+        39
+      ],
+      "headphoneCups": [
+        [
+          34,
+          22
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_1_4.png": {
+      "headbandPath": [
+        [
+          30,
+          9
+        ],
+        [
+          40,
+          13
+        ],
+        [
+          54,
+          16
+        ]
+      ],
+      "crownBase": [
+        42,
+        13
+      ],
+      "neck": [
+        55,
+        40
+      ],
+      "headphoneCups": [
+        [
+          33,
+          23
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_2_0.png": {
+      "headbandPath": [
+        [
+          29,
+          17
+        ],
+        [
+          38,
+          16
+        ],
+        [
+          55,
+          16
+        ]
+      ],
+      "crownBase": [
+        42,
+        13
+      ],
+      "neck": [
+        55,
+        39
+      ],
+      "headphoneCups": [
+        [
+          33,
+          23
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_2_1.png": {
+      "headbandPath": [
+        [
+          29,
+          17
+        ],
+        [
+          38,
+          16
+        ],
+        [
+          55,
+          16
+        ]
+      ],
+      "crownBase": [
+        42,
+        13
+      ],
+      "neck": [
+        55,
+        39
+      ],
+      "headphoneCups": [
+        [
+          33,
+          23
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_2_2.png": {
+      "headbandPath": [
+        [
+          29,
+          17
+        ],
+        [
+          38,
+          16
+        ],
+        [
+          55,
+          16
+        ]
+      ],
+      "crownBase": [
+        42,
+        12
+      ],
+      "neck": [
+        55,
+        39
+      ],
+      "headphoneCups": [
+        [
+          33,
+          23
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_2_3.png": {
+      "headbandPath": [
+        [
+          30,
+          16
+        ],
+        [
+          39,
+          15
+        ],
+        [
+          56,
+          15
+        ]
+      ],
+      "crownBase": [
+        43,
+        12
+      ],
+      "neck": [
+        56,
+        38
+      ],
+      "headphoneCups": [
+        [
+          34,
+          22
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_2_4.png": {
+      "headbandPath": [
+        [
+          28,
+          16
+        ],
+        [
+          37,
+          15
+        ],
+        [
+          54,
+          15
+        ]
+      ],
+      "crownBase": [
+        41,
+        13
+      ],
+      "neck": [
+        54,
+        39
+      ],
+      "headphoneCups": [
+        [
+          32,
+          22
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_3_0.png": {
+      "headbandPath": [
+        [
+          31,
+          25
+        ],
+        [
+          43,
+          25
+        ],
+        [
+          56,
+          27
+        ]
+      ],
+      "crownBase": [
+        43,
+        26
+      ],
+      "neck": [
+        48,
+        52
+      ],
+      "headphoneCups": [
+        [
+          34,
+          34
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_3_1.png": {
+      "headbandPath": [
+        [
+          31,
+          25
+        ],
+        [
+          43,
+          25
+        ],
+        [
+          56,
+          27
+        ]
+      ],
+      "crownBase": [
+        43,
+        26
+      ],
+      "neck": [
+        49,
+        52
+      ],
+      "headphoneCups": [
+        [
+          34,
+          34
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_4_0.png": {
+      "headbandPath": [
+        [
+          34,
+          39
+        ],
+        [
+          46,
+          39
+        ],
+        [
+          59,
+          41
+        ]
+      ],
+      "crownBase": [
+        46,
+        34
+      ],
+      "neck": [
+        48,
+        60
+      ],
+      "headphoneCups": [
+        [
+          37,
+          48
+        ]
+      ],
+      "bowtieFacing": "profile"
+    },
+    "pikachu/pikachu_5_0.png": {
+      "headbandPath": [
+        [
+          12,
+          18
+        ],
+        [
+          26,
+          16
+        ],
+        [
+          41,
+          14
+        ]
+      ],
+      "crownBase": [
+        26,
+        6
+      ],
+      "neck": [
+        27,
+        40
+      ],
+      "headphoneCups": [
+        [
+          10,
+          26
+        ],
+        [
+          43,
+          24
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_5_1.png": {
+      "headbandPath": [
+        [
+          18,
+          11
+        ],
+        [
+          32,
+          13
+        ],
+        [
+          46,
+          15
+        ]
+      ],
+      "crownBase": [
+        32,
+        6
+      ],
+      "neck": [
+        32,
+        37
+      ],
+      "headphoneCups": [
+        [
+          16,
+          21
+        ],
+        [
+          48,
+          23
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_5_2.png": {
+      "headbandPath": [
+        [
+          13,
+          9
+        ],
+        [
+          28,
+          11
+        ],
+        [
+          44,
+          13
+        ]
+      ],
+      "crownBase": [
+        28,
+        7
+      ],
+      "neck": [
+        28,
+        36
+      ],
+      "headphoneCups": [
+        [
+          11,
+          19
+        ],
+        [
+          46,
+          21
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_5_3.png": {
+      "headbandPath": [
+        [
+          11,
+          11
+        ],
+        [
+          26,
+          10
+        ],
+        [
+          41,
+          10
+        ]
+      ],
+      "crownBase": [
+        26,
+        6
+      ],
+      "neck": [
+        26,
+        35
+      ],
+      "headphoneCups": [
+        [
+          9,
+          20
+        ],
+        [
+          43,
+          19
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_5_4.png": {
+      "headbandPath": [
+        [
+          23,
+          11
+        ],
+        [
+          36,
+          17
+        ],
+        [
+          48,
+          23
+        ]
+      ],
+      "crownBase": [
+        36,
+        11
+      ],
+      "neck": [
+        33,
+        42
+      ],
+      "headphoneCups": [
+        [
+          20,
+          23
+        ],
+        [
+          51,
+          29
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_6_0.png": {
+      "headbandPath": [
+        [
+          31,
+          15
+        ],
+        [
+          44,
+          15
+        ],
+        [
+          58,
+          15
+        ]
+      ],
+      "crownBase": [
+        44,
+        13
+      ],
+      "neck": [
+        41,
+        41
+      ],
+      "headphoneCups": [
+        [
+          29,
+          24
+        ],
+        [
+          59,
+          24
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_6_1.png": {
+      "headbandPath": [
+        [
+          34,
+          9
+        ],
+        [
+          46,
+          14
+        ],
+        [
+          58,
+          20
+        ]
+      ],
+      "crownBase": [
+        46,
+        11
+      ],
+      "neck": [
+        42,
+        40
+      ],
+      "headphoneCups": [
+        [
+          31,
+          21
+        ],
+        [
+          59,
+          26
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_6_2.png": {
+      "headbandPath": [
+        [
+          28,
+          39
+        ],
+        [
+          40,
+          39
+        ],
+        [
+          53,
+          39
+        ]
+      ],
+      "crownBase": [
+        40,
+        32
+      ],
+      "neck": [
+        25,
+        54
+      ],
+      "headphoneCups": [
+        [
+          26,
+          48
+        ],
+        [
+          55,
+          48
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_6_3.png": {
+      "headbandPath": [
+        [
+          28,
+          39
+        ],
+        [
+          40,
+          39
+        ],
+        [
+          53,
+          39
+        ]
+      ],
+      "crownBase": [
+        40,
+        32
+      ],
+      "neck": [
+        25,
+        54
+      ],
+      "headphoneCups": [
+        [
+          26,
+          48
+        ],
+        [
+          55,
+          48
+        ]
+      ],
+      "bowtieFacing": "front"
+    },
+    "pikachu/pikachu_6_4.png": {
+      "headbandPath": [
+        [
+          29,
+          39
+        ],
+        [
+          42,
+          39
+        ],
+        [
+          54,
+          39
+        ]
+      ],
+      "crownBase": [
+        42,
+        32
+      ],
+      "neck": [
+        26,
+        54
+      ],
+      "headphoneCups": [
+        [
+          27,
+          48
+        ],
+        [
+          56,
+          48
+        ]
+      ],
+      "bowtieFacing": "front"
+    }
+  }
+}

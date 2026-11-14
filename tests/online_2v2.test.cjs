@@ -1838,23 +1838,73 @@ test('combined costumes preserve old IDs and allow independent head/neck choices
     {
       ...protocol,
       capSheet: 'cap.png',
+      crownSheet: 'crown.png',
+      headphonesSheet: 'headphones.png',
+      bowtieSheet: 'bowtie.png',
+      starSunglassesSheet: 'star-sunglasses.png',
       headbandSheet: 'headband.png',
       scarfSheet: 'scarf.png',
+      sunglassesSheet: 'sunglasses.png',
+      roundGlassesSheet: 'round-glasses.png',
+      triangleSunglassesSheet: 'triangle-sunglasses.png',
+      cyborgSheet: 'cyborg.png',
     }
   );
   for (const id of protocol.SKIN_IDS) {
     const parts = costumeParts(id);
-    assert.equal(costumeId(parts.head, parts.neck), id);
+    assert.equal(costumeId(parts.head, parts.neck, parts.skin, parts.eyes), id);
     assert.deepEqual(plain(protocol.playerSkins([id], 'four')), [id]);
   }
   assert.equal(costumeId('cap', 'scarf'), 'cap-scarf');
+  assert.equal(
+    costumeId('crown', 'bowtie', 'cyborg', 'star-sunglasses'),
+    'cyborg-crown-bowtie-star-sunglasses'
+  );
+  assert.equal(
+    costumeId('headphones', 'bowtie', 'pikachu', 'round-glasses'),
+    'headphones-bowtie-round-glasses'
+  );
+  assert.equal(
+    costumeId('cap', 'scarf', 'pikachu', 'sunglasses'),
+    'cap-scarf-sunglasses'
+  );
+  assert.equal(
+    costumeId('headband', 'scarf', 'cyborg', 'sunglasses'),
+    'cyborg-headband-scarf-sunglasses'
+  );
+  assert.equal(
+    costumeId('none', 'none', 'pikachu', 'sunglasses'),
+    'sunglasses'
+  );
+  assert.equal(costumeId('none', 'none', 'pikachu', '__proto__'), 'classic');
+  assert.deepEqual(plain(costumeParts('cyborg-cap-scarf-sunglasses')), {
+    skin: 'cyborg',
+    head: 'cap',
+    neck: 'scarf',
+    eyes: 'sunglasses',
+  });
   assert.equal(costumeId('headband', 'scarf'), 'headband-scarf');
+  assert.equal(costumeId('cap', 'scarf', 'cyborg'), 'cyborg-cap-scarf');
+  assert.equal(
+    costumeId('headband', 'scarf', 'cyborg'),
+    'cyborg-headband-scarf'
+  );
+  assert.equal(costumeId('none', 'none', 'cyborg'), 'cyborg');
+  assert.equal(costumeId('none', 'none', '__proto__'), 'classic');
+  assert.deepEqual(plain(costumeParts('cyborg-headband-scarf')), {
+    skin: 'cyborg',
+    head: 'headband',
+    neck: 'scarf',
+    eyes: 'none',
+  });
   assert.equal(costumeId('none', 'scarf'), 'scarf');
   assert.equal(costumeId('cap', 'none'), 'cap');
   assert.equal(costumeId('__proto__', 'missing'), 'classic');
   assert.deepEqual(plain(costumeParts('__proto__')), {
+    skin: 'pikachu',
     head: 'none',
     neck: 'none',
+    eyes: 'none',
   });
   const { loadCostumes } = load(
     'online_2v2/costume_selector.js',
@@ -1864,10 +1914,14 @@ test('combined costumes preserve old IDs and allow independent head/neck choices
   assert.deepEqual(
     plain(
       loadCostumes('pairs', {
-        get: () => JSON.stringify(['cap-scarf', 'headband-scarf']),
+        get: () =>
+          JSON.stringify([
+            'cyborg-cap-scarf-round-glasses',
+            'headband-scarf-triangle-sunglasses',
+          ]),
       })
     ),
-    ['cap-scarf', 'headband-scarf']
+    ['cyborg-cap-scarf-round-glasses', 'headband-scarf-triangle-sunglasses']
   );
 });
 
@@ -1898,11 +1952,145 @@ test('accessory PNG sheets use every original Pikachu atlas rectangle', () => {
   );
   for (const [name, frame] of Object.entries(manifest.frames))
     assert.deepEqual(frame, original.frames[name]);
-  for (const name of ['cap', 'headband', 'scarf']) {
+  for (const name of [
+    'cap',
+    'headband',
+    'scarf',
+    'sunglasses',
+    'round-glasses',
+    'triangle-sunglasses',
+    'crown',
+    'headphones',
+    'bowtie',
+    'star-sunglasses',
+  ]) {
     const png = fs.readFileSync(path.join(root, 'costumes', name + '.png'));
     assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
     assert.equal(png.readUInt32BE(16), manifest.size.w);
     assert.equal(png.readUInt32BE(20), manifest.size.h);
     assert.equal(png[25], 6, 'Accessory sheets must retain RGBA transparency');
   }
+});
+
+test('cyborg skin has all original poses and complete accessory attachment metadata', () => {
+  const root = path.join(__dirname, '../src/resources/assets/images');
+  const atlas = JSON.parse(
+    fs.readFileSync(path.join(root, 'costumes/frames.json'), 'utf8')
+  );
+  const skin = JSON.parse(
+    fs.readFileSync(path.join(root, 'skins/cyborg.json'), 'utf8')
+  );
+  assert.deepEqual(skin.size, atlas.size);
+  assert.deepEqual(skin.offset, atlas.offset);
+  assert.deepEqual(
+    Object.keys(skin.attachments).sort(),
+    Object.keys(atlas.frames).sort()
+  );
+  for (const attachment of Object.values(skin.attachments))
+    for (const part of ['head', 'neck', 'eyes'])
+      for (const axis of ['x', 'y']) {
+        assert.ok(Number.isSafeInteger(attachment[part][axis]));
+        assert.ok(Math.abs(attachment[part][axis]) < 64);
+      }
+  const png = fs.readFileSync(path.join(root, 'skins/cyborg.png'));
+  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(png.readUInt32BE(16), atlas.size.w);
+  assert.equal(png.readUInt32BE(20), atlas.size.h);
+  assert.equal(png[25], 6);
+});
+
+test('sunglasses have reviewed eye landmarks for every pose, including tilted and dizzy frames', () => {
+  const data = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../art/sunglasses/eye_landmarks.json'),
+      'utf8'
+    )
+  );
+  const atlas = JSON.parse(
+    fs.readFileSync(
+      path.join(
+        __dirname,
+        '../src/resources/assets/images/costumes/frames.json'
+      ),
+      'utf8'
+    )
+  );
+  assert.deepEqual(
+    Object.keys(data.frames).sort(),
+    Object.keys(atlas.frames).sort()
+  );
+  for (const [name, eyes] of Object.entries(data.frames)) {
+    const front = Number(name.split('_').at(-2)) >= 5;
+    assert.equal(eyes.length, front ? 2 : 1, name);
+    for (const box of eyes) {
+      assert.equal(box.length, 4);
+      assert.ok(box.every((v) => Number.isSafeInteger(v) && v >= 0 && v < 64));
+      assert.ok(box[0] <= box[2] && box[1] <= box[3]);
+    }
+  }
+  // Unlike pupils, the glasses must not move through the two stationary poses.
+  assert.deepEqual(
+    data.fixedLensCenters['pikachu/pikachu_6_2.png'],
+    data.fixedLensCenters['pikachu/pikachu_6_3.png']
+  );
+  assert.deepEqual(
+    data.fixedLensCenters['pikachu/pikachu_6_4.png'],
+    data.fixedLensCenters['pikachu/pikachu_6_2.png'].map(([x, y]) => [x + 1, y])
+  );
+});
+
+test('accessory fit landmarks cover every pose and follow tilted foreheads', () => {
+  const fit = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../art/accessories/fit_landmarks.json'),
+      'utf8'
+    )
+  ).frames;
+  const atlas = JSON.parse(
+    fs.readFileSync(
+      path.join(
+        __dirname,
+        '../src/resources/assets/images/costumes/frames.json'
+      ),
+      'utf8'
+    )
+  ).frames;
+  assert.deepEqual(Object.keys(fit).sort(), Object.keys(atlas).sort());
+  for (const info of Object.values(fit)) {
+    assert.equal(info.headbandPath.length, 3);
+    for (const point of [
+      ...info.headbandPath,
+      info.neck,
+      info.crownBase,
+      ...info.headphoneCups,
+    ])
+      assert.ok(
+        point.every((v) => Number.isSafeInteger(v) && v >= 0 && v < 64)
+      );
+  }
+  for (const name of ['pikachu/pikachu_5_4.png', 'pikachu/pikachu_6_1.png'])
+    assert.notEqual(fit[name].headbandPath[0][1], fit[name].headbandPath[2][1]);
+});
+
+test('new outfit labels translate individual items without duplicating catalog combinations', () => {
+  const { costumeLabel } = load(
+    'online_2v2/costume_selector.js',
+    ['costumeLabel'],
+    {
+      COSTUME_NAMES: {
+        example: 'Cyborg Pikachu + Crown + Bow Tie + Star Sunglasses',
+      },
+      translateMessage: (value) =>
+        ({
+          'Cyborg Pikachu': '사이보그 피카츄',
+          Crown: '왕관',
+          'Bow Tie': '나비넥타이',
+          'Star Sunglasses': '별 선글라스',
+        }[value] || value),
+    }
+  );
+  assert.equal(
+    costumeLabel('example'),
+    '사이보그 피카츄 + 왕관 + 나비넥타이 + 별 선글라스'
+  );
 });

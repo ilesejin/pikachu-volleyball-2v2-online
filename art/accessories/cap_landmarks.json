@@ -1,0 +1,200 @@
+{
+  "frames": {
+    "pikachu/pikachu_0_0.png": {
+      "brimCenter": [
+        42,
+        11
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_0_1.png": {
+      "brimCenter": [
+        42,
+        12
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_0_2.png": {
+      "brimCenter": [
+        41,
+        13
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_0_3.png": {
+      "brimCenter": [
+        42,
+        12
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_0_4.png": {
+      "brimCenter": [
+        42,
+        11
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_1_0.png": {
+      "brimCenter": [
+        42,
+        16
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_1_1.png": {
+      "brimCenter": [
+        42,
+        15
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_1_2.png": {
+      "brimCenter": [
+        42,
+        15
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_1_3.png": {
+      "brimCenter": [
+        43,
+        14
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_1_4.png": {
+      "brimCenter": [
+        42,
+        14
+      ],
+      "angleDegrees": 16.26
+    },
+    "pikachu/pikachu_2_0.png": {
+      "brimCenter": [
+        42,
+        15
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_2_1.png": {
+      "brimCenter": [
+        42,
+        15
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_2_2.png": {
+      "brimCenter": [
+        42,
+        14
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_2_3.png": {
+      "brimCenter": [
+        43,
+        14
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_2_4.png": {
+      "brimCenter": [
+        41,
+        15
+      ],
+      "angleDegrees": -2.2
+    },
+    "pikachu/pikachu_3_0.png": {
+      "brimCenter": [
+        43,
+        28
+      ],
+      "angleDegrees": 4.57
+    },
+    "pikachu/pikachu_3_1.png": {
+      "brimCenter": [
+        43,
+        28
+      ],
+      "angleDegrees": 4.57
+    },
+    "pikachu/pikachu_4_0.png": {
+      "brimCenter": [
+        46,
+        36
+      ],
+      "angleDegrees": 4.57
+    },
+    "pikachu/pikachu_5_0.png": {
+      "brimCenter": [
+        26,
+        12
+      ],
+      "angleDegrees": -7.85
+    },
+    "pikachu/pikachu_5_1.png": {
+      "brimCenter": [
+        32,
+        12
+      ],
+      "angleDegrees": 8.13
+    },
+    "pikachu/pikachu_5_2.png": {
+      "brimCenter": [
+        28,
+        13
+      ],
+      "angleDegrees": 7.35
+    },
+    "pikachu/pikachu_5_3.png": {
+      "brimCenter": [
+        26,
+        12
+      ],
+      "angleDegrees": -1.91
+    },
+    "pikachu/pikachu_5_4.png": {
+      "brimCenter": [
+        36,
+        17
+      ],
+      "angleDegrees": 25.64
+    },
+    "pikachu/pikachu_6_0.png": {
+      "brimCenter": [
+        44,
+        16
+      ],
+      "angleDegrees": 0.0
+    },
+    "pikachu/pikachu_6_1.png": {
+      "brimCenter": [
+        46,
+        16
+      ],
+      "angleDegrees": 24.62
+    },
+    "pikachu/pikachu_6_2.png": {
+      "brimCenter": [
+        40,
+        35
+      ],
+      "angleDegrees": 0.0
+    },
+    "pikachu/pikachu_6_3.png": {
+      "brimCenter": [
+        40,
+        35
+      ],
+      "angleDegrees": 0.0
+    },
+    "pikachu/pikachu_6_4.png": {
+      "brimCenter": [
+        42,
+        35
+      ],
+      "angleDegrees": 0.0
+    }
+  }
+}

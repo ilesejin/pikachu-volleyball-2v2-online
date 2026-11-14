@@ -5,43 +5,111 @@ import { Texture } from '@pixi/core';
 import { DOUBLES_CONFIG } from '../offline_2v2/doubles_config.js';
 import { SKIN_IDS } from './protocol.js';
 import capSheet from '../../assets/images/costumes/cap.png';
+import crownSheet from '../../assets/images/costumes/crown.png';
+import headphonesSheet from '../../assets/images/costumes/headphones.png';
+import bowtieSheet from '../../assets/images/costumes/bowtie.png';
+import starSunglassesSheet from '../../assets/images/costumes/star-sunglasses.png';
 import headbandSheet from '../../assets/images/costumes/headband.png';
 import scarfSheet from '../../assets/images/costumes/scarf.png';
+import sunglassesSheet from '../../assets/images/costumes/sunglasses.png';
+import roundGlassesSheet from '../../assets/images/costumes/round-glasses.png';
+import triangleSunglassesSheet from '../../assets/images/costumes/triangle-sunglasses.png';
+import cyborgSheet from '../../assets/images/skins/cyborg.png';
+import cyborgLayout from '../../assets/images/skins/cyborg.json';
 import costumeLayout from '../../assets/images/costumes/frames.json';
 
 export const COSTUME_SHEETS = {
   cap: capSheet,
+  crown: crownSheet,
+  headphones: headphonesSheet,
+  bowtie: bowtieSheet,
+  'star-sunglasses': starSunglassesSheet,
   headband: headbandSheet,
   scarf: scarfSheet,
+  sunglasses: sunglassesSheet,
+  'round-glasses': roundGlassesSheet,
+  'triangle-sunglasses': triangleSunglassesSheet,
 };
+export const SKIN_SHEETS = { cyborg: cyborgSheet };
 export function loadCostumeSheets(loader) {
-  Object.values(COSTUME_SHEETS).forEach((url) => loader.add(url));
+  [...Object.values(COSTUME_SHEETS), ...Object.values(SKIN_SHEETS)].forEach(
+    (url) => loader.add(url)
+  );
 }
 // Stable IDs keep earlier saved preferences and replay files compatible.
 export function costumeParts(id) {
-  if (!SKIN_IDS.includes(id)) return { head: 'none', neck: 'none' };
+  const valid = SKIN_IDS.includes(id) ? id : 'classic';
+  const skin = valid.startsWith('cyborg') ? 'cyborg' : 'pikachu';
+  const accessory =
+    skin === 'cyborg' ? valid.slice('cyborg'.length).replace(/^-/, '') : valid;
   return {
-    head: id.startsWith('cap')
-      ? 'cap'
-      : id.startsWith('headband')
-      ? 'headband'
+    skin,
+    head:
+      ['cap', 'headband', 'crown', 'headphones'].find(
+        (part) => accessory === part || accessory.startsWith(part + '-')
+      ) || 'none',
+    neck: accessory.includes('bowtie')
+      ? 'bowtie'
+      : accessory.includes('scarf')
+      ? 'scarf'
       : 'none',
-    neck: id.includes('scarf') ? 'scarf' : 'none',
+    eyes:
+      [
+        'star-sunglasses',
+        'triangle-sunglasses',
+        'round-glasses',
+        'sunglasses',
+      ].find((part) => accessory === part || accessory.endsWith('-' + part)) ||
+      'none',
   };
 }
-export function costumeId(head, neck) {
-  const hat = ['cap', 'headband'].includes(head) ? head : '';
-  return neck === 'scarf' ? (hat ? hat + '-scarf' : 'scarf') : hat || 'classic';
+export function costumeId(head, neck, skin = 'pikachu', eyes = 'none') {
+  const hat = ['cap', 'headband', 'crown', 'headphones'].includes(head)
+    ? head
+    : '';
+  const accessory = [
+    hat,
+    ['scarf', 'bowtie'].includes(neck) ? neck : '',
+    [
+      'sunglasses',
+      'round-glasses',
+      'triangle-sunglasses',
+      'star-sunglasses',
+    ].includes(eyes)
+      ? eyes
+      : '',
+  ]
+    .filter(Boolean)
+    .join('-');
+  return skin === 'cyborg'
+    ? 'cyborg' + (accessory ? '-' + accessory : '')
+    : accessory || 'classic';
 }
 
-export const COSTUME_NAMES = {
-  classic: 'Classic',
+const ITEM_NAMES = {
   cap: 'Cap',
   headband: 'Headband',
+  crown: 'Crown',
+  headphones: 'Headphones',
   scarf: 'Scarf',
-  'cap-scarf': 'Cap + Scarf',
-  'headband-scarf': 'Headband + Scarf',
+  bowtie: 'Bow Tie',
+  sunglasses: 'Sunglasses',
+  'round-glasses': 'Round Glasses',
+  'triangle-sunglasses': 'Triangular Sunglasses',
+  'star-sunglasses': 'Star Sunglasses',
 };
+export const COSTUME_NAMES = Object.fromEntries(
+  SKIN_IDS.map((id) => {
+    const parts = costumeParts(id);
+    const names = [
+      parts.skin === 'cyborg' ? 'Cyborg Pikachu' : '',
+      ...[parts.head, parts.neck, parts.eyes]
+        .filter((part) => part !== 'none')
+        .map((part) => ITEM_NAMES[part]),
+    ].filter(Boolean);
+    return [id, names.join(' + ') || 'Classic'];
+  })
+);
 const canvas = (width = 64, height = 64) => {
   const image = document.createElement('canvas');
   image.width = width;
@@ -51,35 +119,46 @@ const canvas = (width = 64, height = 64) => {
 // PNGs share a vertical crop of the original atlas. Subtract its saved offset.
 // Frame origins and spacing stay unchanged. Combine once,
 // then reuse cached textures; no accessory drawing or compositing in the ticker.
-function compose(source, id, frame, resources) {
+function compose(source, id, frame, resources, attachment) {
   const image = canvas(),
     ctx = image.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(source, 0, 0);
   const parts = costumeParts(id);
-  // Neck first, head last: a fixed layer order for every animation and replay.
-  for (const accessory of [parts.neck, parts.head]) {
-    if (accessory === 'none') continue;
-    const sheet =
-      resources[COSTUME_SHEETS[accessory]]?.texture?.baseTexture.resource
-        .source;
+  const drawSheet = (url, label, offset = { x: 0, y: 0 }) => {
+    const sheet = resources[url]?.texture?.baseTexture.resource.source;
     if (
       !sheet ||
       sheet.width !== costumeLayout.size.w ||
       sheet.height !== costumeLayout.size.h
     )
-      throw new Error('Invalid costume sprite sheet: ' + accessory);
+      throw new Error('Invalid character sprite sheet: ' + label);
     ctx.drawImage(
       sheet,
       frame.x - costumeLayout.offset.x,
       frame.y - costumeLayout.offset.y,
       frame.width,
       frame.height,
-      0,
-      0,
+      offset.x,
+      offset.y,
       frame.width,
       frame.height
     );
+  };
+  // A skin replaces the body completely; accessories are independent overlays.
+  if (parts.skin === 'cyborg') drawSheet(SKIN_SHEETS.cyborg, 'cyborg');
+  else ctx.drawImage(source, 0, 0);
+  // Eyewear is last so its lenses stay visible with either headwear option.
+  for (const [slot, accessory] of [
+    ['neck', parts.neck],
+    ['head', parts.head],
+    ['eyes', parts.eyes],
+  ]) {
+    if (accessory !== 'none')
+      drawSheet(
+        COSTUME_SHEETS[accessory],
+        accessory,
+        parts.skin === 'cyborg' ? attachment?.[slot] : undefined
+      );
   }
   return Texture.from(image);
 }
@@ -101,15 +180,43 @@ export class CostumeLibrary {
     sprite.position.set(32, 32);
     stage.addChild(sprite);
     try {
-      for (const id of SKIN_IDS.slice(1)) this.frames[id] = [];
-      for (const texture of base) {
+      const attachments = new Map(
+        Object.entries(costumeLayout.frames).map(([name, info]) => [
+          info.frame.x + ':' + info.frame.y,
+          cyborgLayout.attachments[name],
+        ])
+      );
+      const sources = base.map((texture) => {
         sprite.texture = texture;
         renderer.render(stage);
-        for (const id of SKIN_IDS.slice(1))
-          this.frames[id].push(
-            compose(renderer.view, id, texture.frame, resources)
-          );
-      }
+        const source = canvas();
+        source.getContext('2d').drawImage(renderer.view, 0, 0);
+        return source;
+      });
+      // Cache a full animation only when that outfit is actually requested.
+      // Adding catalog combinations must not prebuild thousands of unused canvases.
+      for (const id of SKIN_IDS.slice(1))
+        Object.defineProperty(this.frames, id, {
+          enumerable: true,
+          configurable: true,
+          get: () => {
+            const frames = base.map((texture, index) =>
+              compose(
+                sources[index],
+                id,
+                texture.frame,
+                resources,
+                attachments.get(texture.frame.x + ':' + texture.frame.y)
+              )
+            );
+            Object.defineProperty(this.frames, id, {
+              value: frames,
+              enumerable: true,
+              configurable: true,
+            });
+            return frames;
+          },
+        });
     } finally {
       stage.destroy({ children: true });
       renderer.destroy(true);

@@ -1,6 +1,65 @@
 /** Product text only; names, chat messages and network packets are never translated. */
 export const ZH_MESSAGES = {
   Classic: '經典',
+  Crown: '皇冠',
+  Headphones: '耳機',
+  'Bow Tie': '蝴蝶領結',
+  'Star Sunglasses': '星形太陽眼鏡',
+  'Round Glasses': '圓框眼鏡',
+  'Cap + Round Glasses': '帽子 + 圓框眼鏡',
+  'Headband + Round Glasses': '頭帶 + 圓框眼鏡',
+  'Scarf + Round Glasses': '圍巾 + 圓框眼鏡',
+  'Cap + Scarf + Round Glasses': '帽子 + 圍巾 + 圓框眼鏡',
+  'Headband + Scarf + Round Glasses': '頭帶 + 圍巾 + 圓框眼鏡',
+  'Cyborg Pikachu + Round Glasses': '機械皮卡丘 + 圓框眼鏡',
+  'Cyborg Pikachu + Cap + Round Glasses': '機械皮卡丘 + 帽子 + 圓框眼鏡',
+  'Cyborg Pikachu + Headband + Round Glasses': '機械皮卡丘 + 頭帶 + 圓框眼鏡',
+  'Cyborg Pikachu + Scarf + Round Glasses': '機械皮卡丘 + 圍巾 + 圓框眼鏡',
+  'Cyborg Pikachu + Cap + Scarf + Round Glasses':
+    '機械皮卡丘 + 帽子 + 圍巾 + 圓框眼鏡',
+  'Cyborg Pikachu + Headband + Scarf + Round Glasses':
+    '機械皮卡丘 + 頭帶 + 圍巾 + 圓框眼鏡',
+  'Triangular Sunglasses': '三角太陽眼鏡',
+  'Cap + Triangular Sunglasses': '帽子 + 三角太陽眼鏡',
+  'Headband + Triangular Sunglasses': '頭帶 + 三角太陽眼鏡',
+  'Scarf + Triangular Sunglasses': '圍巾 + 三角太陽眼鏡',
+  'Cap + Scarf + Triangular Sunglasses': '帽子 + 圍巾 + 三角太陽眼鏡',
+  'Headband + Scarf + Triangular Sunglasses': '頭帶 + 圍巾 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Triangular Sunglasses': '機械皮卡丘 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Cap + Triangular Sunglasses':
+    '機械皮卡丘 + 帽子 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Headband + Triangular Sunglasses':
+    '機械皮卡丘 + 頭帶 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Scarf + Triangular Sunglasses':
+    '機械皮卡丘 + 圍巾 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Cap + Scarf + Triangular Sunglasses':
+    '機械皮卡丘 + 帽子 + 圍巾 + 三角太陽眼鏡',
+  'Cyborg Pikachu + Headband + Scarf + Triangular Sunglasses':
+    '機械皮卡丘 + 頭帶 + 圍巾 + 三角太陽眼鏡',
+  Eyewear: '眼鏡',
+  Sunglasses: '太陽眼鏡',
+  'Cap + Sunglasses': '帽子 + 太陽眼鏡',
+  'Headband + Sunglasses': '頭帶 + 太陽眼鏡',
+  'Scarf + Sunglasses': '圍巾 + 太陽眼鏡',
+  'Cap + Scarf + Sunglasses': '帽子 + 圍巾 + 太陽眼鏡',
+  'Headband + Scarf + Sunglasses': '頭帶 + 圍巾 + 太陽眼鏡',
+  'Cyborg Pikachu + Sunglasses': '機械皮卡丘 + 太陽眼鏡',
+  'Cyborg Pikachu + Cap + Sunglasses': '機械皮卡丘 + 帽子 + 太陽眼鏡',
+  'Cyborg Pikachu + Headband + Sunglasses': '機械皮卡丘 + 頭帶 + 太陽眼鏡',
+  'Cyborg Pikachu + Scarf + Sunglasses': '機械皮卡丘 + 圍巾 + 太陽眼鏡',
+  'Cyborg Pikachu + Cap + Scarf + Sunglasses':
+    '機械皮卡丘 + 帽子 + 圍巾 + 太陽眼鏡',
+  'Cyborg Pikachu + Headband + Scarf + Sunglasses':
+    '機械皮卡丘 + 頭帶 + 圍巾 + 太陽眼鏡',
+
+  Skin: '角色外觀',
+  Pikachu: '皮卡丘',
+  'Cyborg Pikachu': '機械皮卡丘',
+  'Cyborg Pikachu + Cap': '機械皮卡丘 + 帽子',
+  'Cyborg Pikachu + Headband': '機械皮卡丘 + 頭帶',
+  'Cyborg Pikachu + Scarf': '機械皮卡丘 + 圍巾',
+  'Cyborg Pikachu + Cap + Scarf': '機械皮卡丘 + 帽子 + 圍巾',
+  'Cyborg Pikachu + Headband + Scarf': '機械皮卡丘 + 頭帶 + 圍巾',
   Cap: '帽子',
   Headband: '頭帶',
   Scarf: '圍巾',
@@ -245,6 +304,67 @@ export const ZH_MESSAGES = {
 
 const REPLAY_KO = {
   Classic: '기본',
+  Crown: '왕관',
+  Headphones: '헤드폰',
+  'Bow Tie': '나비넥타이',
+  'Star Sunglasses': '별 선글라스',
+  'Round Glasses': '둥근 안경',
+  'Cap + Round Glasses': '모자 + 둥근 안경',
+  'Headband + Round Glasses': '머리띠 + 둥근 안경',
+  'Scarf + Round Glasses': '스카프 + 둥근 안경',
+  'Cap + Scarf + Round Glasses': '모자 + 스카프 + 둥근 안경',
+  'Headband + Scarf + Round Glasses': '머리띠 + 스카프 + 둥근 안경',
+  'Cyborg Pikachu + Round Glasses': '사이보그 피카츄 + 둥근 안경',
+  'Cyborg Pikachu + Cap + Round Glasses': '사이보그 피카츄 + 모자 + 둥근 안경',
+  'Cyborg Pikachu + Headband + Round Glasses':
+    '사이보그 피카츄 + 머리띠 + 둥근 안경',
+  'Cyborg Pikachu + Scarf + Round Glasses':
+    '사이보그 피카츄 + 스카프 + 둥근 안경',
+  'Cyborg Pikachu + Cap + Scarf + Round Glasses':
+    '사이보그 피카츄 + 모자 + 스카프 + 둥근 안경',
+  'Cyborg Pikachu + Headband + Scarf + Round Glasses':
+    '사이보그 피카츄 + 머리띠 + 스카프 + 둥근 안경',
+  'Triangular Sunglasses': '삼각 선글라스',
+  'Cap + Triangular Sunglasses': '모자 + 삼각 선글라스',
+  'Headband + Triangular Sunglasses': '머리띠 + 삼각 선글라스',
+  'Scarf + Triangular Sunglasses': '스카프 + 삼각 선글라스',
+  'Cap + Scarf + Triangular Sunglasses': '모자 + 스카프 + 삼각 선글라스',
+  'Headband + Scarf + Triangular Sunglasses': '머리띠 + 스카프 + 삼각 선글라스',
+  'Cyborg Pikachu + Triangular Sunglasses': '사이보그 피카츄 + 삼각 선글라스',
+  'Cyborg Pikachu + Cap + Triangular Sunglasses':
+    '사이보그 피카츄 + 모자 + 삼각 선글라스',
+  'Cyborg Pikachu + Headband + Triangular Sunglasses':
+    '사이보그 피카츄 + 머리띠 + 삼각 선글라스',
+  'Cyborg Pikachu + Scarf + Triangular Sunglasses':
+    '사이보그 피카츄 + 스카프 + 삼각 선글라스',
+  'Cyborg Pikachu + Cap + Scarf + Triangular Sunglasses':
+    '사이보그 피카츄 + 모자 + 스카프 + 삼각 선글라스',
+  'Cyborg Pikachu + Headband + Scarf + Triangular Sunglasses':
+    '사이보그 피카츄 + 머리띠 + 스카프 + 삼각 선글라스',
+  Eyewear: '안경',
+  Sunglasses: '선글라스',
+  'Cap + Sunglasses': '모자 + 선글라스',
+  'Headband + Sunglasses': '머리띠 + 선글라스',
+  'Scarf + Sunglasses': '스카프 + 선글라스',
+  'Cap + Scarf + Sunglasses': '모자 + 스카프 + 선글라스',
+  'Headband + Scarf + Sunglasses': '머리띠 + 스카프 + 선글라스',
+  'Cyborg Pikachu + Sunglasses': '사이보그 피카츄 + 선글라스',
+  'Cyborg Pikachu + Cap + Sunglasses': '사이보그 피카츄 + 모자 + 선글라스',
+  'Cyborg Pikachu + Headband + Sunglasses':
+    '사이보그 피카츄 + 머리띠 + 선글라스',
+  'Cyborg Pikachu + Scarf + Sunglasses': '사이보그 피카츄 + 스카프 + 선글라스',
+  'Cyborg Pikachu + Cap + Scarf + Sunglasses':
+    '사이보그 피카츄 + 모자 + 스카프 + 선글라스',
+  'Cyborg Pikachu + Headband + Scarf + Sunglasses':
+    '사이보그 피카츄 + 머리띠 + 스카프 + 선글라스',
+
+  Pikachu: '피카츄',
+  'Cyborg Pikachu': '사이보그 피카츄',
+  'Cyborg Pikachu + Cap': '사이보그 피카츄 + 모자',
+  'Cyborg Pikachu + Headband': '사이보그 피카츄 + 머리띠',
+  'Cyborg Pikachu + Scarf': '사이보그 피카츄 + 스카프',
+  'Cyborg Pikachu + Cap + Scarf': '사이보그 피카츄 + 모자 + 스카프',
+  'Cyborg Pikachu + Headband + Scarf': '사이보그 피카츄 + 머리띠 + 스카프',
   Cap: '모자',
   Headband: '머리띠',
   Scarf: '스카프',
