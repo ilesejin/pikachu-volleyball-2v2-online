@@ -1,0 +1,404 @@
+{
+  "size": {
+    "w": 476,
+    "h": 262
+  },
+  "offset": {
+    "x": 0,
+    "y": 266
+  },
+  "attachments": {
+    "pikachu/pikachu_0_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_0_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_0_2.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_0_3.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_0_4.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_1_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_1_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_1_2.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_1_3.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_1_4.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_2_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_2_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_2_2.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_2_3.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_2_4.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_3_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_3_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_4_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_5_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_5_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_5_2.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_5_3.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_5_4.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_6_0.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_6_1.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_6_2.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_6_3.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "pikachu/pikachu_6_4.png": {
+      "head": {
+        "x": 0,
+        "y": 0
+      },
+      "neck": {
+        "x": 0,
+        "y": 0
+      },
+      "eyes": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  }
+}
