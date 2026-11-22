@@ -52,6 +52,10 @@ module.exports = {
           from: 'resources/assets/**/*.+(json|png|mp3|wav)',
         },
         { from: 'src/index.html', to: 'index.html' },
+        {
+          from: 'src/google17755a85b1270793.html',
+          to: 'google17755a85b1270793.html',
+        },
         { from: 'src/replay/index.html', to: 'replay/index.html' },
       ],
     }),
