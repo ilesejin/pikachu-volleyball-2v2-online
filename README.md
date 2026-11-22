@@ -172,3 +172,24 @@ The costume preview shows only the current selection; hovering or keyboard focus
 
 
 Crown, Headphones, Star Sunglasses, and Bow Tie are independent choices in their existing categories. The headband now follows per-pose forehead paths, including tilted winning/losing poses, and is clipped to the head silhouette with tied ends attached at the back. The [fit/export guide](art/accessories/README.md) documents the editable assets and reviewed attachment data. Existing IDs and replays remain compatible; one item per category gives 150 valid outfits across both skins without prebuilding every outfit at startup.
+
+
+## Deferred SEO improvements
+
+Saved on 2026-11-22 for later implementation. These are proposed improvements, not completed website changes. The goal is to improve discovery for `피카츄 배구`, especially the more specific `피카츄 배구 2대2` and `피카츄 배구 온라인` queries. No ranking is guaranteed.
+
+First implementation priorities:
+
+- [ ] Improve the Korean title to `피카츄 배구 2대2 온라인 | 친구와 4인 플레이` and use `피카츄 배구 2대2 온라인` as the main heading.
+- [ ] Expand the visible introduction near the top. Suggested text: “피카츄 배구를 친구들과 2대2 온라인으로 즐겨보세요. 설치 없이 브라우저에서 4명이 각자 접속하거나, 두 컴퓨터에서 2명씩 팀을 이루어 플레이할 수 있습니다.”
+- [ ] Add a short, useful playing guide covering room creation, joining friends, solo/pair matching, controls, and replay saving. Keep the game easy to reach and avoid repeating keywords merely for SEO.
+- [ ] Replace the original 1v1 screenshot with an actual 2v2 screenshot and an accurate caption/alternative text.
+
+Follow-up actions:
+
+- [ ] Check that the repository About field and README clearly link to the playable site. Share a helpful demonstration with relevant gaming communities where their rules allow it. Do not buy links or post repetitive promotional comments; preserve existing credits.
+- [ ] Once pages are indexed, monitor Search Console queries, impressions, clicks, and average position, then use those observations to refine the content. Repeated indexing requests do not improve rankings.
+
+The multilingual sitemap and Google verification-file deployment are already configured. The sitemap helps discovery; it does not guarantee indexing or higher rankings. Keep this plan separate from any future game, physics, networking, or background changes.
+
+References: [Google SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide), [Google Search spam policies](https://developers.google.com/search/docs/essentials/spam-policies).
