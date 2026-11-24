@@ -14,6 +14,12 @@ function load(file, names, bindings = {}) {
   )(...Object.values(bindings));
 }
 const { getHashCode } = load('utils/hash_code.js', ['getHashCode']);
+const visual = load('replay/visual/format.js', [
+  'VERSION',
+  'decode',
+  'encode',
+  'vectorLength',
+]);
 const format = load(
   'online_2v2/replay_format.js',
   [
@@ -26,7 +32,12 @@ const format = load(
     'copy',
     'replayChunks',
   ],
-  { manifest: { files: { physics: 'test-engine' } }, getHashCode }
+  {
+    manifest: { files: { physics: 'test-engine' } },
+    getHashCode,
+    VISUAL_VERSION: visual.VERSION,
+    decodeVisualReplay: visual.decode,
+  }
 );
 test('all legal inputs roundtrip through the four-player compact format', () => {
   for (const xDirection of [-1, 0, 1])
@@ -286,4 +297,55 @@ test('a promoted host can transfer its recording without claiming missing earlie
   replay.commitTakeover(false);
   assert.equal(replay.pack.authoritative, false);
   assert.equal(replay.pack.complete, false);
+});
+
+test('offline recordings use the room container, bypass only the unneeded engine requirement, and validate visual frames', () => {
+  const legacy = {
+    version: visual.VERSION,
+    createdAt: '2026-11-23T00:00:00Z',
+    segments: [
+      {
+        settings: { width: 680, fps: 30, serveMode: 'fixed', practice: false },
+        frames: [
+          {
+            dt: 1000 / 30,
+            key: Array(visual.vectorLength(680)).fill(0),
+            sounds: [],
+          },
+        ],
+      },
+    ],
+  };
+  const text = visual.encode(legacy);
+  assert.equal(JSON.parse(text).pack.version, format.REPLAY_VERSION);
+  assert.deepEqual(format.decodeReplay(text), legacy);
+  const damaged = JSON.parse(text);
+  damaged.pack.events[0].key.pop();
+  damaged.checksum = getHashCode(JSON.stringify(damaged.pack));
+  assert.throws(() => format.decodeReplay(JSON.stringify(damaged)), /keyframe/);
+});
+
+test('playback adapter preserves the actual online session implementations without importing signaling', () => {
+  const session = fs.readFileSync(
+    path.join(__dirname, '../src/resources/js/online_2v2/session.js'),
+    'utf8'
+  );
+  const adapter = fs.readFileSync(
+    path.join(__dirname, '../src/resources/js/replay/replay_engine.js'),
+    'utf8'
+  );
+  const tokens = (s) => s.replace(/\s+/g, '');
+  for (const [name, next] of [
+    ['prepare', 'async start'],
+    ['stepGame', 'tick'],
+    ['applySnapshot', 'stop'],
+  ]) {
+    const start = session.indexOf('  ' + name + '('),
+      end = session.indexOf('  ' + next + '(', start);
+    assert.ok(
+      tokens(adapter).includes(tokens(session.slice(start, end))),
+      'Unchanged ' + name
+    );
+  }
+  assert.ok(!/from ['"](?:.*room|.*firebase|.*session)\.js['"]/.test(adapter));
 });

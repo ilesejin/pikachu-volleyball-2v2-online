@@ -2927,6 +2927,13 @@ async function screenshot(page, name) {
     const state =
       'JSON.stringify({players:__volley.game.players,ball:__volley.game.physics.ball,scores:__volley.game.scores,state:__volley.game.state.name,counter:__volley.game.frameCounter,clouds:__volley.game.view.game.cloudArray,wave:__volley.game.view.game.wave,rng:__volley.session.rng?.state()||null})';
     const firstExpected = await host.ev(state);
+    if (process.env.PIKA_REPLAY_COMPAT_DIR) {
+      fs.mkdirSync(process.env.PIKA_REPLAY_COMPAT_DIR, { recursive: true });
+      fs.writeFileSync(
+        path.join(process.env.PIKA_REPLAY_COMPAT_DIR, 'online-lockstep.json'),
+        JSON.stringify({ text: firstText, state: firstExpected })
+      );
+    }
     await host.ev('__volley.session.replay.save()');
     let savedFile;
     for (let i = 0; i < 100; i++) {
@@ -3331,6 +3338,11 @@ async function screenshot(page, name) {
       ).size,
       2
     );
+    if (process.env.PIKA_REPLAY_COMPAT_DIR)
+      fs.writeFileSync(
+        path.join(process.env.PIKA_REPLAY_COMPAT_DIR, 'online-session.json'),
+        JSON.stringify({ text: sessionText, state: secondExpected })
+      );
     console.log('Replay check: loading host-only viewer');
     const second = await viewer(sessionText, 'zh');
     await second.ev('__replay.seekFrame(__replay.doubles.events.length)');
@@ -3396,6 +3408,11 @@ async function screenshot(page, name) {
     await click(host, 'pause');
     const pairText = await host.ev('__volley.session.replay.text()'),
       pairExpected = await host.ev(state);
+    if (process.env.PIKA_REPLAY_COMPAT_DIR)
+      fs.writeFileSync(
+        path.join(process.env.PIKA_REPLAY_COMPAT_DIR, 'online-pairs.json'),
+        JSON.stringify({ text: pairText, state: pairExpected })
+      );
     const pairViewer = await viewer(pairText, 'ko');
     await pairViewer.ev('__replay.seekFrame(__replay.doubles.events.length)');
     assert.equal(await pairViewer.ev(replayState), pairExpected);

@@ -1,4 +1,6 @@
 'use strict';
+import { VisualPlayback } from './visual_playback.js';
+import { VERSION as VISUAL_VERSION } from './visual/format.js';
 import { loadCostumeSheets } from '../online_2v2/costumes.js';
 import { settings } from '@pixi/settings';
 import { SCALE_MODES } from '@pixi/constants';
@@ -103,12 +105,15 @@ class ReplayPlayer {
         // @ts-ignore
         packWithComment = JSON.parse(event.target.result);
         pack = packWithComment.pack;
-        if (pack && pack.version === REPLAY_VERSION) {
+        if (pack && [REPLAY_VERSION, VISUAL_VERSION].includes(pack.version)) {
           pack = decodeReplay(event.target.result);
-          loadCostumeSheets(this.loader);
+          if (pack.version !== VISUAL_VERSION) loadCostumeSheets(this.loader);
           this.loader.load(() => {
             try {
-              this.doubles = new DoublesPlayback(this, pack);
+              this.doubles =
+                pack.version === VISUAL_VERSION
+                  ? new VisualPlayback(this, pack)
+                  : new DoublesPlayback(this, pack);
               this.pikaVolley = this.doubles.game;
               this.pikaVolley.audio.turnBGMVolume(
                 document.getElementById('turn-on-bgm-checkbox').checked
@@ -117,7 +122,7 @@ class ReplayPlayer {
                 document.getElementById('turn-on-sfx-checkbox').checked
               );
               showTotalTimeDuration(this.doubles.duration);
-              setMaxForScrubberRange(pack.events.length);
+              setMaxForScrubberRange(this.doubles.events.length);
               this.ticker.start();
               this.playBGMProperly();
               adjustPlayPauseBtnIcon();

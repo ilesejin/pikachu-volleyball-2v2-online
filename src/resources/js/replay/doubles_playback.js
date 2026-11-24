@@ -4,7 +4,7 @@ import { PikachuVolleyball } from '../offline_2v2/pikavolley.js';
 import { ASSETS_PATH as DOUBLES_ASSETS } from '../offline_2v2/assets_path.js';
 import { ASSETS_PATH } from '../offline_version_js/assets_path.js';
 import { restoreCheckpoint } from '../online_2v2/checkpoint.js';
-import { OnlineMatch, validSnapshot } from '../online_2v2/session.js';
+import { OnlineMatch, validSnapshot } from './replay_engine.js';
 import { setCustomRng } from '../offline_2v2/rand.js';
 import { unpackInputs } from '../online_2v2/replay_format.js';
 import { translateMessage } from '../online_2v2/i18n.js';

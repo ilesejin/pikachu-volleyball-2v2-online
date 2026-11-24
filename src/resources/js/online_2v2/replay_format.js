@@ -1,3 +1,7 @@
+import {
+  decode as decodeVisualReplay,
+  VERSION as VISUAL_VERSION,
+} from '../replay/visual/format.js';
 import manifest from '../../../../offline-engine.manifest.json';
 import { getHashCode } from '../utils/hash_code.js';
 export const REPLAY_VERSION = 'pikavolley-2v2-room-replay-v1';
@@ -36,7 +40,11 @@ export function encodeReplay(pack) {
   return text;
 }
 export function decodeReplay(text) {
-  if (typeof text !== 'string' || text.length > MAX_REPLAY_BYTES)
+  if (
+    typeof text !== 'string' ||
+    text.length > MAX_REPLAY_BYTES ||
+    new TextEncoder().encode(text).length > MAX_REPLAY_BYTES
+  )
     throw new Error('Replay file is too large.');
   const data = JSON.parse(text, (key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value))
@@ -46,6 +54,11 @@ export function decodeReplay(text) {
     return value;
   });
   const pack = data.pack;
+  if (
+    pack?.version === VISUAL_VERSION ||
+    (pack?.version === REPLAY_VERSION && pack.rendering === 'sprites-v1')
+  )
+    return decodeVisualReplay(text);
   if (
     !pack ||
     pack.version !== REPLAY_VERSION ||

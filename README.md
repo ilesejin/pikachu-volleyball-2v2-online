@@ -51,6 +51,8 @@ Press **Space** or click **Chat** to type a room-wide message. Press **Enter** t
 
 ## Replays
 
+Both websites' replay viewers now open online and offline recordings, including earlier offline files and original P2P files. New offline files use the same room replay container/checksum with visual events; they omit room identity, player names, chat and IPs. Online recordings retain their existing format, engine checks, names, chat and costumes. Visual recordings require no physics simulation or engine-version match. The offline website includes a standalone copy of this viewer with no Firebase or room connections.
+
 Use **Save replay** to download a `.txt` file (the original P2P extension; existing `.pvreplay` files are still supported) containing the whole current room session, including rematches and restarts. Saving does not reset the recording. **Auto-save on leaving** is enabled by default and its saved preference survives reopening the site; browser-close downloads are best effort. The last recording remains manually savable after disconnection until joining/creating another room.
 
 Downloads use the original P2P FileSaver path without a site-provided save dialog. Browser-level download-location prompts still follow the browser settings. The viewer link is in the introduction and replay instructions, as in the original P2P page. The auto-save checkbox is in the pre-game Options section, and Save replay is beside Options above the court.
