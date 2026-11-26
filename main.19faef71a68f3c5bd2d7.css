@@ -728,5 +728,31 @@ select:focus-visible {
   gap: 10px;
 }
 
+/* Anonymous room totals fit the original entry-page layout on narrow screens. */
+.room-activity {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #8886;
+  border-radius: 6px;
+}
+.room-activity-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 0.9rem;
+}
+.room-activity-counts span {
+  white-space: nowrap;
+}
+.room-activity-counts strong {
+  font-variant-numeric: tabular-nums;
+}
+#room-activity-state {
+  display: block;
+  margin-top: 5px;
+  opacity: 0.75;
+  font-size: 0.75rem;
+}
 
-/*# sourceMappingURL=main.196fd6eaf0dc994faaed.css.map*/
+
+/*# sourceMappingURL=main.19faef71a68f3c5bd2d7.css.map*/
