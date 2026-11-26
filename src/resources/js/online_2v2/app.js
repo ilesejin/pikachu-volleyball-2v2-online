@@ -1,3 +1,4 @@
+import { RoomActivity, activityTransport } from './room_activity.js';
 import { CostumeLibrary, loadCostumeSheets } from './costumes.js';
 import { CostumeSelector, loadCostumes } from './costume_selector.js';
 import { setUpConnectionFeedback } from './connection_feedback.js';
@@ -68,6 +69,7 @@ const params = new URLSearchParams(location.search);
 let costumes, costumeUI;
 let classicUI,
   quickMatch,
+  roomActivity,
   room,
   session,
   game,
@@ -174,6 +176,7 @@ function updateSettingsForm(value) {
   $('synchronization').value = value.synchronization;
 }
 function update(error) {
+  roomActivity?.sync();
   costumeUI?.update();
   if (quickMatch && matchmakingURL)
     quickMatch.sync().catch((error) => status(error.message, true));
@@ -528,6 +531,10 @@ async function boot() {
             '먼저 quick_match_config.js를 설정하세요.'
           )
         );
+      const activityRevision =
+        body.action === 'publish'
+          ? roomActivity?.publicationRevision(body)
+          : undefined;
       const token = await store.token();
       const response = await fetch(
         matchmakingURL.replace(/\/$/, '') + '/v2/match',
@@ -537,16 +544,60 @@ async function boot() {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + token,
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            ...body,
+            ...(activityRevision === undefined ? {} : { activityRevision }),
+          }),
           signal: AbortSignal.timeout(10000),
         }
       );
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || 'Quick Match request failed.');
+      if (body.action === 'publish')
+        roomActivity?.published(body, data, activityRevision);
       return data;
     },
   });
+  if (matchmakingURL) {
+    const activityText = {
+      en: {
+        unavailable: 'Unavailable',
+        approximate: 'Approximate counts · Updates every 60 seconds',
+      },
+      ko: {
+        unavailable: '확인 불가',
+        approximate: '대략적인 방 수 · 60초마다 갱신',
+      },
+      zh: {
+        unavailable: '暫時無法取得',
+        approximate: '概略房間數 · 每60秒更新',
+      },
+    }[document.documentElement.lang] || {
+      unavailable: 'Unavailable',
+      approximate: 'Approximate counts · Updates every 60 seconds',
+    };
+    roomActivity = new RoomActivity({
+      room,
+      ...activityTransport(matchmakingURL, () => store.token()),
+      changed: (counts) => {
+        for (const [id, key] of [
+          ['active-room-count', 'active'],
+          ['public-waiting-count', 'publicWaiting'],
+          ['public-playing-count', 'publicPlaying'],
+        ])
+          $(id).textContent = counts ? String(counts[key]) : '—';
+        $('room-activity-state').textContent = counts
+          ? activityText.approximate
+          : activityText.unavailable;
+        $('room-activity').classList.toggle('unavailable', !counts);
+      },
+    });
+    document.addEventListener('visibilitychange', () => roomActivity.refresh());
+    roomActivity.start();
+  } else {
+    $('room-activity').hidden = true;
+  }
   costumeUI = new CostumeSelector({
     room,
     library: costumes,
@@ -580,6 +631,7 @@ async function boot() {
       updates,
       diagnostics,
       quickMatch,
+      roomActivity,
       costumes,
       version: CLIENT_VERSION,
     };
@@ -764,6 +816,7 @@ async function boot() {
   });
   window.addEventListener('beforeunload', () => {
     diagnostics.stop();
+    roomActivity?.stop();
     if (quickMatch.active) quickMatch.stop();
     if (!room.closed) {
       session.stop();

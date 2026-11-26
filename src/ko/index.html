@@ -52,6 +52,23 @@
           <a href="../en/" target="_self">English</a> | ✓ Korean (한국어)
         </p>
         <p class="doubles-description">피카츄 배구 2대2 온라인 버전입니다.</p>
+        <aside
+          id="room-activity"
+          class="room-activity"
+          aria-label="전체 활성 방"
+          title="비공개 방은 전체 방 수에만 포함됩니다. 공개 대기실 수에는 가득 찬 방도 포함됩니다."
+        >
+          <div class="room-activity-counts">
+            <span>전체 활성 방: <strong id="active-room-count">—</strong></span>
+            <span
+              >공개 대기실: <strong id="public-waiting-count">—</strong></span
+            >
+            <span
+              >공개 경기 중: <strong id="public-playing-count">—</strong></span
+            >
+          </div>
+          <small id="room-activity-state" role="status">방 수 확인 중…</small>
+        </aside>
         <p class="doubles-offline-version version-link">
           <a
             href="https://ilesejin.github.io/pikachu-volleyball-2v2/ko/"

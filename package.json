@@ -13,7 +13,8 @@
     "test:replay": "webpack --config webpack.dev.js && node tests/browser-replay.cjs",
     "pretest": "node scripts/sync-offline-engine.cjs",
     "sync:offline": "node scripts/sync-offline-engine.cjs",
-    "check:offline": "node scripts/sync-offline-engine.cjs --check"
+    "check:offline": "node scripts/sync-offline-engine.cjs --check",
+    "test:rooms": "webpack --config webpack.dev.js && node tests/browser-room-activity.cjs"
   },
   "repository": {
     "type": "git",

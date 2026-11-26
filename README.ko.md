@@ -22,6 +22,14 @@
 
 원작: SACHI SOFT / SAWAYAKAN Programmers 및 Satoshi Takenouchi. JavaScript 이식과 기존 P2P 구현: [이규태 (gorisanson)](https://github.com/gorisanson/pikachu-volleyball).
 
+## 활성 방 수
+
+접속 전 페이지에 **전체 활성 방**, **공개 대기실**, **공개 경기 중**을 표시합니다. 전체에는 공개·비공개 대기실과 경기 중인 방이 포함되며 방장만 있는 대기실도 셉니다. 공개 대기실에는 인원이 가득 찬 방도 포함되므로 참가 가능한 방 수와는 다릅니다. 참가자나 AI마다 별도 방으로 세지 않습니다. 통계 API는 비공개 방 코드, 이름, 명단 또는 개별 방 정보를 반환하지 않습니다.
+
+접속 전 페이지가 보일 때 60초마다 갱신합니다. 비공개 방과 경기 중인 방의 방장은 30초마다 보고하며, 공개 대기실은 기존 빠른 대전 광고를 재사용하여 별도의 주기적 통계 요청을 보내지 않습니다. 90초 동안 보고가 없으면 집계에서 제외됩니다. 공개 여부·경기 상태·방장 변경 시 즉시 보고합니다. 최근에 보고한 업데이트된 클라이언트를 집계하는 대략적인 수치이며, 서버 장애나 잘못된 응답은 0 대신 **확인 불가**로 표시합니다. 서버가 재시작되면 다음 보고까지 집계가 일시적으로 비어 있을 수 있습니다.
+
+업데이트된 빠른 대전 서버를 **먼저 배포한 뒤** 웹사이트를 배포하세요. 기존 `quickMatchServerURL`을 사용하며 Firestore 규칙이나 Firebase 설정 변경, 추가 Firestore 읽기·쓰기는 없습니다. 기존 공개 대기실 매칭 광고의 2초 갱신·15초 만료는 유지합니다. `npm run test:rooms`는 형제 서버 프로젝트를 이용하여 음소거한 로컬 브라우저로 검증합니다. 실제 Firebase에는 접근하지 않습니다.
+
 ## 빠른 대전
 
 같은 새 Firebase 프로젝트를 사용하도록 형제 폴더의 `pikachu-volleyball-2v2-online-quick-match-server-main` 서버를 설정하세요. `src/resources/js/online_2v2/quick_match_config.js`의 `quickMatchServerURL`에 서버 HTTPS 주소를 입력하면 빠른 대전 버튼이 활성화됩니다. 자세한 설정은 서버 README를 참고하세요.

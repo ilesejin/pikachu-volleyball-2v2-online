@@ -8,6 +8,14 @@ By default, every browser runs the preserved offline physics and AI in determini
 
 Protocol v5 reduces Firestore usage: lobby changes do not write documents, Quick Match waiting does not poll Firestore, and successful connection setup deletes its temporary signaling. Starting removes the join entry; returning to the lobby recreates the same room code. Deploy the updated rules and Quick Match backend before the frontend; see [upgrade steps](ONLINE_SETUP.md#signaling-only-update-protocol-v5). The v4 Firestore lobby is retired: `/rooms` access is denied and `/v1/match` returns HTTP 410 with a reload message. Older clients must reload and create or join a new room.
 
+## Active room counts
+
+The entry page shows **All active rooms**, **Public waiting**, and **Public playing**. All active rooms includes public/private lobbies and matches, including a lobby with only its host. Public waiting includes full lobbies; it is not a count of joinable rooms. Guests and AI players do not create additional rooms. Private room codes, names, rosters and individual room records are never returned by the statistics API.
+
+Counts refresh every 60 seconds while the entry page is visible. Private/playing hosts report every 30 seconds; public waiting rooms reuse their existing matchmaking publications instead of sending an additional periodic statistics request. Reports expire after 90 seconds. Visibility/status changes and host changes trigger immediate reports. Counts are approximate and include recently reporting, updated clients. Unreachable or invalid responses show **Unavailable**, not zero. Server restarts temporarily clear the totals until hosts report again.
+
+Deploy the updated Quick Match server **before** this website. Both statistics endpoints use the configured `quickMatchServerURL`; no Firestore rules or Firebase configuration changes are needed, and the feature makes no Firestore reads or writes. Existing public-lobby matchmaking advertisements retain their two-second refresh and 15-second expiry. Run `npm run test:rooms` for muted, local browser tests against the sibling server (`PIKA_QUICK_MATCH_SERVER` may select another checkout); no production Firebase is used.
+
 ## Playing
 
 1. Configure your new Firebase project using [ONLINE_SETUP.md](ONLINE_SETUP.md), install dependencies, then run `npm start`.

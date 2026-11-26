@@ -255,7 +255,10 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(versionResponse.data));
     return;
   }
-  if (req.url === '/v2/match' && matchmakingApp)
+  if (
+    (req.url === '/v2/match' || req.url.startsWith('/v2/rooms/')) &&
+    matchmakingApp
+  )
     return matchmakingApp(req, res);
   if (req.url === '/__test_signaling' && req.method === 'POST') {
     let body = '';
@@ -389,9 +392,7 @@ async function tab(port, lang = 'en', injected = true, existingContext = null) {
     await page.send('Page.addScriptToEvaluateOnNewDocument', {
       source:
         fs.readFileSync(path.join(__dirname, 'browser-store.js'), 'utf8') +
-        (process.env.PIKA_QUICK_MATCH_SERVER
-          ? '\nwindow.__PIKA_TEST_MATCH_URL__=location.origin;'
-          : ''),
+        '\nwindow.__PIKA_TEST_MATCH_URL__=location.origin;',
     });
   if (injected)
     await page.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -820,6 +821,141 @@ async function screenshot(page, name) {
     );
   const host = await tab(port);
 
+  if (process.env.PIKA_ROOM_ACTIVITY_ONLY) {
+    assert.ok(
+      matchmakingApp,
+      'Room activity tests require the local Quick Match server'
+    );
+    const observer = await tab(port, 'ko');
+    const refresh = async (page) => page.ev('__volley.roomActivity.refresh()');
+    const counts = async () => {
+      const response = await fetch(
+        'http://127.0.0.1:' + server.address().port + '/v2/rooms/stats'
+      );
+      return response.json();
+    };
+    const expect = async (value) => {
+      for (let i = 0; i < 100; i++) {
+        if (JSON.stringify(await counts()) === JSON.stringify(value)) return;
+        await delay(50);
+      }
+      assert.deepEqual(await counts(), value);
+    };
+    await refresh(observer);
+    assert.equal(
+      await observer.ev(
+        'document.getElementById("active-room-count").textContent'
+      ),
+      '0'
+    );
+    await host.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    await click(host, 'create');
+    await host.until('!__volley.room.closed && __volley.room.isHost');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 0 });
+    await refresh(observer);
+    assert.equal(
+      await observer.ev(
+        'document.getElementById("active-room-count").textContent'
+      ),
+      '1'
+    );
+    await selectSlot(host, '0');
+    const guest = await tab(port);
+    await guest.ev(
+      'document.getElementById("auto-save-replay-checkbox").checked=false;document.getElementById("auto-save-replay-checkbox").dispatchEvent(new Event("change"))'
+    );
+    await join(guest, await host.ev('__volley.room.id'), '3');
+    await assertConnections(host, [guest], 'mesh');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 0 });
+    await host.ev(
+      'document.getElementById("room-visibility").value="public";document.getElementById("room-visibility").dispatchEvent(new Event("change"))'
+    );
+    await expect({ active: 1, publicWaiting: 1, publicPlaying: 0 });
+    await host.until(
+      '!!__volley.roomActivity.shared && __volley.roomActivity.shared.revision===__volley.roomActivity.revision'
+    );
+    await host.ev(`(async()=>{
+      await __volley.roomActivity.tail;
+      window.activityPosts=0;const report=__volley.roomActivity.report;
+      __volley.roomActivity.report=(...args)=>{activityPosts++;return report(...args);};
+      await __volley.roomActivity.sync(true);
+      await __volley.quickMatch.sync(true);
+      await __volley.roomActivity.sync(true);
+    })()`);
+    assert.equal(
+      await host.ev('activityPosts'),
+      0,
+      'Public lobby heartbeats reuse matchmaking requests'
+    );
+
+    await click(host, 'start');
+    await host.until('__volley.session.phase==="playing"');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 1 });
+    await click(host, 'pause');
+    await host.until('__volley.session.phase==="paused"');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 1 });
+    await host.ev('document.getElementById("visibility-private-btn").click()');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 0 });
+    await click(host, 'back-lobby');
+    await host.until('__volley.room.data.status==="lobby"');
+    const target = await guest.ev('__volley.room.selfId');
+    await host.ev('__volley.room.transferHost(' + JSON.stringify(target) + ')');
+    await guest.until('__volley.room.isHost && !__volley.room.handoff');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 0 });
+    await click(host, 'leave');
+    await expect({ active: 1, publicWaiting: 0, publicPlaying: 0 });
+    await click(guest, 'leave');
+    await expect({ active: 0, publicWaiting: 0, publicPlaying: 0 });
+    await observer.ev(
+      'window.activityRead=__volley.roomActivity.read;__volley.roomActivity.read=async()=>{throw Error("offline")};__volley.roomActivity.refresh()'
+    );
+    assert.equal(
+      await observer.ev(
+        'document.getElementById("active-room-count").textContent'
+      ),
+      '—'
+    );
+    assert.equal(
+      await observer.ev(
+        'document.getElementById("room-activity").classList.contains("unavailable")'
+      ),
+      true
+    );
+    await observer.ev(
+      '__volley.roomActivity.read=window.activityRead;__volley.roomActivity.refresh()'
+    );
+    assert.equal(
+      await observer.ev(
+        'document.getElementById("active-room-count").textContent'
+      ),
+      '0'
+    );
+    for (const language of ['en', 'ko', 'zh']) {
+      const page = await tab(port, language);
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      });
+      await refresh(page);
+      assert.equal(
+        await page.ev(
+          '(()=>{const r=document.getElementById("room-activity").getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()'
+        ),
+        true
+      );
+      await screenshot(page, 'room-activity-' + language + '-mobile.png');
+      await browser.send('Target.closeTarget', { targetId: page.targetId });
+    }
+    assert.equal(errors.length, 0, JSON.stringify(errors));
+    console.log(
+      'Room activity passed: private totals, public lobby/match/pause counts, guest exclusion, visibility changes, host transfer, leave, unavailable/recovery, and three mobile languages. No live Firebase used.'
+    );
+    return;
+  }
   if (process.env.PIKA_COSTUMES_ONLY) {
     const guest = await tab(port, 'ko');
     for (const page of [host, guest])

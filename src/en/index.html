@@ -54,6 +54,29 @@
         <p class="doubles-description">
           The 2v2 online edition of Pikachu Volleyball.
         </p>
+        <aside
+          id="room-activity"
+          class="room-activity"
+          aria-label="All active rooms"
+          title="Private rooms contribute only to the total. Full public lobbies are included in waiting rooms."
+        >
+          <div class="room-activity-counts">
+            <span
+              >All active rooms: <strong id="active-room-count">—</strong></span
+            >
+            <span
+              >Public waiting:
+              <strong id="public-waiting-count">—</strong></span
+            >
+            <span
+              >Public playing:
+              <strong id="public-playing-count">—</strong></span
+            >
+          </div>
+          <small id="room-activity-state" role="status"
+            >Loading room counts…</small
+          >
+        </aside>
         <p class="doubles-offline-version version-link">
           You can also play the
           <a
